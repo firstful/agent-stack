@@ -1,0 +1,23 @@
+{
+  "name": "sutliff-blog",
+  "private": true,
+  "scripts": {
+    "build:ts": "esbuild src/ts/main.ts --bundle --outfile=docs/assets/js/main.js",
+    "build:css": "postcss src/css/main.css -o docs/assets/theme.css --env production",
+    "build:site": "sed -i \"s|^site_url:.*|site_url: ${SITE_URL:-https://blog.ffilt.us/}|\" mkdocs.yml && mkdocs build",
+    "build:preview": "MKDOCS_SCHEDULE_MODE=1 npm run build:site",
+    "build": "npm run build:ts && npm run build:css && npm run build:site",
+    "dev:ts": "esbuild src/ts/main.ts --bundle --outfile=docs/assets/js/main.js --watch",
+    "dev:css": "postcss src/css/main.css -o docs/assets/theme.css --watch",
+    "dev:site": "mkdocs serve",
+    "validate": "npm run build && test -f docs/index.html && echo Validation passed"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "cssnano": "^7.0.6",
+    "esbuild": "^0.28.0",
+    "postcss": "^8.4.49",
+    "postcss-cli": "^11.0.0",
+    "postcss-import": "^16.1.0"
+  }
+}

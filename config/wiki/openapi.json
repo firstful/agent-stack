@@ -1,0 +1,534 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Agent-Stack Infrastructure API",
+    "version": "1.0.0",
+    "description": "REST API for the agent-stack container orchestration system. All endpoints return JSON unless noted otherwise."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:80",
+      "description": "Internal (container network)"
+    },
+    {
+      "url": "http://agent-stack:80",
+      "description": "DNS-resolvable on stack-net"
+    }
+  ],
+  "paths": {
+    "/api/status": {
+      "get": {
+        "summary": "Controller and system health status",
+        "tags": [
+          "Status"
+        ],
+        "responses": {
+          "200": {
+            "description": "Health status with error lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "healthy": {
+                      "type": "boolean"
+                    },
+                    "uptime": {
+                      "type": "integer",
+                      "description": "Seconds since start"
+                    },
+                    "startTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "lastReconcile": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    },
+                    "reconcileCount": {
+                      "type": "integer"
+                    },
+                    "reconcileErrors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "buildErrors": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "toolErrors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "cloudflaredError": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "services": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/services": {
+      "get": {
+        "summary": "List all services",
+        "tags": [
+          "Services"
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of service summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "file": {
+                        "type": "string"
+                      },
+                      "port": {
+                        "type": "integer"
+                      },
+                      "running": {
+                        "type": "boolean"
+                      },
+                      "exposed": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new service",
+        "tags": [
+          "Services"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "repo"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "port": {
+                    "type": "integer"
+                  },
+                  "host_port": {
+                    "type": "integer"
+                  },
+                  "auto_port": {
+                    "type": "boolean"
+                  },
+                  "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "volumes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expose_enabled": {
+                    "type": "boolean"
+                  },
+                  "hostname": {
+                    "type": "string"
+                  },
+                  "tunnel": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Service created"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/services/:name": {
+      "get": {
+        "summary": "Get service status",
+        "tags": [
+          "Services"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service runtime state"
+          },
+          "404": {
+            "description": "Service not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a service",
+        "tags": [
+          "Services"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "port": {
+                    "type": "integer"
+                  },
+                  "host_port": {
+                    "type": "integer"
+                  },
+                  "auto_port": {
+                    "type": "boolean"
+                  },
+                  "env": {
+                    "type": "object"
+                  },
+                  "volumes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expose_enabled": {
+                    "type": "boolean"
+                  },
+                  "hostname": {
+                    "type": "string"
+                  },
+                  "tunnel": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Service updated"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a service",
+        "tags": [
+          "Services"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service deleted"
+          },
+          "404": {
+            "description": "Service not found"
+          }
+        }
+      }
+    },
+    "/api/services/:name/start": {
+      "post": {
+        "summary": "Start a service",
+        "tags": [
+          "Service Actions"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service started"
+          },
+          "500": {
+            "description": "Failed to start"
+          }
+        }
+      }
+    },
+    "/api/services/:name/stop": {
+      "post": {
+        "summary": "Stop a service",
+        "tags": [
+          "Service Actions"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service stopped"
+          },
+          "500": {
+            "description": "Failed to stop"
+          }
+        }
+      }
+    },
+    "/api/services/:name/restart": {
+      "post": {
+        "summary": "Restart a service",
+        "tags": [
+          "Service Actions"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service restarted"
+          },
+          "500": {
+            "description": "Failed to restart"
+          }
+        }
+      }
+    },
+    "/api/services/:name/rebuild": {
+      "post": {
+        "summary": "Rebuild a service container from latest source",
+        "tags": [
+          "Service Actions"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service rebuilt"
+          },
+          "500": {
+            "description": "Failed to rebuild"
+          }
+        }
+      }
+    },
+    "/api/reconcile": {
+      "post": {
+        "summary": "Trigger an immediate reconciliation cycle",
+        "tags": [
+          "Control"
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliation triggered"
+          }
+        }
+      }
+    },
+    "/api/logs/:name": {
+      "get": {
+        "summary": "Get container logs for a specific service",
+        "tags": [
+          "Logs"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lines",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "Number of tail lines"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log output",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to retrieve logs"
+          }
+        }
+      }
+    },
+    "/api/logs/analytics": {
+      "post": {
+        "summary": "Get aggregated logs from multiple sources",
+        "tags": [
+          "Logs"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "controller",
+                        "cloudflared",
+                        "podman",
+                        "agent-stack",
+                        "container"
+                      ]
+                    }
+                  },
+                  "lines": {
+                    "type": "integer",
+                    "default": 100
+                  },
+                  "containerName": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-source log output",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "Get the OpenAPI specification for this API",
+        "tags": [
+          "Meta"
+        ],
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.0 JSON spec"
+          },
+          "404": {
+            "description": "Spec file not found"
+          }
+        }
+      }
+    }
+  }
+}

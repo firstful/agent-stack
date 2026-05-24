@@ -1,0 +1,16 @@
+{
+  "name": "cockpit",
+  "version": 6,
+  "service": {
+    "type": "simple",
+    "exec_start": "/usr/lib/cockpit/cockpit-ws --for-tls-proxy",
+    "port": 9090,
+    "user": "root",
+    "restart": "always"
+  },
+  "expose": {
+    "hostname": "cockpit.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf",
+    "enabled": true
+  }
+}

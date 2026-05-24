@@ -1,0 +1,8 @@
+{
+  "name": "mcp-stdio-shim",
+  "version": "1.0.0",
+  "description": "MCP stdio shim — proxies stdin/stdout JSON-RPC to an HTTP MCP endpoint",
+  "main": "shim.js",
+  "type": "commonjs",
+  "license": "ISC"
+}

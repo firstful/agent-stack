@@ -1,0 +1,5 @@
+FROM docker.io/library/couchdb:3
+
+COPY local.ini /opt/couchdb/etc/local.d/obsidian-livesync.ini
+
+EXPOSE 5984

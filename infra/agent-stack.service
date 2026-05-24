@@ -1,0 +1,27 @@
+[Unit]
+Description=Agent Stack Controller — reconcile desired/ state with podman + cloudflared
+After=network-online.target podman.service
+Wants=network-online.target
+Wants=cloudflared.service
+
+[Service]
+Environment=MCP_PORT=80
+Environment=VAULT_TOKEN=techdeck-vault-token
+Environment=VAULT_URL=http://localhost:4006
+Type=simple
+ExecStart=/srv/agent-stack/infra/node_modules/.bin/tsx /srv/agent-stack/infra/controller.ts
+WorkingDirectory=/srv/agent-stack/infra
+Restart=always
+RestartSec=5
+User=reeds
+Group=reeds
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+StandardOutput=journal
+StandardError=journal
+
+# Safety
+CPUQuota=50%
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

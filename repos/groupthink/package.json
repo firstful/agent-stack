@@ -1,0 +1,26 @@
+{
+  "name": "groupthink",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm -r --stream dev",
+    "dev:api": "pnpm -F @groupthink/api dev",
+    "dev:nextjs": "pnpm -F @groupthink/nextjs dev",
+    "dev:expo": "pnpm -F @groupthink/expo dev",
+    "build": "pnpm -r build",
+    "build:packages": "pnpm -F @groupthink/db build && pnpm -F @groupthink/shared build",
+    "lint": "tsc --noEmit",
+    "test": "pnpm -r test",
+    "test:shared": "pnpm -F @groupthink/shared test",
+    "test:api": "pnpm -F @groupthink/api test",
+    "db:generate": "pnpm -F @groupthink/db db:generate",
+    "db:push": "pnpm -F @groupthink/db db:push",
+    "db:migrate": "pnpm -F @groupthink/db db:migrate"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

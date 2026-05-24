@@ -1,0 +1,12 @@
+{
+  "name": "resume-interactive",
+  "private": true,
+  "scripts": {
+    "build": "esbuild interactive.ts --bundle --minify --outfile=../../docs/assets/resume/interactive.js",
+    "watch": "esbuild interactive.ts --bundle --watch --outfile=../../docs/assets/resume/interactive.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}

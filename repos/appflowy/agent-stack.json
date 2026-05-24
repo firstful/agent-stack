@@ -1,0 +1,20 @@
+{
+  "name": "appflowy",
+  "version": 1,
+  "service": {
+    "port": 3004,
+    "exec_start": "/srv/agent-stack/repos/appflowy/start.sh",
+    "exec_reload": "/usr/bin/docker-compose -f /srv/agent-stack/repos/appflowy/docker-compose.yml restart",
+    "type": "simple",
+    "user": "root",
+    "restart": "always",
+    "env": {
+      "COMPOSE_PROJECT_NAME": "appflowy"
+    }
+  },
+  "expose": {
+    "hostname": "life.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf",
+    "enabled": true
+  }
+}

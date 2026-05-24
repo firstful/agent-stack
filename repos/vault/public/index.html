@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vault</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f13; color: #d4d4d8; padding: 24px; }
+  h1 { font-size: 20px; font-weight: 600; color: #e4e4e7; }
+  .subtitle { color: #71717a; font-size: 13px; margin-bottom: 24px; }
+  .card { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .label { font-size: 11px; color: #71717a; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .input { width: 100%; background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-family: 'SF Mono', Monaco, monospace; }
+  .input:focus { outline: none; border-color: #6366f1; }
+  .scope-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .scope-chip { display: inline-flex; align-items: center; gap: 4px; background: #27272a; border: 1px solid #3f3f46; border-radius: 999px; padding: 4px 10px; font-size: 11px; color: #a1a1aa; cursor: pointer; }
+  .scope-chip.selected { background: #6366f122; border-color: #6366f1; color: #a5b4fc; }
+  .scope-chip .remove { cursor: pointer; opacity: 0.5; margin-left: 2px; }
+  .scope-chip .remove:hover { opacity: 1; }
+  .btn { padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; transition: background .15s; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover { background: #4f46e5; }
+  .btn-ghost { background: transparent; color: #a1a1aa; }
+  .btn-ghost:hover { background: #27272a; }
+  .btn-danger { background: transparent; color: #ef4444; }
+  .btn-danger:hover { background: #27272a; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .badge-set { background: #22c55e22; color: #4ade80; }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #22c55e; color: #000; padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .login-box { max-width: 360px; margin: 80px auto; }
+  .login-box input { width: 100%; background: #27272a; border: 1px solid #3f3f46; color: #e4e4e7; padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
+  .login-box input:focus { outline: none; border-color: #6366f1; }
+  .login-box button { width: 100%; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 8px; }
+  .actions { display: flex; gap: 8px; }
+  .empty-state { text-align: center; padding: 40px; color: #52525b; font-size: 13px; }
+  .tag { display: inline-block; background: #27272a; padding: 2px 8px; border-radius: 4px; font-size: 10px; color: #71717a; margin-right: 4px; }
+  .flex { display: flex; gap: 8px; }
+  .flex-1 { flex: 1; }
+  .mt-2 { margin-top: 8px; }
+  .mb-2 { margin-bottom: 8px; }
+  .tree-folder-header { cursor: pointer; user-select: none; padding: 6px 8px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #a1a1aa; display: flex; align-items: center; gap: 6px; }
+  .tree-folder-header:hover { background: #27272a; }
+  .tree-chevron { font-size: 10px; width: 12px; text-align: center; flex-shrink: 0; }
+  .tree-children { border-left: 1px solid #27272a; margin-left: 11px; padding-left: 8px; }
+  .secret-link { padding: 6px 8px; border-radius: 6px; font-size: 13px; color: #a1a1aa; cursor: pointer; font-family: 'SF Mono', Monaco, monospace; }
+  .secret-link:hover { background: #27272a; color: #e4e4e7; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+const PWD_KEY = 'vault_token'
+let token = localStorage.getItem(PWD_KEY) || ''
+let services = []
+let knownServiceNames = []
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}), ...opts.headers },
+    ...opts,
+  })
+  if (res.status === 401) { token = ''; localStorage.removeItem(PWD_KEY); render() }
+  if (!res.ok) { const err = await res.text(); throw new Error(err || res.statusText) }
+  return res.json()
+}
+
+async function loadServices() {
+  // Discover service names from agent-stack.json files
+  // Hardcoded fallback for common ones
+  knownServiceNames = ['techdeck', 'opencode', 'vault', 'dash', 'cockpit', 'free-llm-router', 'kilocode-web', 'no-service', 'personal-blog', 'appflowy', 'marp-editor']
+}
+
+async function loadSecrets() {
+  return api('/api/secrets')
+}
+
+function render() {
+  if (!token) return renderLogin()
+  const app = document.getElementById('app')
+  app.innerHTML = `
+    <div class="header-row">
+      <div>
+        <h1>Vault</h1>
+        <div class="subtitle">Encrypted secrets manager</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" onclick="showAddSecret()">+ New Secret</button>
+        <button class="btn btn-ghost" onclick="logout()">Logout</button>
+      </div>
+    </div>
+    <div id="secrets-list"><div class="empty-state">Loading...</div></div>
+  `
+  renderSecretsList()
+}
+
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+    <div class="login-box card">
+      <h1 style="margin-bottom:16px">Vault</h1>
+      <input type="password" id="pwd" placeholder="Master password" onkeydown="if(event.key==='Enter')login()">
+      <button class="btn btn-primary" onclick="login()">Unlock</button>
+    </div>
+  `
+}
+
+async function login() {
+  const pwd = document.getElementById('pwd').value
+  token = pwd
+  try {
+    await api('/api/secrets')
+    localStorage.setItem(PWD_KEY, token)
+    render()
+  } catch {
+    token = ''
+    document.getElementById('pwd').value = ''
+    document.getElementById('pwd').placeholder = 'Wrong password'
+  }
+}
+
+function logout() {
+  token = ''
+  localStorage.removeItem(PWD_KEY)
+  render()
+}
+
+function buildTree(secrets) {
+  const root = {}
+  for (const secret of secrets) {
+    const parts = secret.key.split('_')
+    let node = root
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]
+      const isLast = i === parts.length - 1
+      if (!node[part]) node[part] = { __children: {} }
+      if (isLast) node[part].__secret = secret
+      node = node[part].__children
+    }
+  }
+  return root
+}
+
+function createSecretLink(secret, displayName) {
+  const el = document.createElement('div')
+  el.className = 'secret-link'
+  el.textContent = displayName || secret.key
+  el.onclick = () => showSecretDetail(secret.key)
+  return el
+}
+
+function renderTree(container, tree, depth = 0, prefix = '') {
+  const keys = Object.keys(tree).sort((a, b) => {
+    const aFolder = Object.keys(tree[a].__children).length > 0
+    const bFolder = Object.keys(tree[b].__children).length > 0
+    if (aFolder && !bFolder) return -1
+    if (!aFolder && bFolder) return 1
+    return a.localeCompare(b)
+  })
+  for (const key of keys) {
+    const node = tree[key]
+    const hasChildren = Object.keys(node.__children).length > 0
+    const childPrefix = prefix + key + '_'
+    if (hasChildren && depth < 3) {
+      const wrapper = document.createElement('div')
+      wrapper.className = 'tree-folder'
+      const header = document.createElement('div')
+      header.className = 'tree-folder-header'
+      header.innerHTML = `<span class="tree-chevron">▼</span>${key}`
+      const addBtn = document.createElement('button')
+      addBtn.className = 'btn btn-ghost'
+      addBtn.textContent = '+'
+      addBtn.title = 'New secret under ' + childPrefix
+      addBtn.style.marginLeft = 'auto'
+      addBtn.onclick = (e) => { e.stopPropagation(); showAddSecret(childPrefix) }
+      header.appendChild(addBtn)
+      const childrenEl = document.createElement('div')
+      childrenEl.className = 'tree-children'
+      let isOpen = true
+      header.onclick = (e) => {
+        if (e.target === addBtn) return
+        isOpen = !isOpen
+        childrenEl.style.display = isOpen ? 'block' : 'none'
+        header.querySelector('.tree-chevron').textContent = isOpen ? '▼' : '▶'
+      }
+      wrapper.appendChild(header)
+      if (node.__secret) childrenEl.appendChild(createSecretLink(node.__secret, node.__secret.key.slice(prefix.length)))
+      renderTree(childrenEl, node.__children, depth + 1, childPrefix)
+      wrapper.appendChild(childrenEl)
+      container.appendChild(wrapper)
+    } else {
+      if (node.__secret) container.appendChild(createSecretLink(node.__secret, node.__secret.key.slice(prefix.length)))
+      if (hasChildren) renderTree(container, node.__children, depth, prefix)
+    }
+  }
+}
+
+async function renderSecretsList() {
+  const el = document.getElementById('secrets-list')
+  try {
+    const secrets = await loadSecrets()
+    if (secrets.length === 0) {
+      el.innerHTML = '<div class="empty-state">No secrets yet. Click "+ New Secret" to add one.</div>'
+      return
+    }
+    el.innerHTML = ''
+    const tree = buildTree(secrets)
+    renderTree(el, tree)
+  } catch (e) {
+    el.innerHTML = '<div class="empty-state">Failed to load: ' + e.message + '</div>'
+  }
+}
+
+async function showSecretDetail(key) {
+  try {
+    const secret = await api('/api/secrets/' + key)
+    const overlay = document.createElement('div')
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100;background:#00000099;display:flex;align-items:center;justify-content:center;padding:16px'
+    let valueVisible = false
+    overlay.innerHTML = `
+      <div class="card" style="width:100%;max-width:480px" onclick="event.stopPropagation()">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2 style="font-size:16px;font-weight:600;color:#e4e4e7;font-family:'SF Mono',Monaco,monospace">${secret.key}</h2>
+          <button class="btn btn-ghost" id="sd-close">✕</button>
+        </div>
+        <div class="label">Value</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+          <input class="input" id="sd-value" type="password" value="${secret.value}" readonly style="flex:1">
+          <button class="btn btn-ghost" id="sd-reveal">Show</button>
+        </div>
+        <div class="label">Scoped to services</div>
+        <div style="margin-bottom:16px">
+          ${secret.scopes.map(svc => `<span class="tag">${svc}</span>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary flex-1" id="sd-edit">Edit</button>
+          <button class="btn btn-danger flex-1" id="sd-delete">Delete</button>
+          <button class="btn btn-ghost flex-1" id="sd-close2">Close</button>
+        </div>
+      </div>
+    `
+    overlay.querySelector('#sd-close').onclick = () => overlay.remove()
+    overlay.querySelector('#sd-close2').onclick = () => overlay.remove()
+    overlay.querySelector('#sd-reveal').onclick = (e) => {
+      valueVisible = !valueVisible
+      overlay.querySelector('#sd-value').type = valueVisible ? 'text' : 'password'
+      e.target.textContent = valueVisible ? 'Hide' : 'Show'
+    }
+    overlay.querySelector('#sd-edit').onclick = () => { overlay.remove(); editSecret(secret.key) }
+    overlay.querySelector('#sd-delete').onclick = () => { overlay.remove(); deleteSecret(secret.key) }
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove() }
+    document.body.appendChild(overlay)
+  } catch {}
+}
+
+function showAddSecret(prefix) {
+  showSecretForm(null, prefix || '')
+}
+
+async function editSecret(key) {
+  try {
+    const secret = await api('/api/secrets/' + key)
+    showSecretForm(secret)
+  } catch {}
+}
+
+function showSecretForm(existing, prefix) {
+  const isNew = !existing
+  const key = existing ? existing.key : (prefix || '')
+  const scopes = existing ? existing.scopes : []
+  const value = existing ? existing.value : ''
+
+  const overlay = document.createElement('div')
+  overlay.id = 'secret-form-overlay'
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100;background:#00000099;display:flex;align-items:center;justify-content:center;padding:16px'
+
+  overlay.innerHTML = `
+    <div class="card" style="width:100%;max-width:480px" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 style="font-size:16px;font-weight:600;color:#e4e4e7">${isNew ? 'New Secret' : 'Edit: ' + key}</h2>
+        <button class="btn btn-ghost" onclick="closeSecretForm()">✕</button>
+      </div>
+
+      ${isNew ? `
+        <div class="label">Key name</div>
+        <input class="input" id="sf-key" value="${key}" placeholder="e.g. OPENAI_API_KEY" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/\\s/g,'_').replace(/[^A-Z_]/g,'')">
+      ` : ''}
+
+      <div class="label mt-2">Value</div>
+      <input class="input" id="sf-value" type="password" value="${isNew ? '' : '••••••••'}" placeholder="Secret value" onfocus="if(this.value==='••••••••')this.value=''">
+
+      <div class="label mt-2">Scoped to services</div>
+      <div class="scope-chips" id="sf-scopes">
+        ${knownServiceNames.map(svc => `
+          <span class="scope-chip${scopes.includes(svc) ? ' selected' : ''}" data-svc="${svc}" onclick="toggleScope(this)">${svc}</span>
+        `).join('')}
+        <input class="input" id="sf-custom-scope" placeholder="+ custom service" style="width:140px;font-size:11px;padding:4px 8px" onkeydown="if(event.key==='Enter')addCustomScope(this)">
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary flex-1" onclick="saveSecretForm('${key}', ${isNew})">Save</button>
+        <button class="btn btn-ghost flex-1" onclick="closeSecretForm()">Cancel</button>
+      </div>
+
+      <div id="sf-error" style="color:#ef4444;font-size:12px;margin-top:8px"></div>
+    </div>
+  `
+
+  overlay.onclick = closeSecretForm
+  document.body.appendChild(overlay)
+}
+
+function toggleScope(el) {
+  el.classList.toggle('selected')
+}
+
+function addCustomScope(input) {
+  const val = input.value.trim()
+  if (!val) return
+  const chips = document.getElementById('sf-scopes')
+  const chip = document.createElement('span')
+  chip.className = 'scope-chip selected'
+  chip.dataset.svc = val
+  chip.textContent = val
+  chip.onclick = () => chip.classList.toggle('selected')
+  chips.insertBefore(chip, input)
+  input.value = ''
+}
+
+function closeSecretForm() {
+  const el = document.getElementById('secret-form-overlay')
+  if (el) el.remove()
+}
+
+async function saveSecretForm(existingKey, isNew) {
+  const key = isNew ? document.getElementById('sf-key').value.trim() : existingKey
+  const valInput = document.getElementById('sf-value')
+  const value = valInput.value === '••••••••' ? '' : valInput.value
+  const valueUnchanged = valInput.value === '••••••••' && !isNew
+  const scopes = Array.from(document.querySelectorAll('#sf-scopes .scope-chip.selected')).map(el => el.dataset.svc)
+
+  if (!key) { document.getElementById('sf-error').textContent = 'Key is required'; return }
+  if (!value && isNew) { document.getElementById('sf-error').textContent = 'Value is required'; return }
+  if (scopes.length === 0) { document.getElementById('sf-error').textContent = 'Select at least one service'; return }
+
+  try {
+    const body = valueUnchanged ? { scopes, keepValue: true } : { value, scopes }
+    await api('/api/secrets/' + key, { method: 'PUT', body: JSON.stringify(body) })
+    closeSecretForm()
+    renderSecretsList()
+    showToast('Saved ' + key)
+  } catch (e) {
+    document.getElementById('sf-error').textContent = e.message
+  }
+}
+
+async function deleteSecret(key) {
+  if (!confirm('Delete ' + key + '?')) return
+  await api('/api/secrets/' + key, { method: 'DELETE' })
+  renderSecretsList()
+  showToast('Deleted ' + key)
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast')
+  el.textContent = msg
+  el.classList.add('show')
+  setTimeout(() => el.classList.remove('show'), 2500)
+}
+
+loadServices()
+render()
+</script>
+</body>
+</html>

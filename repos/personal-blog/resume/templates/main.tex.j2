@@ -1,0 +1,108 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[margin=0.6in]{geometry}
+\usepackage{parskip}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\definecolor{primary}{HTML}{1a1a2e}
+\definecolor{secondary}{HTML}{555555}
+\definecolor{accent}{HTML}{0f3460}
+\hypersetup{colorlinks=true, linkcolor=accent, urlcolor=accent}
+\pagestyle{empty}
+
+{% raw %}
+\newcommand{\sectionline}[1]{%
+  \vspace{4pt}
+  {\large\textbf{\textcolor{primary}{#1}}}%
+  \vspace{2pt}\par
+  {\color{secondary}\hrule height 0.5pt}%
+  \vspace{4pt}%
+}
+
+\newcommand{\jobheader}[3]{%
+  {\textbf{#1}} \hfill {\textit{#2}} \\
+  {\textit{#3}}%
+}
+{% endraw %}
+
+\begin{document}
+
+{% if _anonymize %}
+\begin{center}
+  {\Huge\textbf{\textcolor{primary}{Redacted Resume}}}
+
+  \vspace{4pt}
+  {\color{secondary}Contact information available upon request}
+\end{center}
+
+\vspace{8pt}
+{% endif %}
+
+{% if not _anonymize %}
+\begin{center}
+  {\Huge\textbf{\textcolor{primary}{ {{ name }} }}}
+
+  \vspace{4pt}
+  {\color{secondary}{{ _contact_line }}}
+
+  {\color{secondary}{{ _links }}}
+
+\end{center}
+{% endif %}
+
+{% if summary %}
+\sectionline{Summary}
+
+{{ summary }}
+{% endif %}
+
+{% if skills %}
+\sectionline{Skills}
+
+{% for category, skill_list in skills.items() %}
+\textbf{ {{ category | capitalize }} }: {{ skill_list | join(", ") }}
+{% if not loop.last %}\\[2pt]{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if experience %}
+\sectionline{Experience}
+
+{% for entry in experience %}
+\jobheader{ {{ entry.company }} }{ {{ entry.dates }} }{ {{ entry.position }} }
+
+\begin{itemize}[leftmargin=*, nosep, topsep=2pt]
+{% for highlight in entry.highlights %}
+  \item {{ highlight }}
+{% endfor %}
+\end{itemize}
+
+{% if not loop.last %}\vspace{6pt}{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if projects %}
+\sectionline{Projects}
+
+{% for entry in projects %}
+\textbf{ {{ entry.name }} } \hfill {\small {{ entry.technologies | join(", ") }} }
+
+{{ entry.description }}
+
+{% if not loop.last %}\vspace{6pt}{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if education %}
+\sectionline{Education}
+
+{% for entry in education %}
+\textbf{ {{ entry.institution }} } \hfill {\textit{ {{ entry.dates }} } } \\
+{{ entry.degree }}{% if entry.degree %} in {% endif %}{{ entry.field }}
+{% endfor %}
+{% endif %}
+
+\end{document}

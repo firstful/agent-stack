@@ -1,0 +1,45 @@
+import { z } from "zod";
+export const BlockSchema = z.object({
+    id: z.string().uuid(),
+    pageId: z.string().uuid(),
+    index: z.number().int().nonnegative(),
+    children: z.array(z.string().uuid()),
+    type: z.enum([
+        "paragraph", "heading", "heading2", "heading3", "bulletList", "orderedList",
+        "taskList", "codeBlock", "blockQuote", "divider", "image", "file", "mention",
+        "channelLink", "meetingNote", "adr", "postmortem", "okr", "embed", "reactionBar", "table",
+    ]),
+    content: z.string(),
+    attributes: z.object({
+        caret: z.object({ from: z.number(), to: z.number() }).optional(),
+        collapsed: z.boolean().optional(),
+        language: z.string().optional(),
+        alt: z.string().optional(),
+        url: z.string().url().optional(),
+        mentionedIds: z.array(z.string().uuid()).optional(),
+        meetingId: z.string().uuid().optional(),
+        adrStatus: z.enum(["proposed", "accepted", "rejected", "superseded"]).optional(),
+        custom: z.record(z.string(), z.unknown()).optional(),
+    }).default({}),
+    authorId: z.string().uuid(),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date().nullable().default(null),
+    deletedAt: z.coerce.date().nullable().default(null),
+    yjsLogHash: z.string().nullable().default(null),
+});
+export const PageSchema = z.object({
+    id: z.string().uuid(),
+    channelId: z.string().uuid().nullable().default(null),
+    createdById: z.string().uuid(),
+    slug: z.string().min(1).max(255),
+    title: z.string().min(1).max(255),
+    archived: z.boolean().default(false),
+    locked: z.boolean().default(false),
+    rootBlockId: z.string().uuid().nullable().default(null),
+    blocks: z.array(BlockSchema),
+    labels: z.array(z.string()),
+    config: z.record(z.string(), z.unknown()).default({}),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date().nullable().default(null),
+});
+//# sourceMappingURL=document.js.map

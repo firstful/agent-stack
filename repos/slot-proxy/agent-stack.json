@@ -1,0 +1,17 @@
+{
+  "name": "slot-proxy",
+  "version": 2,
+  "container": {
+    "port": 80,
+    "auto_port": true,
+    "volumes": [
+      "/srv/agent-stack/runtime:/runtime"
+    ]
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "*.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf",
+    "no_proxy": true
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "deepseek": {},
+    "free-llm-router": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Free LLM Router",
+      "options": {
+        "baseURL": "http://agent-stack/proxy/free-llm-router/v1",
+        "apiKey": "dummy"
+      },
+      "models": {
+        "default": { "name": "Default" },
+        "big": { "name": "Big" },
+        "quick": { "name": "Quick" },
+        "balanced": { "name": "Balanced" }
+      }
+    }
+  },
+  "model": "free-llm-router/balanced",
+  "mcp": {
+    "agent-stack": {
+      "type": "remote",
+      "url": "http://agent-stack/mcp",
+      "oauth" : false
+    }
+  }
+}

@@ -1,0 +1,26 @@
+FROM docker.io/oven/bun:1 AS builder
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/web/package.json ./packages/web/
+COPY packages/electron/package.json ./packages/electron/
+COPY packages/desktop/package.json ./packages/desktop/
+COPY packages/vscode/package.json ./packages/vscode/
+RUN bun install --frozen-lockfile --ignore-scripts
+COPY . .
+RUN bun run build:web
+
+FROM docker.io/oven/bun:1
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/packages/web/package.json ./packages/web/package.json
+COPY --from=builder /app/packages/web/bin ./packages/web/bin
+COPY --from=builder /app/packages/web/server ./packages/web/server
+COPY --from=builder /app/packages/web/dist ./packages/web/dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/web/node_modules ./packages/web/node_modules
+RUN bun install -g opencode-ai
+ENV OPENCHAMBER_HOST=0.0.0.0
+EXPOSE 3000
+CMD ["node", "packages/web/bin/cli.js", "serve", "--foreground"]

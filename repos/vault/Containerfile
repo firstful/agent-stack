@@ -1,0 +1,14 @@
+FROM docker.io/library/node:22-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY . .
+
+ENV PORT=3500
+
+EXPOSE 3500
+
+CMD ["npx", "tsx", "server/index.ts"]

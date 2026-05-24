@@ -1,0 +1,11 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "mcp": {
+    "agent-stack": {
+      "type": "local",
+      "command": ["node", "/srv/agent-stack/mcp/index.js"],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}

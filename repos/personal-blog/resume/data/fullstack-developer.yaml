@@ -1,0 +1,67 @@
+summary:
+  "Full-stack developer experienced in building and modernizing web applications from the
+   database to the browser. Combines strong C# and SQL fundamentals with Blazor, .NET,
+   and automation platform experience."
+
+skills:
+  languages:
+    - C#
+    - SQL
+    - JavaScript
+    - HTML / CSS
+    - Python
+    - Bash
+  frameworks:
+    - Blazor
+    - .NET
+    - ASP.NET Core
+    - Node.js
+  tools:
+    - Docker
+    - Nginx
+    - Linux
+    - Git
+    - Azure
+  concepts:
+    - Full-Stack Development
+    - Web Performance
+    - API Design
+    - UI / UX
+    - CI/CD
+
+experience:
+  - company: "Foxen"
+    location: "Columbus, OH"
+    position: "Senior Software Engineer"
+    dates: "Aug 2023 – Present"
+    highlights:
+      - "Drove frontend performance improvements reducing API call hops 4 to 1 and cutting latency up to 15x"
+      - "Standardized client SDK across 10 services, enabling consistent developer experience"
+      - "Owned full-stack feature delivery across the entire product lifecycle for both B2B and consumer users"
+      - "Built reusable UI component libraries and testing frameworks adopted across every service"
+
+  - company: "Impower.ai"
+    location: "Columbus, OH"
+    position: "Automation Architect / RPA Developer"
+    dates: "Mar 2020 – Aug 2023"
+    highlights:
+      - "Built full-stack automation dashboards for client reporting and compliance"
+      - "Delivered automation that eliminated 10 planned new hires for a client engagement"
+      - "Developed lead-generation web application for law firm with automated data processing pipeline"
+      - "Rotated through client engagements including Process Automation Engineer at Chipotle Mexican Grill"
+
+education:
+  - institution: "Ohio State University"
+    degree: ""
+    field: "Chemical Engineering"
+    dates: "2014 – 2018"
+
+projects:
+  - name: "ffilt.us (Personal Blog)"
+    description: "Static site built with MkDocs, custom Material theme, automated CI/CD deployment on Azure"
+    technologies:
+      - Python
+      - MkDocs
+      - Azure
+      - GitHub Actions
+    url: "https://ffilt.us"

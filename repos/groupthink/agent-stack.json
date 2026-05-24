@@ -1,0 +1,37 @@
+{
+  "name": "groupthink",
+  "repo": "/srv/agent-stack/repos/groupthink",
+  "version": 2,
+  "container": {
+    "port": 3000,
+    "env": {
+      "DATABASE_URL": "postgres://groupthink:groupthink@groupthink--db:5432/groupthink",
+      "REDIS_URL": "redis://groupthink--redis:6379",
+      "LLM_ENDPOINT": "http://host.containers.internal:8080/v1/chat/completions"
+    },
+    "volumes": ["/srv/agent-stack/config/groupthink:/config"],
+    "sidecars": [
+      {
+        "name": "db",
+        "image": "docker.io/postgres:16-alpine",
+        "port": 5432,
+        "env": {
+          "POSTGRES_USER": "groupthink",
+          "POSTGRES_PASSWORD": "groupthink",
+          "POSTGRES_DB": "groupthink"
+        },
+        "volumes": ["groupthink-pgdata:/var/lib/postgresql/data"]
+      },
+      {
+        "name": "redis",
+        "image": "docker.io/redis:7-alpine",
+        "port": 6379
+      }
+    ]
+  },
+  "expose": {
+    "hostname": "groupthink.ffilt.us",
+    "tunnel": "ffilt-us",
+    "enabled": true
+  }
+}

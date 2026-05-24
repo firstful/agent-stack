@@ -1,0 +1,2351 @@
+May 17 13:08:50 reed-a320ms2h systemd[875]: Started podman-3560690.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665291.
+May 17 13:08:50 reed-a320ms2h systemd[875]: Started podman-3560717.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665295.
+May 17 13:08:50 reed-a320ms2h systemd[875]: Started podman-3560748.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665299.
+May 17 13:08:50 reed-a320ms2h systemd[875]: Started podman-3560783.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665303.
+May 17 13:08:51 reed-a320ms2h systemd[875]: Started podman-3560817.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665307.
+May 17 13:08:51 reed-a320ms2h node[3522782]: [watch] rename: lib/systemd.js — scheduling restart
+May 17 13:08:51 reed-a320ms2h systemd[875]: Started podman-3560845.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665311.
+May 17 13:08:51 reed-a320ms2h systemd[875]: Started podman-3560876.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665315.
+May 17 13:08:51 reed-a320ms2h systemd[875]: Started podman-3560905.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665319.
+May 17 13:08:51 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14921.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:08:51 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2865036.
+May 17 13:08:51 reed-a320ms2h node[3560922]: node:internal/modules/cjs/loader:1478
+May 17 13:08:51 reed-a320ms2h node[3560922]:   throw err;
+May 17 13:08:51 reed-a320ms2h node[3560922]:   ^
+May 17 13:08:51 reed-a320ms2h node[3560922]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:08:51 reed-a320ms2h node[3560922]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:08:51 reed-a320ms2h node[3560922]:   code: 'MODULE_NOT_FOUND',
+May 17 13:08:51 reed-a320ms2h node[3560922]:   requireStack: []
+May 17 13:08:51 reed-a320ms2h node[3560922]: }
+May 17 13:08:51 reed-a320ms2h node[3560922]: Node.js v25.9.0
+May 17 13:08:51 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:08:51 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:08:52 reed-a320ms2h systemd[875]: Started podman-3560944.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665323.
+May 17 13:08:52 reed-a320ms2h systemd[875]: Started podman-3560974.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665327.
+May 17 13:08:52 reed-a320ms2h systemd[875]: Started podman-3561002.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665331.
+May 17 13:08:52 reed-a320ms2h systemd[875]: Started podman-3561036.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665335.
+May 17 13:08:52 reed-a320ms2h systemd[875]: Started podman-3561065.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665339.
+May 17 13:08:52 reed-a320ms2h warp-svc[732]: 2026-05-17T17:08:52.918Z DEBUG collect_device_state: actor_device_state::collector: close time.busy=4.10µs time.idle=8.79µs
+May 17 13:08:53 reed-a320ms2h systemd[875]: Started podman-3561100.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665343.
+May 17 13:08:53 reed-a320ms2h systemd[875]: Started podman-3561131.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665347.
+May 17 13:08:53 reed-a320ms2h systemd[875]: Started podman-3561158.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665351.
+May 17 13:08:53 reed-a320ms2h systemd[875]: Started podman-3561187.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665355.
+May 17 13:08:53 reed-a320ms2h systemd[875]: Started podman-3561223.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665359.
+May 17 13:08:53 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14922.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:08:54 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2865169.
+May 17 13:08:54 reed-a320ms2h systemd[875]: Started podman-3561251.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665363.
+May 17 13:08:54 reed-a320ms2h node[3561270]: node:internal/modules/cjs/loader:1478
+May 17 13:08:54 reed-a320ms2h node[3561270]:   throw err;
+May 17 13:08:54 reed-a320ms2h node[3561270]:   ^
+May 17 13:08:54 reed-a320ms2h node[3561270]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:08:54 reed-a320ms2h node[3561270]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:08:54 reed-a320ms2h node[3561270]:   code: 'MODULE_NOT_FOUND',
+May 17 13:08:54 reed-a320ms2h node[3561270]:   requireStack: []
+May 17 13:08:54 reed-a320ms2h node[3561270]: }
+May 17 13:08:54 reed-a320ms2h node[3561270]: Node.js v25.9.0
+May 17 13:08:54 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:08:54 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:08:54 reed-a320ms2h systemd[875]: Started podman-3561292.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665367.
+May 17 13:08:54 reed-a320ms2h systemd[875]: Started podman-3561323.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665371.
+May 17 13:08:54 reed-a320ms2h systemd[875]: Started podman-3561353.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665375.
+May 17 13:08:54 reed-a320ms2h systemd[875]: Started podman-3561384.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665379.
+May 17 13:08:55 reed-a320ms2h systemd[875]: Started podman-3561417.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665383.
+May 17 13:08:55 reed-a320ms2h systemd[875]: Started podman-3561450.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665387.
+May 17 13:08:55 reed-a320ms2h systemd[875]: Started podman-3561477.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665391.
+May 17 13:08:55 reed-a320ms2h systemd[875]: Started podman-3561508.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665395.
+May 17 13:08:55 reed-a320ms2h systemd[875]: Started podman-3561538.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665399.
+May 17 13:08:55 reed-a320ms2h systemd[875]: Started podman-3561573.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665403.
+May 17 13:08:56 reed-a320ms2h systemd[875]: Started podman-3561604.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665407.
+May 17 13:08:56 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14923.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:08:56 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2865302.
+May 17 13:08:56 reed-a320ms2h node[3561619]: node:internal/modules/cjs/loader:1478
+May 17 13:08:56 reed-a320ms2h node[3561619]:   throw err;
+May 17 13:08:56 reed-a320ms2h node[3561619]:   ^
+May 17 13:08:56 reed-a320ms2h node[3561619]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:08:56 reed-a320ms2h node[3561619]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:08:56 reed-a320ms2h node[3561619]:   code: 'MODULE_NOT_FOUND',
+May 17 13:08:56 reed-a320ms2h node[3561619]:   requireStack: []
+May 17 13:08:56 reed-a320ms2h node[3561619]: }
+May 17 13:08:56 reed-a320ms2h node[3561619]: Node.js v25.9.0
+May 17 13:08:56 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:08:56 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:08:56 reed-a320ms2h systemd[875]: Started podman-3561640.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665411.
+May 17 13:08:56 reed-a320ms2h node[3522782]: [backoff] personal-blog — skip build (10 cycles remaining)
+May 17 13:08:56 reed-a320ms2h systemd[875]: Started podman-3561668.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665415.
+May 17 13:08:56 reed-a320ms2h systemd[875]: Started podman-3561696.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665419.
+May 17 13:08:57 reed-a320ms2h systemd[875]: Started podman-3561734.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665423.
+May 17 13:08:57 reed-a320ms2h systemd[875]: Started podman-3561765.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665427.
+May 17 13:08:57 reed-a320ms2h systemd[875]: Started podman-3561794.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665431.
+May 17 13:08:57 reed-a320ms2h systemd[875]: Started podman-3561824.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665435.
+May 17 13:08:57 reed-a320ms2h systemd[875]: Started podman-3561854.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665439.
+May 17 13:08:58 reed-a320ms2h systemd[875]: Started podman-3561892.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665443.
+May 17 13:08:58 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14924.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:08:58 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2865435.
+May 17 13:08:58 reed-a320ms2h node[3561930]: node:internal/modules/cjs/loader:1478
+May 17 13:08:58 reed-a320ms2h node[3561930]:   throw err;
+May 17 13:08:58 reed-a320ms2h node[3561930]:   ^
+May 17 13:08:58 reed-a320ms2h node[3561930]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:08:58 reed-a320ms2h node[3561930]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:08:58 reed-a320ms2h node[3561930]:   code: 'MODULE_NOT_FOUND',
+May 17 13:08:58 reed-a320ms2h node[3561930]:   requireStack: []
+May 17 13:08:58 reed-a320ms2h node[3561930]: }
+May 17 13:08:58 reed-a320ms2h node[3561930]: Node.js v25.9.0
+May 17 13:08:58 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:08:58 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:08:58 reed-a320ms2h systemd[875]: Started podman-3561923.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665447.
+May 17 13:08:58 reed-a320ms2h systemd[875]: Started podman-3561960.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665451.
+May 17 13:08:58 reed-a320ms2h node[3522782]: [watch] restarting process
+May 17 13:08:58 reed-a320ms2h systemd[1]: agent-stack.service: Deactivated successfully.
+░░ Subject: Unit succeeded
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-stack.service has successfully entered the 'dead' state.
+May 17 13:08:58 reed-a320ms2h systemd[1]: agent-stack.service: Consumed 1min 39.904s CPU time over 4min 55.588s wall clock time, 82.6M memory peak.
+░░ Subject: Resources consumed by unit runtime
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-stack.service completed and consumed the indicated resources.
+May 17 13:08:59 reed-a320ms2h sudo[3561875]:    reeds : TTY=pts/5 ; PWD=/srv/agent-stack ; USER=root ; COMMAND=/usr/bin/systemctl start cockpit.socket
+May 17 13:08:59 reed-a320ms2h sudo[3561875]: pam_unix(sudo:session): session opened for user root(uid=0) by reeds(uid=1000)
+May 17 13:08:59 reed-a320ms2h (sd-listen[3562009]: cockpit.socket: Failed to create listening socket ([::]:9090): Address already in use
+May 17 13:08:59 reed-a320ms2h systemd[1]: cockpit.socket: Failed to receive listening socket ([::]:9090): Input/output error
+May 17 13:08:59 reed-a320ms2h systemd[1]: cockpit.socket: Failed to listen on sockets: Input/output error
+May 17 13:08:59 reed-a320ms2h systemd[1]: Starting Cockpit Web Service Socket...
+░░ Subject: A start job for unit cockpit.socket has begun execution
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit cockpit.socket has begun execution.
+░░ 
+░░ The job identifier is 2865568.
+May 17 13:08:59 reed-a320ms2h systemd[1]: cockpit.socket: Failed with result 'resources'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit cockpit.socket has entered the 'failed' state with result 'resources'.
+May 17 13:08:59 reed-a320ms2h systemd[1]: Failed to listen on Cockpit Web Service Socket.
+░░ Subject: A start job for unit cockpit.socket has failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit cockpit.socket has finished with a failure.
+░░ 
+░░ The job identifier is 2865568 and the job result is failed.
+May 17 13:08:59 reed-a320ms2h systemd[1]: Starting Cockpit issue updater service...
+░░ Subject: A start job for unit cockpit-issue.service has begun execution
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit cockpit-issue.service has begun execution.
+░░ 
+░░ The job identifier is 2865701.
+May 17 13:08:59 reed-a320ms2h sudo[3561875]: pam_unix(sudo:session): session closed for user root
+May 17 13:08:59 reed-a320ms2h systemd[1]: cockpit-issue.service: Deactivated successfully.
+░░ Subject: Unit succeeded
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit cockpit-issue.service has successfully entered the 'dead' state.
+May 17 13:08:59 reed-a320ms2h systemd[1]: Finished Cockpit issue updater service.
+░░ Subject: A start job for unit cockpit-issue.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit cockpit-issue.service has finished successfully.
+░░ 
+░░ The job identifier is 2865701.
+May 17 13:09:00 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14925.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:00 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2865708.
+May 17 13:09:00 reed-a320ms2h node[3562027]: node:internal/modules/cjs/loader:1478
+May 17 13:09:00 reed-a320ms2h node[3562027]:   throw err;
+May 17 13:09:00 reed-a320ms2h node[3562027]:   ^
+May 17 13:09:00 reed-a320ms2h node[3562027]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:00 reed-a320ms2h node[3562027]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:00 reed-a320ms2h node[3562027]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:00 reed-a320ms2h node[3562027]:   requireStack: []
+May 17 13:09:00 reed-a320ms2h node[3562027]: }
+May 17 13:09:00 reed-a320ms2h node[3562027]: Node.js v25.9.0
+May 17 13:09:00 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:00 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:02 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14926.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:02 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2865841.
+May 17 13:09:02 reed-a320ms2h node[3562075]: node:internal/modules/cjs/loader:1478
+May 17 13:09:02 reed-a320ms2h node[3562075]:   throw err;
+May 17 13:09:02 reed-a320ms2h node[3562075]:   ^
+May 17 13:09:02 reed-a320ms2h node[3562075]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:02 reed-a320ms2h node[3562075]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:02 reed-a320ms2h node[3562075]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:02 reed-a320ms2h node[3562075]:   requireStack: []
+May 17 13:09:02 reed-a320ms2h node[3562075]: }
+May 17 13:09:02 reed-a320ms2h node[3562075]: Node.js v25.9.0
+May 17 13:09:02 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:02 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:03 reed-a320ms2h systemd[1]: agent-stack.service: Scheduled restart job, restart counter is at 4.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-stack.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:03 reed-a320ms2h systemd[1]: Started Agent Stack Controller — reconcile desired/ state with podman + cloudflared.
+░░ Subject: A start job for unit agent-stack.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-stack.service has finished successfully.
+░░ 
+░░ The job identifier is 2865974.
+May 17 13:09:04 reed-a320ms2h systemd[875]: Started podman-3562142.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665455.
+May 17 13:09:04 reed-a320ms2h systemd[875]: Started podman-3562170.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665459.
+May 17 13:09:04 reed-a320ms2h systemd[875]: Started podman-3562205.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665463.
+May 17 13:09:04 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14927.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:04 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2866114.
+May 17 13:09:04 reed-a320ms2h node[3562225]: node:internal/modules/cjs/loader:1478
+May 17 13:09:04 reed-a320ms2h node[3562225]:   throw err;
+May 17 13:09:04 reed-a320ms2h node[3562225]:   ^
+May 17 13:09:04 reed-a320ms2h node[3562225]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:04 reed-a320ms2h node[3562225]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:04 reed-a320ms2h node[3562225]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:04 reed-a320ms2h node[3562225]:   requireStack: []
+May 17 13:09:04 reed-a320ms2h node[3562225]: }
+May 17 13:09:04 reed-a320ms2h node[3562225]: Node.js v25.9.0
+May 17 13:09:04 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:04 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:05 reed-a320ms2h systemd[875]: Started podman-3562250.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665467.
+May 17 13:09:05 reed-a320ms2h systemd[875]: Started podman-3562280.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665471.
+May 17 13:09:05 reed-a320ms2h systemd[875]: Started podman-3562307.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665475.
+May 17 13:09:05 reed-a320ms2h systemd[875]: Started podman-3562336.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665479.
+May 17 13:09:05 reed-a320ms2h systemd[875]: Started podman-3562372.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665483.
+May 17 13:09:06 reed-a320ms2h systemd[875]: Started podman-3562408.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665487.
+May 17 13:09:06 reed-a320ms2h systemd[875]: Started podman-3562436.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665491.
+May 17 13:09:06 reed-a320ms2h systemd[875]: Started podman-3562464.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665495.
+May 17 13:09:06 reed-a320ms2h systemd[875]: Started podman-3562495.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665499.
+May 17 13:09:06 reed-a320ms2h systemd[875]: Started podman-3562531.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665503.
+May 17 13:09:06 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14928.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:06 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2866247.
+May 17 13:09:07 reed-a320ms2h systemd[875]: Started podman-3562563.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665507.
+May 17 13:09:07 reed-a320ms2h node[3562566]: node:internal/modules/cjs/loader:1478
+May 17 13:09:07 reed-a320ms2h node[3562566]:   throw err;
+May 17 13:09:07 reed-a320ms2h node[3562566]:   ^
+May 17 13:09:07 reed-a320ms2h node[3562566]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:07 reed-a320ms2h node[3562566]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:07 reed-a320ms2h node[3562566]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:07 reed-a320ms2h node[3562566]:   requireStack: []
+May 17 13:09:07 reed-a320ms2h node[3562566]: }
+May 17 13:09:07 reed-a320ms2h node[3562566]: Node.js v25.9.0
+May 17 13:09:07 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:07 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:07 reed-a320ms2h systemd[875]: Started podman-3562600.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665511.
+May 17 13:09:07 reed-a320ms2h systemd[875]: Started podman-3562635.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665515.
+May 17 13:09:07 reed-a320ms2h systemd[875]: Started podman-3562664.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665519.
+May 17 13:09:07 reed-a320ms2h systemd[875]: Started podman-3562696.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665523.
+May 17 13:09:08 reed-a320ms2h systemd[875]: Started podman-3562730.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665527.
+May 17 13:09:08 reed-a320ms2h systemd[875]: Started podman-3562757.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665531.
+May 17 13:09:08 reed-a320ms2h systemd[875]: Started podman-3562785.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665535.
+May 17 13:09:09 reed-a320ms2h systemd[875]: Started podman-3562820.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665539.
+May 17 13:09:09 reed-a320ms2h systemd[875]: Started podman-3562853.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665543.
+May 17 13:09:09 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14929.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:09 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2866380.
+May 17 13:09:09 reed-a320ms2h node[3562867]: node:internal/modules/cjs/loader:1478
+May 17 13:09:09 reed-a320ms2h node[3562867]:   throw err;
+May 17 13:09:09 reed-a320ms2h node[3562867]:   ^
+May 17 13:09:09 reed-a320ms2h node[3562867]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:09 reed-a320ms2h node[3562867]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:09 reed-a320ms2h node[3562867]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:09 reed-a320ms2h node[3562867]:   requireStack: []
+May 17 13:09:09 reed-a320ms2h node[3562867]: }
+May 17 13:09:09 reed-a320ms2h node[3562867]: Node.js v25.9.0
+May 17 13:09:09 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:09 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:09 reed-a320ms2h systemd[875]: Started podman-3562889.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665547.
+May 17 13:09:09 reed-a320ms2h systemd[875]: Started podman-3562922.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665551.
+May 17 13:09:10 reed-a320ms2h systemd[875]: Started podman-3562955.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665555.
+May 17 13:09:10 reed-a320ms2h node[3562119]: [build] stack/personal-blog:latest from /srv/agent-stack/repos/personal-blog
+May 17 13:09:10 reed-a320ms2h systemd[875]: Started podman-3562984.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665559.
+May 17 13:09:10 reed-a320ms2h node[3562984]: [1/2] STEP 1/11: FROM docker.io/library/node:22 AS build
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 2/11: ARG SITE_URL=https://blog.ffilt.us/
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/R2QMH4GXDAUHZGUUFGWT3YTAAE' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache 83108b3716e8c2b9681c7605c2b270f2e0c28cf8716b68f52a4aeec9e034f113
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> 83108b3716e8
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/R2QMH4GXDAUHZGUUFGWT3YTAAE' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 3/11: RUN apt-get update && apt-get install -y python3 python3-pip python3-venv && rm -rf /var/lib/apt/lists/*
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache 2024d51dffc40a20c11f738748cdf22930c252ab82d1826486636d4ce73f31dd
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> 2024d51dffc4
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 4/11: WORKDIR /app
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/T5PPUECD5HTB4ASJJLFA7HOIKG' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache 3836b497e036f10a8fe0ccbba256ed2d25ab18b07147dea7f511679b28fe7b08
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> 3836b497e036
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/T5PPUECD5HTB4ASJJLFA7HOIKG' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 5/11: COPY requirements.txt ./
+May 17 13:09:11 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14930.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:11 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2866513.
+May 17 13:09:11 reed-a320ms2h node[3563057]: node:internal/modules/cjs/loader:1478
+May 17 13:09:11 reed-a320ms2h node[3563057]:   throw err;
+May 17 13:09:11 reed-a320ms2h node[3563057]:   ^
+May 17 13:09:11 reed-a320ms2h node[3563057]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:11 reed-a320ms2h node[3563057]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:11 reed-a320ms2h node[3563057]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:11 reed-a320ms2h node[3563057]:   requireStack: []
+May 17 13:09:11 reed-a320ms2h node[3563057]: }
+May 17 13:09:11 reed-a320ms2h node[3563057]: Node.js v25.9.0
+May 17 13:09:11 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:11 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache 8d6a8ef93ce262fb546c3ab0a2a99a66b086373e09a57c6f54f433f5c934eeb1
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> 8d6a8ef93ce2
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 6/11: RUN python3 -m venv /venv && /venv/bin/pip install --no-cache-dir -r requirements.txt
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/FGQCHWVNUTNLM7XGNB5TVXRECN' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache b60406af0f07ded28577783737bfc9727811393fec8259a44652a3c700bf8f64
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> b60406af0f07
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 7/11: ENV PATH="/venv/bin:$PATH"
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/KP4IRLCSRSR2BXIEVQKIFLFEZL' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache 1a9c17caf894034096e5f0289b0b4b6e91bea6c7735eca008b042b2ec7a88715
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> 1a9c17caf894
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 8/11: COPY package*.json ./
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/KP4IRLCSRSR2BXIEVQKIFLFEZL' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache 6b9b941a29c3f2249ce020bbd1a928ef10be2bb18032e35d4c35a49ab8def8f1
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> 6b9b941a29c3
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 9/11: RUN npm ci
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/AT7TTL2VYEJ6BZT4W4PZZCCUK7' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> Using cache b48b42793beb2ac4e8814e7d3a901378f456df684f54b68fa107ad5571c4260d
+May 17 13:09:11 reed-a320ms2h node[3562984]: --> b48b42793beb
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:11 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/KQGJQX26HXJ2ENYYH7QYBMNDRG' does not support file handles, falling back to xino=off.
+May 17 13:09:11 reed-a320ms2h node[3562984]: [1/2] STEP 10/11: COPY . .
+May 17 13:09:12 reed-a320ms2h node[3562984]: --> Using cache e987514d2e356219e4e15f2568cf6cd85514362b80305aad8142e7ab2a443c6b
+May 17 13:09:12 reed-a320ms2h node[3562984]: --> e987514d2e35
+May 17 13:09:12 reed-a320ms2h kernel: overlayfs: upper fs does not support file handles, falling back to index=off.
+May 17 13:09:12 reed-a320ms2h kernel: overlayfs: fs on '/home/reeds/.local/share/containers/storage/overlay/l/AHVM7CJ73A33EYP4COWGHPNYSK' does not support file handles, falling back to xino=off.
+May 17 13:09:12 reed-a320ms2h node[3562984]: [1/2] STEP 11/11: RUN SITE_URL=$SITE_URL npm run build:preview
+May 17 13:09:12 reed-a320ms2h systemd[875]: Started libcontainer container buildah-buildah2792386550.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665563.
+May 17 13:09:12 reed-a320ms2h node[3563440]: > build:preview
+May 17 13:09:12 reed-a320ms2h node[3563440]: > MKDOCS_SCHEDULE_MODE=1 npm run build:site
+May 17 13:09:12 reed-a320ms2h node[3563440]: > build:site
+May 17 13:09:12 reed-a320ms2h node[3563440]: > sed -i "s|^site_url:.*|site_url: ${SITE_URL:-https://blog.ffilt.us/}|" mkdocs.yml && mkdocs build
+May 17 13:09:13 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:13 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:13 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:13 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:13 reed-a320ms2h node[3563440]: ```
+May 17 13:09:13 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:13 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:13 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:13 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:13 reed-a320ms2h node[3563440]: ```
+May 17 13:09:13 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:13 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:13 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:13 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:13 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:13 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:13 reed-a320ms2h node[3563440]: WARNING  -  Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:13 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:13 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:13 reed-a320ms2h node[3563440]: ```
+May 17 13:09:13 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:13 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:13 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:13 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:13 reed-a320ms2h node[3563440]: ```
+May 17 13:09:13 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:13 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:13 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: path is deprecated. Use files() instead. Refer to https://importlib-resources.readthedocs.io/en/latest/using.html#migrating-from-legacy for migration advice.
+May 17 13:09:13 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/certifi/core.py", line 36, in where
+May 17 13:09:13 reed-a320ms2h node[3563440]:     _CACERT_CTX = get_path("certifi", "cacert.pem")
+May 17 13:09:13 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/importlib/resources/_legacy.py", line 18, in wrapper
+May 17 13:09:13 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:13 reed-a320ms2h node[3563440]: INFO     -  [macros] - Macros arguments: {'module_name': 'main', 'modules': [], 'include_dir': '', 'include_yaml': [], 'j2_block_start_string': '', 'j2_block_end_string': '', 'j2_variable_start_string': '', 'j2_variable_end_string': '', 'on_undefined': 'keep', 'on_error_fail': False, 'verbose': False}
+May 17 13:09:13 reed-a320ms2h node[3563440]: INFO     -  [macros] - Found local Python module 'main' in: /app
+May 17 13:09:13 reed-a320ms2h node[3563440]: INFO     -  [macros] - Found external Python module 'main' in: /app
+May 17 13:09:13 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14931.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:13 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2866646.
+May 17 13:09:13 reed-a320ms2h node[3563590]: node:internal/modules/cjs/loader:1478
+May 17 13:09:13 reed-a320ms2h node[3563590]:   throw err;
+May 17 13:09:13 reed-a320ms2h node[3563590]:   ^
+May 17 13:09:13 reed-a320ms2h node[3563590]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:13 reed-a320ms2h node[3563590]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:13 reed-a320ms2h node[3563590]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:13 reed-a320ms2h node[3563590]:   requireStack: []
+May 17 13:09:13 reed-a320ms2h node[3563590]: }
+May 17 13:09:13 reed-a320ms2h node[3563590]: Node.js v25.9.0
+May 17 13:09:13 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:13 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  [macros] - Extra variables (config file): ['tags', 'social']
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  [macros] - Extra filters (module): ['pretty']
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  kroki.plugin Configuring: {'ServerURL': 'https://kroki.io', 'EnableBlockDiag': True, 'Enablebpmn': True, 'EnableExcalidraw': True, 'EnableMermaid': True, 'EnableDiagramsnet': False, 'HttpMethod': 'POST', 'DownloadImages': True, 'EmbedImages': False, 'DownloadDir': 'images/kroki_generated', 'FencePrefix': 'kroki-', 'FileTypes': ['svg'], 'FileTypeOverrides': {}}
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  kroki.config File and Diagram types configured: {'bytefield': 'svg', 'ditaa': 'svg', 'erd': 'svg', 'graphviz': 'svg', 'nomnoml': 'svg', 'plantuml': 'svg', 'structurizr': 'svg', 'c4plantuml': 'svg', 'svgbob': 'svg', 'vega': 'svg', 'vegalite': 'svg', 'wavedrom': 'svg', 'pikchr': 'svg', 'umlet': 'svg', 'blockdiag': 'svg', 'seqdiag': 'svg', 'actdiag': 'svg', 'nwdiag': 'svg', 'packetdiag': 'svg', 'rackdiag': 'svg', 'bpmn': 'svg', 'excalidraw': 'svg', 'mermaid': 'svg'}
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  kroki.client Initialized: POST, https://kroki.io
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  Cleaning site directory
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  Building documentation to directory: /app/site
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  The following pages exist in the docs directory, but are not included in the "nav" configuration:
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - tags.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/opinions/any-library-you-want-20-dollars.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/opinions/eng-matters-uipath.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/opinions/language-agnosticism.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/opinions/the-0-01-that-justifies-anything.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/opinions/the-500-million-year-head-start.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/tutorials/mkdocs-azure-swa.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/tutorials/openapi-asyncapi-sharing.md
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - blog/tutorials/openapi-github-actions.md
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:15 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:15 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:15 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:15 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:15 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:15 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:15 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:15 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:15 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:15 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:15 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:15 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:15 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:15 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:15 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:15 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:15 reed-a320ms2h node[3563440]: ```
+May 17 13:09:15 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:15 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:15 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:15 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:15 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:15 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:15 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14932.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:15 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2866779.
+May 17 13:09:15 reed-a320ms2h node[3563839]: node:internal/modules/cjs/loader:1478
+May 17 13:09:15 reed-a320ms2h node[3563839]:   throw err;
+May 17 13:09:15 reed-a320ms2h node[3563839]:   ^
+May 17 13:09:15 reed-a320ms2h node[3563839]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:15 reed-a320ms2h node[3563839]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:15 reed-a320ms2h node[3563839]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:15 reed-a320ms2h node[3563839]:   requireStack: []
+May 17 13:09:15 reed-a320ms2h node[3563839]: }
+May 17 13:09:15 reed-a320ms2h node[3563839]: Node.js v25.9.0
+May 17 13:09:15 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:15 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:15 reed-a320ms2h systemd[1]: Bluetooth service skipped, unmet condition check ConditionPathIsDirectory=/sys/class/bluetooth
+░░ Subject: A start job for unit bluetooth.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit bluetooth.service has finished successfully.
+░░ 
+░░ The job identifier is 2866912.
+May 17 13:09:15 reed-a320ms2h kdeconnectd[1738]: Cannot find Bluez 5 adapter for device search false
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:16 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:16 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:16 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:16 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:16 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:16 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:16 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:16 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:16 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:16 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  [macros] - ERROR # _Macro Rendering Error_
+May 17 13:09:16 reed-a320ms2h node[3563440]: **UndefinedError**: 'secrets' is undefined
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: Traceback (most recent call last):
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_macros/plugin.py", line 480, in render
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return md_template.render(**page_variables)
+May 17 13:09:16 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 1304, in render
+May 17 13:09:16 reed-a320ms2h node[3563440]:     self.environment.handle_exception()
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 925, in handle_exception
+May 17 13:09:16 reed-a320ms2h node[3563440]:     raise rewrite_traceback_stack(source=source)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "<template>", line 104, in <module>
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 474, in getattr
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return getattr(obj, attribute)
+May 17 13:09:16 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:16 reed-a320ms2h node[3563440]: jinja2.exceptions.UndefinedError: 'secrets' is undefined
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:16 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:16 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:16 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:16 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:16 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:16 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:16 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:16 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:16 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:16 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  [macros] - ERROR # _Macro Rendering Error_
+May 17 13:09:16 reed-a320ms2h node[3563440]: **UndefinedError**: 'secrets' is undefined
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: Traceback (most recent call last):
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_macros/plugin.py", line 480, in render
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return md_template.render(**page_variables)
+May 17 13:09:16 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 1304, in render
+May 17 13:09:16 reed-a320ms2h node[3563440]:     self.environment.handle_exception()
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 925, in handle_exception
+May 17 13:09:16 reed-a320ms2h node[3563440]:     raise rewrite_traceback_stack(source=source)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "<template>", line 174, in <module>
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 474, in getattr
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return getattr(obj, attribute)
+May 17 13:09:16 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:16 reed-a320ms2h node[3563440]: jinja2.exceptions.UndefinedError: 'secrets' is undefined
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:16 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:16 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:16 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:16 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:16 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: Use setlocale(), getencoding() and getlocale() instead
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs_blogging_plugin/util.py", line 143, in get_localized_date
+May 17 13:09:16 reed-a320ms2h node[3563440]:     _locale = locale.getdefaultlocale()[0]
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/locale.py", line 559, in getdefaultlocale
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:16 reed-a320ms2h node[3563440]: INFO     -  DeprecationWarning: 'materialx.emoji.twemoji' is deprecated.
+May 17 13:09:16 reed-a320ms2h node[3563440]: Material emoji logic has been officially moved into mkdocs-material
+May 17 13:09:16 reed-a320ms2h node[3563440]: version 9.4. Please use Material's 'material.extensions.emoji.twemoji'
+May 17 13:09:16 reed-a320ms2h node[3563440]: instead of 'materialx.emoji.twemoji' in your 'mkdocs.yml' file.
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: markdown_extensions:
+May 17 13:09:16 reed-a320ms2h node[3563440]:   - pymdownx.emoji:
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_index: !!python/name:material.extensions.emoji.twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:       emoji_generator: !!python/name:material.extensions.emoji.to_svg
+May 17 13:09:16 reed-a320ms2h node[3563440]: ```
+May 17 13:09:16 reed-a320ms2h node[3563440]: 'mkdocs_material_extensions' is deprecated and will no longer be
+May 17 13:09:16 reed-a320ms2h node[3563440]: supported moving forward. This is the last release.
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 118, in twemoji
+May 17 13:09:16 reed-a320ms2h node[3563440]:     return _patch_index(options)
+May 17 13:09:16 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/materialx/emoji.py", line 68, in _deprecated_func
+May 17 13:09:16 reed-a320ms2h node[3563440]:     warnings.warn(
+May 17 13:09:17 reed-a320ms2h node[3563440]: ERROR    -  Error building page 'blog/opinions/any-library-you-want-20-dollars.md': Object of type date is not JSON serializable
+May 17 13:09:17 reed-a320ms2h node[3563440]: Traceback (most recent call last):
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/bin/mkdocs", line 8, in <module>
+May 17 13:09:17 reed-a320ms2h node[3563440]:     sys.exit(cli())
+May 17 13:09:17 reed-a320ms2h node[3563440]:              ^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/click/core.py", line 1524, in __call__
+May 17 13:09:17 reed-a320ms2h node[3563440]:     return self.main(*args, **kwargs)
+May 17 13:09:17 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/click/core.py", line 1445, in main
+May 17 13:09:17 reed-a320ms2h node[3563440]:     rv = self.invoke(ctx)
+May 17 13:09:17 reed-a320ms2h node[3563440]:          ^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/click/core.py", line 1912, in invoke
+May 17 13:09:17 reed-a320ms2h node[3563440]:     return _process_result(sub_ctx.command.invoke(sub_ctx))
+May 17 13:09:17 reed-a320ms2h node[3563440]:                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/click/core.py", line 1308, in invoke
+May 17 13:09:17 reed-a320ms2h node[3563440]:     return ctx.invoke(self.callback, **ctx.params)
+May 17 13:09:17 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/click/core.py", line 877, in invoke
+May 17 13:09:17 reed-a320ms2h node[3563440]:     return callback(*args, **kwargs)
+May 17 13:09:17 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs/__main__.py", line 250, in build_command
+May 17 13:09:17 reed-a320ms2h node[3563440]:     build.build(cfg, dirty=not clean)
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs/commands/build.py", line 329, in build
+May 17 13:09:17 reed-a320ms2h node[3563440]:     _build_page(file.page, config, doc_files, nav, env, dirty)
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/mkdocs/commands/build.py", line 231, in _build_page
+May 17 13:09:17 reed-a320ms2h node[3563440]:     output = template.render(context)
+May 17 13:09:17 reed-a320ms2h node[3563440]:              ^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 1304, in render
+May 17 13:09:17 reed-a320ms2h node[3563440]:     self.environment.handle_exception()
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/environment.py", line 925, in handle_exception
+May 17 13:09:17 reed-a320ms2h node[3563440]:     raise rewrite_traceback_stack(source=source)
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/app/theme/main.html", line 1, in <module>
+May 17 13:09:17 reed-a320ms2h node[3563440]:     {% extends "base.html" %}
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/material/base.html", line 75, in <module>
+May 17 13:09:17 reed-a320ms2h node[3563440]:     {% block extrahead %}{% endblock %}
+May 17 13:09:17 reed-a320ms2h node[3563440]: ^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/app/theme/main.html", line 55, in <module>
+May 17 13:09:17 reed-a320ms2h node[3563440]:     {{ json_ld | tojson }}
+May 17 13:09:17 reed-a320ms2h node[3563440]:   ^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/filters.py", line 1673, in do_tojson
+May 17 13:09:17 reed-a320ms2h node[3563440]:     return htmlsafe_json_dumps(value, dumps=dumps, **kwargs)
+May 17 13:09:17 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/venv/lib/python3.11/site-packages/jinja2/utils.py", line 736, in htmlsafe_json_dumps
+May 17 13:09:17 reed-a320ms2h node[3563440]:     dumps(obj, **kwargs)
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/json/__init__.py", line 238, in dumps
+May 17 13:09:17 reed-a320ms2h node[3563440]:     **kw).encode(obj)
+May 17 13:09:17 reed-a320ms2h node[3563440]:           ^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/json/encoder.py", line 200, in encode
+May 17 13:09:17 reed-a320ms2h node[3563440]:     chunks = self.iterencode(o, _one_shot=True)
+May 17 13:09:17 reed-a320ms2h node[3563440]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/json/encoder.py", line 258, in iterencode
+May 17 13:09:17 reed-a320ms2h node[3563440]:     return _iterencode(o, 0)
+May 17 13:09:17 reed-a320ms2h node[3563440]:            ^^^^^^^^^^^^^^^^^
+May 17 13:09:17 reed-a320ms2h node[3563440]:   File "/usr/lib/python3.11/json/encoder.py", line 180, in default
+May 17 13:09:17 reed-a320ms2h node[3563440]:     raise TypeError(f'Object of type {o.__class__.__name__} '
+May 17 13:09:17 reed-a320ms2h node[3563440]: TypeError: Object of type date is not JSON serializable
+May 17 13:09:17 reed-a320ms2h systemd[875]: runc-buildah-buildah2792386550.scope: Consumed 4.802s CPU time over 4.622s wall clock time, 246.3M memory peak.
+░░ Subject: Resources consumed by unit runtime
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit UNIT completed and consumed the indicated resources.
+May 17 13:09:17 reed-a320ms2h podman[3562984]: 2026-05-17 13:09:17.413150541 -0400 EDT m=+7.166487624 image build  
+May 17 13:09:17 reed-a320ms2h node[3562984]: Error: building at STEP "RUN SITE_URL=$SITE_URL npm run build:preview": while running runtime: exit status 1
+May 17 13:09:17 reed-a320ms2h systemd[875]: podman-3562984.scope: Consumed 3.128s CPU time over 7.121s wall clock time, 107.3M memory peak.
+░░ Subject: Resources consumed by unit runtime
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit UNIT completed and consumed the indicated resources.
+May 17 13:09:17 reed-a320ms2h node[3562119]: [build] stack/personal-blog:latest failed: Command failed: podman build -t stack/personal-blog:latest /srv/agent-stack/repos/personal-blog
+May 17 13:09:17 reed-a320ms2h node[3562119]: [backoff] personal-blog — build #1 failed, retry in 5 cycles (25s)
+May 17 13:09:17 reed-a320ms2h systemd[875]: Started podman-3564011.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665567.
+May 17 13:09:17 reed-a320ms2h systemd[875]: Started podman-3564042.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665571.
+May 17 13:09:17 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14933.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:17 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867046.
+May 17 13:09:18 reed-a320ms2h systemd[875]: Started podman-3564076.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665575.
+May 17 13:09:18 reed-a320ms2h node[3564090]: node:internal/modules/cjs/loader:1478
+May 17 13:09:18 reed-a320ms2h node[3564090]:   throw err;
+May 17 13:09:18 reed-a320ms2h node[3564090]:   ^
+May 17 13:09:18 reed-a320ms2h node[3564090]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:18 reed-a320ms2h node[3564090]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:18 reed-a320ms2h node[3564090]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:18 reed-a320ms2h node[3564090]:   requireStack: []
+May 17 13:09:18 reed-a320ms2h node[3564090]: }
+May 17 13:09:18 reed-a320ms2h node[3564090]: Node.js v25.9.0
+May 17 13:09:18 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:18 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:18 reed-a320ms2h systemd[875]: Started podman-3564118.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665579.
+May 17 13:09:18 reed-a320ms2h systemd[875]: Started podman-3564149.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665583.
+May 17 13:09:18 reed-a320ms2h systemd[875]: Started podman-3564179.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665587.
+May 17 13:09:19 reed-a320ms2h systemd[875]: Started podman-3564209.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665591.
+May 17 13:09:19 reed-a320ms2h node[3562119]: [mcp] HTTP/SSE server listening on :9000
+May 17 13:09:20 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14934.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:20 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867179.
+May 17 13:09:20 reed-a320ms2h node[3564253]: node:internal/modules/cjs/loader:1478
+May 17 13:09:20 reed-a320ms2h node[3564253]:   throw err;
+May 17 13:09:20 reed-a320ms2h node[3564253]:   ^
+May 17 13:09:20 reed-a320ms2h node[3564253]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:20 reed-a320ms2h node[3564253]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:20 reed-a320ms2h node[3564253]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:20 reed-a320ms2h node[3564253]:   requireStack: []
+May 17 13:09:20 reed-a320ms2h node[3564253]: }
+May 17 13:09:20 reed-a320ms2h node[3564253]: Node.js v25.9.0
+May 17 13:09:20 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:20 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:22 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14935.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:22 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867312.
+May 17 13:09:22 reed-a320ms2h node[3564296]: node:internal/modules/cjs/loader:1478
+May 17 13:09:22 reed-a320ms2h node[3564296]:   throw err;
+May 17 13:09:22 reed-a320ms2h node[3564296]:   ^
+May 17 13:09:22 reed-a320ms2h node[3564296]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:22 reed-a320ms2h node[3564296]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:22 reed-a320ms2h node[3564296]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:22 reed-a320ms2h node[3564296]:   requireStack: []
+May 17 13:09:22 reed-a320ms2h node[3564296]: }
+May 17 13:09:22 reed-a320ms2h node[3564296]: Node.js v25.9.0
+May 17 13:09:22 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:22 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:24 reed-a320ms2h systemd[875]: Started podman-3564355.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665595.
+May 17 13:09:24 reed-a320ms2h systemd[875]: Started podman-3564386.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665599.
+May 17 13:09:24 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14936.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:24 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867445.
+May 17 13:09:24 reed-a320ms2h node[3564400]: node:internal/modules/cjs/loader:1478
+May 17 13:09:24 reed-a320ms2h node[3564400]:   throw err;
+May 17 13:09:24 reed-a320ms2h node[3564400]:   ^
+May 17 13:09:24 reed-a320ms2h node[3564400]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:24 reed-a320ms2h node[3564400]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:24 reed-a320ms2h node[3564400]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:24 reed-a320ms2h node[3564400]:   requireStack: []
+May 17 13:09:24 reed-a320ms2h node[3564400]: }
+May 17 13:09:24 reed-a320ms2h node[3564400]: Node.js v25.9.0
+May 17 13:09:24 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:24 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:24 reed-a320ms2h systemd[875]: Started podman-3564424.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665603.
+May 17 13:09:25 reed-a320ms2h systemd[875]: Started podman-3564457.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665607.
+May 17 13:09:25 reed-a320ms2h systemd[875]: Started podman-3564490.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665611.
+May 17 13:09:25 reed-a320ms2h systemd[875]: Started podman-3564523.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665615.
+May 17 13:09:25 reed-a320ms2h systemd[875]: Started podman-3564551.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665619.
+May 17 13:09:25 reed-a320ms2h systemd[875]: Started podman-3564582.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665623.
+May 17 13:09:26 reed-a320ms2h systemd[875]: Started podman-3564614.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665627.
+May 17 13:09:26 reed-a320ms2h systemd[875]: Started podman-3564652.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665631.
+May 17 13:09:26 reed-a320ms2h systemd[875]: Started podman-3564681.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665635.
+May 17 13:09:26 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14937.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:26 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867578.
+May 17 13:09:26 reed-a320ms2h systemd[875]: Started podman-3564713.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665639.
+May 17 13:09:26 reed-a320ms2h node[3564714]: node:internal/modules/cjs/loader:1478
+May 17 13:09:26 reed-a320ms2h node[3564714]:   throw err;
+May 17 13:09:26 reed-a320ms2h node[3564714]:   ^
+May 17 13:09:26 reed-a320ms2h node[3564714]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:26 reed-a320ms2h node[3564714]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:26 reed-a320ms2h node[3564714]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:26 reed-a320ms2h node[3564714]:   requireStack: []
+May 17 13:09:26 reed-a320ms2h node[3564714]: }
+May 17 13:09:26 reed-a320ms2h node[3564714]: Node.js v25.9.0
+May 17 13:09:26 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:26 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:26 reed-a320ms2h systemd[875]: Started podman-3564752.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665643.
+May 17 13:09:27 reed-a320ms2h systemd[875]: Started podman-3564784.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665647.
+May 17 13:09:27 reed-a320ms2h systemd[875]: Started podman-3564816.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665651.
+May 17 13:09:27 reed-a320ms2h systemd[875]: Started podman-3564846.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665655.
+May 17 13:09:27 reed-a320ms2h systemd[875]: Started podman-3564875.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665659.
+May 17 13:09:28 reed-a320ms2h systemd[875]: Started podman-3564907.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665663.
+May 17 13:09:28 reed-a320ms2h systemd[875]: Started podman-3564937.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665667.
+May 17 13:09:28 reed-a320ms2h systemd[875]: Started podman-3564973.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665671.
+May 17 13:09:28 reed-a320ms2h systemd[875]: Started podman-3565003.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665675.
+May 17 13:09:28 reed-a320ms2h systemd[875]: Started podman-3565036.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665679.
+May 17 13:09:28 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14938.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:28 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867711.
+May 17 13:09:28 reed-a320ms2h node[3565054]: node:internal/modules/cjs/loader:1478
+May 17 13:09:28 reed-a320ms2h node[3565054]:   throw err;
+May 17 13:09:28 reed-a320ms2h node[3565054]:   ^
+May 17 13:09:28 reed-a320ms2h node[3565054]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:28 reed-a320ms2h node[3565054]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:28 reed-a320ms2h node[3565054]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:28 reed-a320ms2h node[3565054]:   requireStack: []
+May 17 13:09:28 reed-a320ms2h node[3565054]: }
+May 17 13:09:28 reed-a320ms2h node[3565054]: Node.js v25.9.0
+May 17 13:09:28 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:28 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:29 reed-a320ms2h systemd[875]: Started podman-3565073.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665683.
+May 17 13:09:29 reed-a320ms2h systemd[875]: Started podman-3565103.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665687.
+May 17 13:09:29 reed-a320ms2h systemd[875]: Started podman-3565140.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665691.
+May 17 13:09:29 reed-a320ms2h systemd[875]: Started podman-3565167.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665695.
+May 17 13:09:29 reed-a320ms2h node[3562119]: [backoff] personal-blog — skip build (4 cycles remaining)
+May 17 13:09:29 reed-a320ms2h systemd[875]: Started podman-3565200.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665699.
+May 17 13:09:30 reed-a320ms2h systemd[875]: Started podman-3565230.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665703.
+May 17 13:09:30 reed-a320ms2h systemd[875]: Started podman-3565265.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665707.
+May 17 13:09:30 reed-a320ms2h systemd[875]: Started podman-3565296.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665711.
+May 17 13:09:30 reed-a320ms2h systemd[875]: Started podman-3565325.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665715.
+May 17 13:09:30 reed-a320ms2h systemd[875]: Started podman-3565356.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665719.
+May 17 13:09:30 reed-a320ms2h systemd[1]: agent-controller.service: Scheduled restart job, restart counter is at 14939.
+░░ Subject: Automatic restarting of a unit has been scheduled
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ Automatic restarting of the unit agent-controller.service has been scheduled, as the result for
+░░ the configured Restart= setting for the unit.
+May 17 13:09:30 reed-a320ms2h systemd[1]: Started Agent Controller.
+░░ Subject: A start job for unit agent-controller.service has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit agent-controller.service has finished successfully.
+░░ 
+░░ The job identifier is 2867844.
+May 17 13:09:31 reed-a320ms2h node[3565381]: node:internal/modules/cjs/loader:1478
+May 17 13:09:31 reed-a320ms2h node[3565381]:   throw err;
+May 17 13:09:31 reed-a320ms2h node[3565381]:   ^
+May 17 13:09:31 reed-a320ms2h node[3565381]: Error: Cannot find module '/srv/agent-stack/controller.js'
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at Module._resolveFilename (node:internal/modules/cjs/loader:1475:15)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at wrapResolveFilename (node:internal/modules/cjs/loader:1048:27)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1072:10)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1093:12)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at Module._load (node:internal/modules/cjs/loader:1261:25)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+May 17 13:09:31 reed-a320ms2h node[3565381]:     at node:internal/main/run_main_module:33:47 {
+May 17 13:09:31 reed-a320ms2h node[3565381]:   code: 'MODULE_NOT_FOUND',
+May 17 13:09:31 reed-a320ms2h node[3565381]:   requireStack: []
+May 17 13:09:31 reed-a320ms2h node[3565381]: }
+May 17 13:09:31 reed-a320ms2h node[3565381]: Node.js v25.9.0
+May 17 13:09:31 reed-a320ms2h systemd[1]: agent-controller.service: Main process exited, code=exited, status=1/FAILURE
+░░ Subject: Unit process exited
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ An ExecStart= process belonging to unit agent-controller.service has exited.
+░░ 
+░░ The process' exit code is 'exited' and its exit status is 1.
+May 17 13:09:31 reed-a320ms2h systemd[1]: agent-controller.service: Failed with result 'exit-code'.
+░░ Subject: Unit failed
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ The unit agent-controller.service has entered the 'failed' state with result 'exit-code'.
+May 17 13:09:31 reed-a320ms2h systemd[875]: Started podman-3565390.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665723.
+May 17 13:09:31 reed-a320ms2h systemd[875]: Started podman-3565428.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665727.
+May 17 13:09:31 reed-a320ms2h systemd[875]: Started podman-3565463.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665731.
+May 17 13:09:31 reed-a320ms2h systemd[875]: Started podman-3565490.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665735.
+May 17 13:09:32 reed-a320ms2h systemd[875]: Started podman-3565523.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665739.
+May 17 13:09:32 reed-a320ms2h systemd[875]: Started podman-3565557.scope.
+░░ Subject: A start job for unit UNIT has finished successfully
+░░ Defined-By: systemd
+░░ Support: https://forum.manjaro.org/c/support
+░░ 
+░░ A start job for unit UNIT has finished successfully.
+░░ 
+░░ The job identifier is 2665743.

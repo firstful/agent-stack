@@ -1,0 +1,3 @@
+FROM quay.io/cockpit/ws:latest
+EXPOSE 9090
+ENTRYPOINT ["/container/label-run", "--no-tls"]

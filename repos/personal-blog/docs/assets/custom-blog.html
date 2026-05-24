@@ -1,0 +1,68 @@
+{% extends "blog.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    "name": "{{ config.site_name }} Blog",
+    "description": "{{ config.site_description }}",
+    "url": "{{ config.site_url }}{{ page.url }}",
+    "author": {
+      "@type": "Person",
+      "name": "{{ config.site_author }}"
+    }
+  }
+  </script>
+{% endblock %}
+
+{% macro render_tags(tags, base_url, category) -%}
+    <div class="blogging-tags-grid">
+        {% for tag in tags %}
+        <span class="md-tag md-tag-icon md-tag-icon--{{ mkdocs_context.config.extra.tags[tag] }} tag-{{ category }}">{{ tag }}</span>
+        {% endfor %}
+    </div>
+    {{ caller() }}
+{% endmacro %}
+
+{% macro render_category(category) -%}
+    <span class="blog-category blog-category--{{ category }}">{{ category }}</span>
+{% endmacro %}
+
+{% if render_blog is not defined %}
+{% macro render_blog(title, description, time, url, pg) -%}
+{% set src_path = pg.file.src_path %}
+{% if '/opinions/' in src_path %}
+    {% set category = 'opinion' %}
+{% elif '/tutorials/' in src_path %}
+    {% set category = 'tutorial' %}
+{% endif %}
+<a class="no-hover" href="{{ url }}">
+    <div class="blog-override-post">
+        {% if "image" in pg.meta %}
+            <div class="blog-logo">
+                <img src="{{ pg.meta.image }}" alt="{{ title }}" />
+            </div>
+        {% endif %}
+        <div>
+            <div class="blog-post-meta-row">
+                {% if category %}
+                    {{ render_category(category) }}
+                {% endif %}
+            </div>
+            <h3 class="blog-post-title">{{ title }}</h3>
+            {% if show_tags and "tags" in pg.meta %}
+                {% call render_tags(pg.meta["tags"], index_url, category) %}
+                {% endcall %}
+            {% endif %}
+            <p class="blog-post-description">{{ description }}</p>
+            <div class="blog-post-extra">
+                {{ ("Updated" if is_revision else "Published") + " on: " + time.split(',')[0] }}
+            </div>
+        </div>
+    </div>
+</a>
+{{ caller() }}
+{%- endmacro %}
+{% endif %}

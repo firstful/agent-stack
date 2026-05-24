@@ -1,0 +1,75 @@
+name: "Reed Sutliff"
+email: "sutliff.reed@gmail.com"
+phone: "+1 (614) 620-7333"
+location: "Columbus, Ohio"
+linkedin: "linkedin.com/in/reed-sutliff-21213b114/"
+github: "github.com/reedsutliff"
+website: "ffilt.us"
+
+summary:
+  "Software engineer with experience building web applications, automation platforms,
+   and event-driven systems. Comfortable across the stack and with client-facing delivery."
+
+skills:
+  languages:
+    - C#
+    - SQL
+    - Python
+    - JavaScript
+    - HTML / CSS
+    - Bash
+    - PowerShell
+  frameworks:
+    - Blazor
+    - .NET
+    - Node.js
+  tools:
+    - Docker
+    - Nginx
+    - Linux
+    - Git
+    - Azure
+  concepts:
+    - Automation
+    - RPA
+    - API Design
+    - CI/CD
+    - Event-Driven Architecture
+
+experience:
+  - company: "Foxen"
+    location: "Columbus, OH"
+    position: "Senior Software Engineer"
+    dates: "Aug 2023 – Present"
+    highlights:
+      - "Reduced frontend API call hops from 4 to 1 via reverse proxy, cutting endpoint latency up to 15x"
+      - "Drove client SDK standardization and code reuse across 10 services"
+      - "Created reusable libraries and testing frameworks adopted across every service"
+      - "Implemented event-driven architecture inside legacy codebase without service disruption"
+
+  - company: "Impower.ai"
+    location: "Columbus, OH"
+    position: "Automation Architect / RPA Developer"
+    dates: "Mar 2020 – Aug 2023"
+    highlights:
+      - "Delivered automation that eliminated 10 planned new hires for a client engagement"
+      - "Built container tracking system enabling 5-10x daily inspection frequency, reducing demurrage fees"
+      - "Delivered compliance automation for Fortune 500 company, avoiding significant litigation exposure"
+      - "Built lead-generation system processing thousands of prospects daily for a law firm"
+      - "Rotated through client engagements including Process Automation Engineer at Chipotle Mexican Grill"
+
+education:
+  - institution: "Ohio State University"
+    degree: ""
+    field: "Chemical Engineering"
+    dates: "2014 – 2018"
+
+projects:
+  - name: "ffilt.us (Personal Blog)"
+    description: "Static site built with MkDocs, custom Material theme, automated CI/CD deployment on Azure"
+    technologies:
+      - Python
+      - MkDocs
+      - Azure
+      - GitHub Actions
+    url: "https://ffilt.us"

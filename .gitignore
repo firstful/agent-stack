@@ -1,0 +1,31 @@
+# Generated runtime state
+runtime/
+
+# Logs
+infra/controller.log
+infra/nohup.out
+infra/.WIP
+
+# Secrets
+infra/.password.txt
+infra/.sudo-password.txt
+
+# Dependencies in service repos
+repos/*/node_modules/
+
+# Per-repo work-in-progress markers
+repos/*/.wip
+
+# Build artifacts in service repos
+repos/*/dist/
+repos/*/build/
+repos/*/.next/
+repos/*/.cache/
+
+# Environment files
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,12 @@
+{
+  "name": "vault",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx server/index.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "tsx": "^4.16.0"
+  }
+}

@@ -1,0 +1,35 @@
+import { z } from "zod";
+export const MeetingSchema = z.object({
+    id: z.string().uuid(),
+    channelId: z.string().uuid().nullable().default(null),
+    createdById: z.string().uuid(),
+    title: z.string().min(1).max(255),
+    state: z.enum(["scheduled", "ringing", "active", "recording", "paused", "ended", "cancelled"]),
+    scheduledAt: z.coerce.date().nullable().default(null),
+    startedAt: z.coerce.date().nullable().default(null),
+    endedAt: z.coerce.date().nullable().default(null),
+    recordingRequested: z.boolean().default(false),
+    participants: z.array(z.object({
+        identityId: z.string().uuid(),
+        role: z.enum(["host", "presenter", "guest", "observer"]),
+        joinedAt: z.coerce.date().nullable().default(null),
+        leftAt: z.coerce.date().nullable().default(null),
+        isActive: z.boolean(),
+    })),
+    recordings: z.array(z.object({
+        id: z.string().uuid(),
+        meetingId: z.string().uuid(),
+        storageKey: z.string(),
+        durationSeconds: z.number().int().nonnegative(),
+        hasTranscript: z.boolean(),
+        transcriptKey: z.string().nullable(),
+        language: z.string().length(2),
+        createdAt: z.coerce.date(),
+        finishedAt: z.coerce.date().nullable(),
+        retention: z.unknown(),
+    })),
+    metadata: z.record(z.string(), z.unknown()).default({}),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date().nullable().default(null),
+});
+//# sourceMappingURL=meeting.js.map

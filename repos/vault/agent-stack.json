@@ -1,0 +1,20 @@
+{
+  "name": "vault",
+  "version": 2,
+  "container": {
+    "port": 3500,
+    "auto_port": true,
+    "volumes": [
+      "vault-data:/data"
+    ],
+    "env": {
+      "PORT": "3500",
+      "VAULT_PASSWORD": "techdeck-vault-token"
+    }
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "vault.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  }
+}
