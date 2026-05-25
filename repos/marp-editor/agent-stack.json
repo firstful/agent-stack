@@ -23,6 +23,7 @@
       "IMAGE_BASE_URL": "http://free-llm-router:3000/v1",
       "IMAGE_MODEL": "dall-e-3",
       "CORS_ORIGIN": "https://techdeck.ffilt.us",
+      "BETTER_AUTH_URL": "https://techdeck.ffilt.us",
       "BETTER_AUTH_SECRET": "5cd9c9aef45ef2688e9e0dd10f26a609b3760045028c5604e6919e4f0d366cc0"
     }
   },

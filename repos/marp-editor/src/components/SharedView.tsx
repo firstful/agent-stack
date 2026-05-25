@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { renderSlides, renderSlideToHtml } from '../lib/marp'
 
 interface SharedData {
@@ -7,7 +8,9 @@ interface SharedData {
   css: string
 }
 
-export function SharedView({ token, onClose }: { token: string; onClose: () => void }) {
+export function SharedView() {
+  const { token } = useParams<{ token: string }>()
+  const navigate = useNavigate()
   const [data, setData] = useState<SharedData | null>(null)
   const [error, setError] = useState('')
   const [current, setCurrent] = useState(0)
@@ -16,6 +19,7 @@ export function SharedView({ token, onClose }: { token: string; onClose: () => v
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
+    if (!token) return
     fetch(`/api/share/${token}`)
       .then((r) => {
         if (!r.ok) throw new Error(r.status === 410 ? 'Link expired or revoked' : 'Not found')
@@ -36,13 +40,15 @@ export function SharedView({ token, onClose }: { token: string; onClose: () => v
     }
   }, [slideHtml, renderedCss, current])
 
+  const handleClose = () => navigate('/')
+
   if (error) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
         <div className="text-center text-gray-300">
           <div className="text-5xl mb-4">🔗</div>
           <p className="text-lg mb-2">{error}</p>
-          <button onClick={onClose} className="btn btn-primary mt-4">Back</button>
+          <button onClick={handleClose} className="btn btn-primary mt-4">Back</button>
         </div>
       </div>
     )
@@ -60,7 +66,7 @@ export function SharedView({ token, onClose }: { token: string; onClose: () => v
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800">
         <h1 className="text-sm font-bold text-blue-400 truncate">{data.title}</h1>
-        <button onClick={onClose} className="btn-ghost btn text-xs text-gray-400">Close</button>
+        <button onClick={handleClose} className="btn-ghost btn text-xs text-gray-400">Close</button>
       </div>
       <div
         className="flex-1 flex items-center justify-center cursor-pointer"
