@@ -1,14 +1,8 @@
 # Repo: fuse
 
-## Service Config
-
-Desired state: `/srv/agent-stack/desired/fuse.json`
-
-## Dockerfile
-
 This repo contains a `Dockerfile` that builds the image `stack/fuse:latest`.
 
-## Deployment Workflow
+## Deployment
 
 1. **Make changes** to this repo (Dockerfile, source code, etc.)
 2. **Create `.wip`** at the repo root to block auto-rebuilds:
@@ -24,4 +18,4 @@ This repo contains a `Dockerfile` that builds the image `stack/fuse:latest`.
 
 ## Config Changes
 
-To change ports, volumes, env vars, or expose settings, edit `/srv/agent-stack/desired/fuse.json` directly — this always triggers a container recreation (no `.wip` needed).
+To change ports, volumes, env vars, or expose settings, edit `agent-stack.json` in this repo directly — this always triggers a container recreation (no `.wip` needed).

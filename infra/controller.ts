@@ -30,6 +30,30 @@ function log(level: string, msg: string): void {
   fs.appendFileSync(LOG_FILE, line + "\n");
 }
 
+function appendLog(data: string): void {
+  try { fs.appendFileSync(LOG_FILE, data); } catch {}
+}
+
+// Patch console so all main-thread console calls also go to the log file
+const origLog = console.log;
+const origError = console.error;
+const origWarn = console.warn;
+console.log = (...args: any[]) => {
+  const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  origLog(...args);
+  appendLog(msg + '\n');
+};
+console.error = (...args: any[]) => {
+  const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  origError(...args);
+  appendLog(msg + '\n');
+};
+console.warn = (...args: any[]) => {
+  const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+  origWarn(...args);
+  appendLog(msg + '\n');
+};
+
 // Truncate log at startup to prevent unbounded growth
 try { fs.writeFileSync(LOG_FILE, ""); } catch {}
 
@@ -156,8 +180,14 @@ function startWorker(): void {
     ],
   });
 
-  (worker as any).stdout.on("data", (d: any) => process.stdout.write(d));
-  (worker as any).stderr.on("data", (d: any) => process.stderr.write(d));
+  (worker as any).stdout.on("data", (d: any) => {
+    process.stdout.write(d);
+    try { fs.appendFileSync(LOG_FILE, d); } catch {}
+  });
+  (worker as any).stderr.on("data", (d: any) => {
+    process.stderr.write(d);
+    try { fs.appendFileSync(LOG_FILE, d); } catch {}
+  });
 
   worker!.on("message", (msg: any) => {
     workerRestartAttempts = 0;

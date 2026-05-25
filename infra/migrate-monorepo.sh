@@ -3,7 +3,7 @@
 # Run from the host as reeds (not inside the agent-stack container).
 set -e
 
-BARE=/srv/git/infra.git
+BARE=/srv/git/agent-stack.git
 WORKING=/srv/agent-stack
 BRANCH=main
 
