@@ -20,7 +20,7 @@ desired/*.json → controller.js → podman containers + cloudflared tunnel
 ```
  /srv/agent-stack/
  ├── infra/               # Controller and dependencies
- │   ├── controller.js    # Main reconciliation loop + MCP HTTP/SSE server
+ │   ├── controller.js    # Main reconciliation loop + HTTP/API server
  │   ├── lib/             # Modular helper libraries
  │   │   ├── services.js
  │   │   ├── podman.js
@@ -30,8 +30,7 @@ desired/*.json → controller.js → podman containers + cloudflared tunnel
  │   ├── package.json
  │   └── agent-stack.service
  ├── desired/             # Service definitions (JSON files) - ONLY for systemd-managed services
- │   ├── cockpit.json
- │   └── opencode.json
+ │   └── cockpit.json
  ├── repos/               # Git repositories for each service
  │   ├── <service-name>/
  │   │   ├── Dockerfile
@@ -70,7 +69,7 @@ desired/*.json → controller.js → podman containers + cloudflared tunnel
 | `sudo journalctl -u agent-stack -f` | Follow controller logs |
 | `podman ps` | List running containers |
 | `podman images` | List built images |
-| `curl http://localhost:9000/mcp -X POST -d '{"method":"tools/list"}'` | Test MCP endpoint |
+| `curl -s http://localhost/api/status` | Check controller health |
 | `sudo systemctl restart cloudflared` | Restart tunnel after config change |
 
 ## Adding a Service
@@ -78,6 +77,39 @@ desired/*.json → controller.js → podman containers + cloudflared tunnel
 1. Create `/srv/agent-stack/repos/<name>/` with a `Dockerfile`
 2. Add `/srv/agent-stack/repos/<name>/agent-stack.json`
 3. Controller auto-detects and reconciles within 5 seconds
+
+## Change Detection
+
+The controller determines whether a service's container needs a rebuild by computing a combined hash of:
+
+1. **Config hash** — `md5` of `agent-stack.json` (or `desired/<name>.json`). Any edit to the config always triggers a rebuild.
+2. **Repo hash** — a hash of all files in the service's repo directory, used to detect source/Dockerfile changes.
+
+The combined hash is: `md5(configHash + repoHash)`. If this hash differs from the previous reconciliation, the controller rebuilds the image and recreates the container.
+
+### Git-Aware Hashing
+
+Since the entire `/srv/agent-stack/` tree is a git repository, the controller uses `git log -1 --format=%H -- repos/<service-name>/` to compute the repo hash. This means:
+
+- **Uncommitted file edits do NOT trigger a rebuild.** The `git log` query returns the same commit hash until you `git commit`.
+- **After committing**, the next reconciliation (within 5 seconds) detects the new commit hash and triggers a rebuild.
+- **Editing `agent-stack.json` always triggers a rebuild**, regardless of commits, because it changes the config hash component.
+
+### `.wip` File
+
+Create a file named `.wip` at the root of a service's repo directory to block rebuilds triggered by repo hash changes:
+
+```bash
+touch /srv/agent-stack/repos/<name>/.wip   # block rebuilds
+# ... make edits, test, commit ...
+rm /srv/agent-stack/repos/<name>/.wip        # re-enable — next reconcile picks up the new hash
+```
+
+When `.wip` is present, the repo hash component is skipped (`""`), so only `agent-stack.json` edits trigger a rebuild. This lets you batch multiple commits and test safely before deploying.
+
+### File-Based Fallback
+
+If `/srv/agent-stack/.git` is not available (e.g., the repo was deployed without git history), the controller falls back to a recursive `md5` hash of all files in the service directory (excluding `node_modules` and dotfiles). In this mode, any file edit on disk is detected immediately — no commit required.
 
 ## Auto-Injected Container Environment Variables
 
@@ -127,12 +159,12 @@ Every container-managed service receives `IS_CONTAINER=true` injected automatica
 #### API Base URL / Swagger
 
 ```bash
-[ -n "$IS_CONTAINER" ] && BASE_URL="http://agent-stack" || BASE_URL="http://localhost:9000"
+[ -n "$IS_CONTAINER" ] && BASE_URL="http://agent-stack" || BASE_URL="http://localhost"
 SWAGGER_URL="${BASE_URL}/api/openapi.json"
 ```
 
 When inside a container: `http://agent-stack/api/openapi.json`
-When on the host: `http://localhost:9000/api/openapi.json`
+When on the host: `http://localhost/api/openapi.json`
 
 ### Notes for opencode and opencode-admin
 
@@ -140,11 +172,11 @@ When configuring subagents, tools, or any service-to-service communication, pref
 
 ## Agent-Stack Infrastructure Endpoints
 
-For detailed information about the agent-stack infrastructure endpoints, including MCP tools, HTTP endpoints, and service proxying, see the [Agent-Stack Endpoints Documentation](../config/wiki/agent-stack-endpoints.md).
+For detailed information about the agent-stack infrastructure endpoints, including REST API endpoints, HTTP endpoints, and service proxying, see the [Agent-Stack Endpoints Documentation](../config/wiki/agent-stack-endpoints.md).
 
 This documentation covers:
-- All available MCP endpoints and tools
-- HTTP interfaces (/mcp, /ping, /sudo, /status, /proxy/*)
+- REST API endpoints (/api/*)
+- HTTP interfaces (/ping, /sudo, /status, /proxy/*)
 - Unix socket interface
 - Service management and logging capabilities
 - Examples for interacting with the infrastructure programmatically

@@ -1,7 +1,40 @@
 # Agent-Stack Controller
 
-The controller (`controller.ts`) runs the reconciliation loop, MCP/HTTP API,
+The controller (`controller.ts`) runs the reconciliation loop, HTTP API,
 and Cloudflare Tunnel config generation.
+
+## Change Detection (Hash-Based)
+
+The controller determines rebuilds by comparing a combined hash across reconciliation
+ticks (every 5s):
+
+**`md5(configHash + repoHash)`**
+
+- **configHash** — `md5` of the service's `agent-stack.json` (or `desired/<name>.json`).
+  Always detected immediately when the file changes on disk.
+- **repoHash** — hash of all files in the service repo directory. When
+  `/srv/agent-stack/.git` exists (production path), the controller uses
+  `git log -1 --format=%H -- repos/<service>/` — the latest commit hash for that
+  subdirectory. When `.git` is absent, it falls back to a recursive `md5` of all
+  files (excluding `node_modules` and dotfiles).
+
+### Git-Aware Behavior
+
+- **Uncommitted file edits do NOT trigger a rebuild.** The commit hash stays the
+  same until `git commit` creates a new one.
+- **After committing**, the next reconcile detects the new commit hash and
+  rebuilds the container.
+- **`agent-stack.json` edits always trigger a rebuild**, irrespective of commits,
+  because the config hash changes on disk.
+- **`.wip` file** in a service's repo root (`repos/<name>/.wip`) suppresses the
+  repo hash component entirely (`""`), so only `agent-stack.json` edits cause a
+  rebuild. Use this to batch commits and test before deploying.
+
+### Port Allocation
+
+For container services with `auto_port: true`, each slot (a/b) gets its own port
+from the `AUTO_PORT_START`–`AUTO_PORT_END` range (default 4000–4999). See
+`lib/config.ts`.
 
 ## Auto-Restart Behavior
 

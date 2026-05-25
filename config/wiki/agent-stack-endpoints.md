@@ -4,44 +4,16 @@ This document describes all exposed endpoints provided by the agent-stack infras
 
 > **Note**: The `desired/` folder is **only for systemd-managed services** (like cockpit). For containerized services managed by the controller, configuration should be placed in each service's repository as `agent-stack.json`.
 
-> **Note**: The `desired/` folder is **only for systemd-managed services** (like cockpit). For containerized services managed by the controller, configuration should be placed in each service's repository as `agent-stack.json`.
+## HTTP Endpoints
 
-## HTTP/MCP Endpoints (Controller.js)
+The controller exposes an HTTP server on port **80** (runs directly on the host as a systemd service) with the following endpoints:
 
-The controller exposes an HTTP server on port **80** (internally mapped to host port 4007) with the following endpoints:
-
-### 1. **GET /mcp**
-- **Description**: MCP (Model Context Protocol) endpoint for Server-Sent Events (SSE)
-- **Response**: 
-  - Sets up SSE connection with heartbeat every 30 seconds
-  - Initial message: `event: endpoint\ndata: /mcp\n\n`
-  - Heartbeat: `event: heartbeat\ndata: \n\n`
-- **Headers**: 
-  - Content-Type: text/event-stream
-  - Cache-Control: no-cache
-  - Connection: keep-alive
-
-### 2. **POST /mcp**
-- **Description**: MCP endpoint for receiving JSON-RPC style requests
-- **Expected Body**: JSON object with `method` and optional `params`
-- **Supported Methods**:
-  - `tools/list` - Returns list of available tools
-  - `tools/call` - Executes a specific tool with provided arguments
-
-### 3. **POST /mcp/<tool_name>**
-- **Description**: Direct tool execution endpoint (alternative to POST /mcp with tools/call)
-- **Examples**: 
-  - POST /mcp/list_services
-  - POST /mcp/get_service_status
-  - POST /mcp/get_log_analytics
-- **Expected Body**: JSON object with tool-specific arguments
-
-### 4. **GET /ping**
+### 1. **GET /ping**
 - **Description**: Simple health check endpoint
 - **Response**: `{"status": "ok"}`
 - **Headers**: Content-Type: application/json
 
-### 5. **POST /sudo**
+### 2. **POST /sudo**
 - **Description**: Execute privileged commands with sudo (requires authentication)
 - **Expected Body**: 
   ```json
@@ -58,7 +30,7 @@ The controller exposes an HTTP server on port **80** (internally mapped to host 
   }
   ```
 
-### 6. **GET /status**
+### 3. **GET /status**
 - **Description**: Get comprehensive controller and system status
 - **Response**: JSON object containing:
   - `healthy`: Boolean indicating system health
@@ -72,7 +44,7 @@ The controller exposes an HTTP server on port **80** (internally mapped to host 
   - `cloudflaredError`: Last cloudflared error
   - `services`: Current state of all managed services
 
-### 7. **GET /proxy/<service_name>[/<path>]**
+### 4. **GET /proxy/<service_name>[/<path>]**
 - **Description**: Proxy requests to individual managed services
 - **Path Parameters**: 
   - `service_name`: Name of service to proxy to (must exist in services.json and be running)
@@ -83,105 +55,9 @@ The controller exposes an HTTP server on port **80** (internally mapped to host 
   - Preserves original method, headers (except Host)
   - Returns service response or 502 error if service not found/not running
 
-## MCP Tools (Available via /mcp endpoint)
-
-The following tools are available through the MCP interface:
-
-### Service Management Tools
-1. **list_services**
-   - Description: List all services
-   - Parameters: None
-   
-2. **get_service_status**
-   - Description: Get status of a specific service
-   - Parameters: `{ name: string }` (required)
-
-3. **create_service**
-   - Description: Create a new service
-   - Parameters: 
-     ```json
-     {
-       "name": string (required),
-       "repo": string (required),
-       "port": number,
-       "host_port": number,
-       "auto_port": boolean,
-       "env": object,
-       "volumes": string[],
-       "expose_enabled": boolean,
-       "hostname": string,
-       "tunnel": string
-     }
-     ```
-
-4. **update_service**
-   - Description: Update an existing service
-   - Parameters: 
-     ```json
-     {
-       "name": string (required),
-       "port": number,
-       "host_port": number,
-       "auto_port": boolean,
-       "env": object,
-       "volumes": string[],
-       "expose_enabled": boolean,
-       "hostname": string,
-       "tunnel": string
-     }
-     ```
-
-5. **delete_service**
-   - Description: Delete a service
-   - Parameters: `{ name: string }` (required)
-
-6. **start_service**
-   - Description: Start a service
-   - Parameters: `{ name: string }` (required)
-
-7. **stop_service**
-   - Description: Stop a service
-   - Parameters: `{ name: string }` (required)
-
-8. **restart_service**
-   - Description: Restart a service
-   - Parameters: `{ name: string }` (required)
-
-9. **rebuild_service**
-   - Description: Rebuild a service container from latest source
-   - Parameters: `{ name: string }` (required)
-
-10. **reconcile**
-    - Description: Trigger reconciliation process
-    - Parameters: None
-
-### Logging Tools
-11. **get_service_logs**
-    - Description: Get logs for a specific service
-    - Parameters: 
-      ```json
-      {
-        "name": string (required),
-        "lines": number (default: 100)
-      }
-      ```
-
-12. **get_log_analytics**
-    - Description: Get aggregated logs from multiple sources
-    - Parameters:
-      ```json
-      {
-        "sources": string[] (optional, defaults to ["controller", "cloudflared", "podman"]),
-        "lines": number (default: 100),
-        "containerName": string (required when sources includes "container")
-      }
-      ```
-    - **Available Sources**: "controller", "cloudflared", "podman", "agent-stack", "container"
-    - **Response**: Object with keys matching requested sources and log content as values
-
 ## REST API Endpoints (`/api/*`)
 
-The same functionality is also exposed as RESTful HTTP endpoints. These map 1:1 to MCP tools but follow standard resource-oriented conventions.
+The same functionality is also exposed as RESTful HTTP endpoints following standard resource-oriented conventions.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -259,9 +135,9 @@ When services are running and healthy, the `/proxy/<service_name>` endpoint allo
 
 ## Implementation Notes
 
-1. **Port Configuration**: Controller listens on port 80 internally, but gets mapped to host port 4007 via container configuration
+1. **Port Configuration**: Controller listens on port 80 directly on the host (runs as systemd service)
 2. **Authentication**: The `/sudo` endpoint requires authentication using credentials stored in `.password.txt` and `.sudo-password.txt`
-3. **Logging**: All controller activity is logged to `__dirname/controller.log`
+3. **Logging**: All controller activity is logged to `controller.log` in `infra/`
 4. **Watchdog**: Controller automatically restarts when infrastructure files change (via fs.watch)
 5. **Worker Thread**: Reconciliation logic runs in a separate worker thread for stability
 
