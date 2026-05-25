@@ -3,9 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { execSync } from "child_process";
 import type { Service } from "./types";
-import { DESIRED_DIR, REPOS_DIR, INFRA_DIR, RUNTIME_FILE } from "./config";
-
-const VAULT_TOKEN = process.env.VAULT_TOKEN || "";
+import { DESIRED_DIR, REPOS_DIR, CLONES_DIR, INFRA_DIR, RUNTIME_FILE } from "./config";
 
 function discoverVaultUrl(): string {
   // 1. Read vault's host port from the previous runtime state
@@ -25,12 +23,12 @@ function discoverVaultUrl(): string {
 
 export function resolveSecrets(service: Service): Record<string, string> {
   if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
-  if (!VAULT_TOKEN) {
+  if (!process.env.VAULT_TOKEN) {
     throw new Error(`[secrets] cannot resolve secrets for "${service.name}": VAULT_TOKEN is not set`);
   }
   const vaultUrl = discoverVaultUrl();
   try {
-    const curl = `curl -sf ${vaultUrl}/api/secrets/plain/${service.name} -H "Authorization: Bearer ${VAULT_TOKEN}"`;
+    const curl = `curl -sf ${vaultUrl}/api/secrets/plain/${service.name} -H "Authorization: Bearer ${process.env.VAULT_TOKEN}"`;
     const raw = execSync(curl, { timeout: 5000, encoding: "utf8" });
     const result = JSON.parse(raw);
     if (!result.secrets) {
@@ -97,6 +95,42 @@ export function repoHashForPath(repoPath: string): string {
   return hashDir(repoPath);
 }
 
+export function ensureServiceClone(service: Service): string | null {
+  const repoPath = service.repo;
+  if (!repoPath) return null;
+
+  // Only clone repos inside the monorepo
+  if (!repoPath.startsWith(REPOS_DIR)) return null;
+  if (!fs.existsSync(MONOREPO_GIT)) return null;
+
+  try {
+    const relPath = path.relative(MONOREPO_ROOT, repoPath);
+    const commitHash = execSync(`git log -1 --format=%H -- "${relPath}"`, {
+      cwd: MONOREPO_ROOT,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).toString().trim();
+
+    if (!commitHash) return null;
+
+    service._commitHash = commitHash;
+    const cloneDir = path.join(CLONES_DIR, service.name, commitHash);
+
+    if (!fs.existsSync(cloneDir)) {
+      fs.mkdirSync(cloneDir, { recursive: true });
+      execSync(
+        `git -C ${MONOREPO_ROOT} archive ${commitHash} -- "${relPath}/" | tar -x -C ${cloneDir} --strip-components=2`,
+        { timeout: 30000 }
+      );
+    }
+
+    return cloneDir;
+  } catch (e: any) {
+    console.error(`[services] failed to create clone for ${service.name}: ${e.message}`);
+    return null;
+  }
+}
+
 function scanRepoAgentConfigs(): Service[] {
   const results: Service[] = [];
   let repos: fs.Dirent[];
@@ -120,12 +154,7 @@ function scanRepoAgentConfigs(): Service[] {
       service._file = `${service.name}.json`;
       service._fromRepo = true;
 
-      const configHash = crypto.createHash("md5").update(raw).digest("hex");
-      const repoHash = repoHashForPath(service.repo!);
-      service._hash = crypto
-        .createHash("md5")
-        .update(configHash + repoHash)
-        .digest("hex");
+      service._hash = repoHashForPath(service.repo!);
 
       results.push(service);
     } catch (e: any) {
@@ -171,13 +200,7 @@ export function loadDesired(): Service[] {
 
       service._file = f;
       service._fromRepo = false;
-
-      const configHash = crypto.createHash("md5").update(raw).digest("hex");
-      const repoHash = service.repo ? repoHashForPath(service.repo) : "";
-      service._hash = crypto
-        .createHash("md5")
-        .update(configHash + repoHash)
-        .digest("hex");
+      service._hash = "";
 
       nameIndex[service.name] = service;
       services.push(service);

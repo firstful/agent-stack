@@ -3,29 +3,21 @@
 The controller (`controller.ts`) runs the reconciliation loop, HTTP API,
 and Cloudflare Tunnel config generation.
 
-## Change Detection (Hash-Based)
+## Change Detection (Commit-Based)
 
-The controller determines rebuilds by comparing a combined hash across reconciliation
-ticks (every 5s):
+The controller rebuilds a container when a new git commit touches the service's
+repo subdirectory. The hash marker (`/tmp/stack.<name>.hash`) stores the commit
+hash from `git log -1 --format=%H -- repos/<service>/`. On each reconciliation
+tick (every 5s) it compares — any change triggers a rebuild.
 
-**`md5(configHash + repoHash)`**
-
-- **configHash** — `md5` of the service's `agent-stack.json` (or `desired/<name>.json`).
-  Always detected immediately when the file changes on disk.
-- **repoHash** — hash of all files in the service repo directory. When
-  `/srv/agent-stack/.git` exists (production path), the controller uses
-  `git log -1 --format=%H -- repos/<service>/` — the latest commit hash for that
-  subdirectory. When `.git` is absent, it falls back to a recursive `md5` of all
-  files (excluding `node_modules` and dotfiles).
-
-### Git-Aware Behavior
-
-- **Uncommitted file edits do NOT trigger a rebuild.** The commit hash stays the
-  same until `git commit` creates a new one.
-- **After committing**, the next reconcile detects the new commit hash and
-  rebuilds the container.
-- **`agent-stack.json` edits always trigger a rebuild**, irrespective of commits,
-  because the config hash changes on disk.
+- **Only committed changes trigger a rebuild.** Uncommitted edits are ignored.
+- When a rebuild is needed, the controller creates a limited checkout at
+  `/srv/clones/<name>/<hash>/` using `git archive` of just that subdirectory,
+  builds the container image from the checkout, and blue-green deploys via
+  slot swap.
+- The built image gets a `stack.commit=<hash>` label for traceability.
+- If `/srv/agent-stack/.git` is absent, it falls back to a recursive `md5` of
+  all files (excluding `node_modules` and dotfiles).
 
 ### Port Allocation
 

@@ -11,6 +11,7 @@ import {
   sh,
 } from "./podman";
 import { ensureSidecars, removeSidecars } from "./sidecar";
+import { ensureServiceClone } from "./services";
 import type { Service } from "./types";
 import {
   AUTO_PORT_START,
@@ -135,6 +136,8 @@ export function ensureContainer(
       );
     } else {
       try {
+        const clonePath = ensureServiceClone(service);
+        if (clonePath) service.repo = clonePath;
         buildImage(service);
         delete buildBackoffs[name];
         clearBuildError(name);

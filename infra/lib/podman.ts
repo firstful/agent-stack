@@ -72,9 +72,12 @@ export function buildImage(service: Service): void {
   const net = cfg.network ? `--network ${cfg.network}` : "";
   const cache = cfg.no_cache ? "--no-cache" : "";
   const extra = cfg.podman_args || "";
+  const commitLabel = service._commitHash
+    ? `--label stack.commit=${service._commitHash}`
+    : "";
   try {
     sh(
-      `podman build ${net} ${cache} ${extra} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}`
+      `podman build ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}`
     );
   } catch (e: any) {
     console.error(`[build] ${imageTag(service.name)} failed: ${e.message}`);

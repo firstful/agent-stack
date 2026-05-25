@@ -4,6 +4,7 @@ import path from "path";
 export const DESIRED_DIR = process.env.STACK_DESIRED_DIR || "/srv/agent-stack/desired";
 export const REPOS_DIR = process.env.STACK_REPOS_DIR || "/srv/agent-stack/repos";
 export const RUNTIME_DIR = process.env.STACK_RUNTIME_DIR || "/srv/agent-stack/runtime";
+export const CLONES_DIR = process.env.STACK_CLONES_DIR || "/srv/clones";
 export const RUNTIME_FILE = path.join(RUNTIME_DIR, "services.json");
 export const INFRA_DIR = path.resolve(__dirname, "..");
 

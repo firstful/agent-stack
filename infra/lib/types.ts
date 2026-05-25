@@ -56,4 +56,5 @@ export interface Service {
   _file: string;
   _fromRepo: boolean;
   _hash: string;
+  _commitHash?: string;
 }
