@@ -9,14 +9,17 @@ import { ThemePanel } from './components/ThemePanel'
 import { LoginForm } from './components/LoginForm'
 import { FileManager } from './components/FileManager'
 import { SharedView } from './components/SharedView'
+import { ChangelogModal } from './components/ChangelogModal'
 import { clearCookies } from './lib/cookies'
 import { listThemes } from './lib/api'
+import { getNewEntries } from './lib/changelog'
 
 export default function App() {
   const [shareToken, setShareToken] = useState<string | null>(() => {
     const m = window.location.pathname.match(/^\/share\/([a-f0-9]+)$/)
     return m ? m[1] : null
   })
+  const [showChangelog, setShowChangelog] = useState(false)
 
   const {
     layout, setLayout, currentSlide, setCurrentSlide, slides,
@@ -27,6 +30,9 @@ export default function App() {
   useEffect(() => {
     initFromCookies()
     listThemes().then(setPalettes).catch(() => {})
+    if (getNewEntries().length > 0) {
+      setShowChangelog(true)
+    }
   }, [])
 
   if (shareToken) {
@@ -137,6 +143,7 @@ export default function App() {
       </div>
       <ThemePanel />
       <FileManager />
+      {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
     </div>
   )
 }
