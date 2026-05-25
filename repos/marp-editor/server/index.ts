@@ -1,3 +1,4 @@
+import './tracing.js'
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
@@ -70,5 +71,5 @@ app.get('*', (_, res) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`MARP Editor server running on http://localhost:${PORT}`)
+  console.log(`TechDeck server running on http://localhost:${PORT}`)
 })
