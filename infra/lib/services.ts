@@ -3,9 +3,25 @@ import path from "path";
 import crypto from "crypto";
 import { execSync } from "child_process";
 import type { Service } from "./types";
-import { DESIRED_DIR, REPOS_DIR, INFRA_DIR } from "./config";
+import { DESIRED_DIR, REPOS_DIR, INFRA_DIR, RUNTIME_FILE } from "./config";
 
 const VAULT_TOKEN = process.env.VAULT_TOKEN || "";
+
+function discoverVaultUrl(): string {
+  // 1. Read vault's host port from the previous runtime state
+  try {
+    const raw = fs.readFileSync(RUNTIME_FILE, "utf-8");
+    const runtime = JSON.parse(raw);
+    const port = runtime.vault?.port;
+    if (port) return `http://localhost:${port}`;
+  } catch {
+    // runtime file not available yet
+  }
+  // 2. Fall back to env var (legacy)
+  if (process.env.VAULT_URL) return process.env.VAULT_URL;
+  // 3. Hardcoded fallback
+  return "http://localhost:4000";
+}
 
 export function resolveSecrets(service: Service): Record<string, string> {
   if (!service.secrets || !Array.isArray(service.secrets)) return {};
@@ -13,7 +29,7 @@ export function resolveSecrets(service: Service): Record<string, string> {
     return {};
   }
   try {
-    const vaultUrl = process.env.VAULT_URL || "http://localhost:4006";
+    const vaultUrl = discoverVaultUrl();
     const curl = `curl -sf ${vaultUrl}/api/secrets/plain/${service.name} -H "Authorization: Bearer ${VAULT_TOKEN}"`;
     const raw = execSync(curl, { timeout: 5000, encoding: "utf8" });
     const result = JSON.parse(raw);

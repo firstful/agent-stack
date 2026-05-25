@@ -10,8 +10,7 @@ export const auth = betterAuth({
   database: db,
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
   emailAndPassword: {
-    enabled: true,
-    autoSignIn: true,
+    enabled: false,
   },
   plugins: [
     username(),
