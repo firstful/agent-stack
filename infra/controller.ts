@@ -104,7 +104,6 @@ function watchInfraDir(): void {
   const infraDir = path.join(__dirname);
   fs.watch(infraDir, { recursive: true }, (eventType, filename) => {
     if (!filename) return;
-    if (fs.existsSync(path.join(INFRA_DIR, ".WIP"))) return;
     const ext = path.extname(filename).toLowerCase();
     if (![".js", ".ts", ".json"].includes(ext)) return;
     if (filename.includes("node_modules")) return;

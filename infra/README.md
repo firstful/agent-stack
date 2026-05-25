@@ -26,9 +26,6 @@ ticks (every 5s):
   rebuilds the container.
 - **`agent-stack.json` edits always trigger a rebuild**, irrespective of commits,
   because the config hash changes on disk.
-- **`.wip` file** in a service's repo root (`repos/<name>/.wip`) suppresses the
-  repo hash component entirely (`""`), so only `agent-stack.json` edits cause a
-  rebuild. Use this to batch commits and test before deploying.
 
 ### Port Allocation
 
@@ -58,20 +55,6 @@ or:
 [watch] reconcile.ts modified — running tests...
 [watch] tests FAILED — canceled
 ```
-
-### .WIP File
-
-Create `/srv/agent-stack/infra/.WIP` to suppress both tests and restarts for
-any file change. This is useful during active development:
-
-```bash
-touch /srv/agent-stack/infra/.WIP    # disable auto-restart
-# ... make changes ...
-rm /srv/agent-stack/infra/.WIP       # re-enable
-```
-
-When `.WIP` is present, the watcher returns immediately on any event — no
-tests, no restart.
 
 ## Running Tests
 

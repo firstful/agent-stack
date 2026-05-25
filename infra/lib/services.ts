@@ -24,23 +24,31 @@ function discoverVaultUrl(): string {
 }
 
 export function resolveSecrets(service: Service): Record<string, string> {
-  if (!service.secrets || !Array.isArray(service.secrets)) return {};
+  if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
   if (!VAULT_TOKEN) {
-    return {};
+    throw new Error(`[secrets] cannot resolve secrets for "${service.name}": VAULT_TOKEN is not set`);
   }
+  const vaultUrl = discoverVaultUrl();
   try {
-    const vaultUrl = discoverVaultUrl();
     const curl = `curl -sf ${vaultUrl}/api/secrets/plain/${service.name} -H "Authorization: Bearer ${VAULT_TOKEN}"`;
     const raw = execSync(curl, { timeout: 5000, encoding: "utf8" });
     const result = JSON.parse(raw);
-    if (!result.secrets) return {};
+    if (!result.secrets) {
+      throw new Error(`[secrets] vault returned no secrets object for "${service.name}"`);
+    }
+    const missing: string[] = [];
     const filtered: Record<string, string> = {};
     for (const key of service.secrets) {
       if (result.secrets[key] !== undefined) filtered[key] = result.secrets[key];
+      else missing.push(key);
+    }
+    if (missing.length > 0) {
+      throw new Error(`[secrets] vault missing keys for "${service.name}": ${missing.join(", ")}`);
     }
     return filtered;
-  } catch {
-    return {};
+  } catch (e: any) {
+    if (e.message?.startsWith("[secrets]")) throw e;
+    throw new Error(`[secrets] vault unreachable at ${vaultUrl} for "${service.name}": ${e.message}`);
   }
 }
 
@@ -113,11 +121,7 @@ function scanRepoAgentConfigs(): Service[] {
       service._fromRepo = true;
 
       const configHash = crypto.createHash("md5").update(raw).digest("hex");
-      let repoHash = "";
-      const wipFile = path.join(service.repo!, ".wip");
-      if (!fs.existsSync(wipFile)) {
-        repoHash = repoHashForPath(service.repo!);
-      }
+      const repoHash = repoHashForPath(service.repo!);
       service._hash = crypto
         .createHash("md5")
         .update(configHash + repoHash)
@@ -169,13 +173,7 @@ export function loadDesired(): Service[] {
       service._fromRepo = false;
 
       const configHash = crypto.createHash("md5").update(raw).digest("hex");
-      let repoHash = "";
-      if (service.repo) {
-        const wipFile = path.join(service.repo, ".wip");
-        if (!fs.existsSync(wipFile)) {
-          repoHash = repoHashForPath(service.repo);
-        }
-      }
+      const repoHash = service.repo ? repoHashForPath(service.repo) : "";
       service._hash = crypto
         .createHash("md5")
         .update(configHash + repoHash)

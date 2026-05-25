@@ -95,18 +95,6 @@ Since the entire `/srv/agent-stack/` tree is a git repository, the controller us
 - **After committing**, the next reconciliation (within 5 seconds) detects the new commit hash and triggers a rebuild.
 - **Editing `agent-stack.json` always triggers a rebuild**, regardless of commits, because it changes the config hash component.
 
-### `.wip` File
-
-Create a file named `.wip` at the root of a service's repo directory to block rebuilds triggered by repo hash changes:
-
-```bash
-touch /srv/agent-stack/repos/<name>/.wip   # block rebuilds
-# ... make edits, test, commit ...
-rm /srv/agent-stack/repos/<name>/.wip        # re-enable — next reconcile picks up the new hash
-```
-
-When `.wip` is present, the repo hash component is skipped (`""`), so only `agent-stack.json` edits trigger a rebuild. This lets you batch multiple commits and test safely before deploying.
-
 ### File-Based Fallback
 
 If `/srv/agent-stack/.git` is not available (e.g., the repo was deployed without git history), the controller falls back to a recursive `md5` hash of all files in the service directory (excluding `node_modules` and dotfiles). In this mode, any file edit on disk is detected immediately — no commit required.
