@@ -124,6 +124,25 @@ export function ensureServiceClone(service: Service): string | null {
       );
     }
 
+    // Prune old clones — keep only the 4 most recent based on mtime
+    const parentDir = path.join(CLONES_DIR, service.name);
+    if (fs.existsSync(parentDir)) {
+      const entries = fs.readdirSync(parentDir, { withFileTypes: true })
+        .filter(e => e.isDirectory())
+        .map(e => ({
+          name: e.name,
+          mtime: fs.statSync(path.join(parentDir, e.name)).mtimeMs,
+        }))
+        .sort((a, b) => b.mtime - a.mtime);
+
+      // Keep the current one at index 0 plus up to 3 more
+      for (const entry of entries.slice(4)) {
+        const oldDir = path.join(parentDir, entry.name);
+        fs.rmSync(oldDir, { recursive: true, force: true });
+        console.log(`[services] pruned old clone: ${oldDir}`);
+      }
+    }
+
     return cloneDir;
   } catch (e: any) {
     console.error(`[services] failed to create clone for ${service.name}: ${e.message}`);

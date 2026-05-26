@@ -14,7 +14,7 @@ import {
 } from "./lib/systemd";
 import { writeCloudflaredConfig } from "./lib/cloudflared";
 import { writeRuntimeState } from "./lib/runtime";
-import { getManagedContainers } from "./lib/podman";
+import { getManagedContainers, sh } from "./lib/podman";
 import { sidecarContainerName, baseServiceName } from "./lib/config";
 import { parentPort } from "worker_threads";
 
@@ -126,6 +126,13 @@ function reconcile(): void {
     } catch (e: any) {
       console.error(`[runtime] failed to write runtime state: ${e.message}`);
     }
+
+    try {
+      sh(`podman image prune -f`);
+    } catch {
+      // best effort
+    }
+
     send({
       type: "status_update",
       payload: {
