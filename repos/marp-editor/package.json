@@ -18,6 +18,12 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",
     "@marp-team/marp-core": "^3.9.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.57.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.200.0",
+    "@opentelemetry/resources": "^2.0.0",
+    "@opentelemetry/sdk-node": "^0.200.0",
+    "@opentelemetry/semantic-conventions": "^1.32.0",
     "ai": "^6.0.185",
     "bcryptjs": "^2.4.3",
     "better-auth": "^1.6.11",
