@@ -5,12 +5,12 @@ A lightweight container orchestration system using Podman, Cloudflare Tunnel, an
 ## Architecture
 
 ```
-desired/*.json → controller.js → podman containers + cloudflared tunnel
+desired/*.json → controller.ts → podman containers + cloudflared tunnel
 ```
 
 > **Note**: The `desired/` folder is **only for systemd-managed services** (like cockpit). For containerized services managed by the controller, configuration should be placed in each service's repository as `agent-stack.json`.
 
-- **controller.js** - Runs every 5 seconds via systemd (`agent-stack.service`), compares desired/ state with running containers, builds images, starts/stops containers, and regenerates cloudflared config. **Do NOT run it manually** — the systemd service handles it automatically. Running a second instance directly will cause port conflicts and race conditions with the systemd-managed one. **Note: The AI assistant should not attempt to kill or restart the controller process directly.**
+- **controller.ts** - Runs every 5 seconds via systemd (`agent-stack.service`), compares desired/ state with running containers, builds images, starts/stops containers, and regenerates cloudflared config. On each tick it spawns a **reconcile-worker.ts** as a child process to do the actual reconciliation work. **Do NOT run it manually** — the systemd service handles it automatically. Running a second instance directly will cause port conflicts and race conditions with the systemd-managed one. **Note: The AI assistant should not attempt to kill or restart the controller process directly.**
 - **Podman** - Container runtime for running services
 - **cloudflared** - Exposes services via Cloudflare Tunnel using ingress rules from service configs
 - **systemd** - Runs controller as a service (`agent-stack.service`)
@@ -20,17 +20,20 @@ desired/*.json → controller.js → podman containers + cloudflared tunnel
 ```
  /srv/agent-stack/
  ├── infra/               # Controller and dependencies
- │   ├── controller.js    # Main reconciliation loop + HTTP/API server
+ │   ├── controller.ts    # Main reconciliation loop + HTTP/API server
+ │   ├── reconcile-worker.ts  # Child process that performs reconciliation
  │   ├── lib/             # Modular helper libraries
- │   │   ├── services.js
- │   │   ├── podman.js
- │   │   ├── cloudflared.js
- │   │   ├── runtime.js
- │   │   └── reconcile.js
+ │   │   ├── config.ts
+ │   │   ├── services.ts
+ │   │   ├── podman.ts
+ │   │   ├── cloudflared.ts
+ │   │   ├── runtime.ts
+ │   │   └── reconcile.ts
  │   ├── package.json
  │   └── agent-stack.service
  ├── desired/             # Service definitions (JSON files) - ONLY for systemd-managed services
- │   └── cockpit.json
+ │   ├── cockpit.json
+ │   └── shellular.json
  ├── repos/               # Git repositories for each service
  │   ├── <service-name>/
  │   │   ├── Dockerfile
@@ -64,13 +67,16 @@ desired/*.json → controller.js → podman containers + cloudflared tunnel
 
 | Command | Description |
 |---------|-------------|
-| `node controller.js` | Run controller once (or as daemon with 5s interval) — **only for testing**; the systemd service handles production runs. Never leave a manual instance running — it will conflict. |
+| `npx tsx controller.ts` | Run controller once (or as daemon with 5s interval) — **only for testing**; the systemd service handles production runs. Never leave a manual instance running — it will conflict. |
 | `sudo systemctl status agent-stack` | Check if controller service is running |
 | `sudo journalctl -u agent-stack -f` | Follow controller logs |
-| `podman ps` | List running containers |
-| `podman images` | List built images |
+| `sudo -u reeds podman ps` | List running containers (controller runs as `reeds` with rootless podman) |
+| `sudo -u reeds podman images` | List built images |
+| `sudo -u reeds podman logs <container>` | View container logs |
 | `curl -s http://localhost/api/status` | Check controller health |
 | `sudo systemctl restart cloudflared` | Restart tunnel after config change |
+
+> **Important**: The controller runs as user `reeds` using **rootless podman**. When inspecting containers or images from a root shell, always prefix podman commands with `sudo -u reeds`. Running `podman` as root shows a separate rootful instance which will appear empty.
 
 ## Adding a Service
 
@@ -94,10 +100,11 @@ Since the entire `/srv/agent-stack/` tree is a git repository, the controller us
 - **Uncommitted file edits do NOT trigger a rebuild.** The `git log` query returns the same commit hash until you `git commit`.
 - **After committing**, the next reconciliation (within 5 seconds) detects the new commit hash and triggers a rebuild.
 - **Editing `agent-stack.json` always triggers a rebuild**, regardless of commits, because it changes the config hash component.
+- **Note:** If `git` fails (e.g., dubious ownership error when the repo is owned by a different user), the controller silently falls back to file-based hashing.
 
 ### File-Based Fallback
 
-If `/srv/agent-stack/.git` is not available (e.g., the repo was deployed without git history), the controller falls back to a recursive `md5` hash of all files in the service directory (excluding `node_modules` and dotfiles). In this mode, any file edit on disk is detected immediately — no commit required.
+If `/srv/agent-stack/.git` is not available (e.g., the repo was deployed without git history), or if `git` commands fail (e.g., ownership mismatch), the controller falls back to a recursive `md5` hash of all files in the service directory (excluding `node_modules` and dotfiles). In this mode, any file edit on disk is detected immediately — no commit required.
 
 ## Auto-Injected Container Environment Variables
 
@@ -153,6 +160,61 @@ SWAGGER_URL="${BASE_URL}/api/openapi.json"
 
 When inside a container: `http://agent-stack/api/openapi.json`
 When on the host: `http://localhost/api/openapi.json`
+
+## Observability (OpenTelemetry)
+
+An `observability` service provides distributed tracing via OpenTelemetry:
+
+```
+app → OTLP HTTP → otel-collector → OTLP gRPC → Tempo → Grafana UI
+```
+
+### Components
+
+- **otel-collector** (sidecar) — Receives OTLP traces via HTTP at port 4318, batches them, and forwards to Tempo
+- **Tempo** (sidecar) — Trace storage backend, receives OTLP gRPC from collector, retains traces for 48h
+- **Grafana** (main container) — Web UI at `https://observability.ffilt.us`, pre-configured with Tempo datasource (Explore → Tempo → search)
+
+All three run on the `stack-net` network. Services send traces to `http://observability--otel-collector:4318/v1/traces`.
+
+### Env Vars Injected Into Every Service
+
+Every container service automatically receives:
+
+| Variable | Value |
+|----------|-------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://observability--otel-collector:4318` |
+| `OTEL_SERVICE_NAME` | `<service-name>` |
+| `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment=production` |
+
+These are standard OpenTelemetry env vars. Any service with an OTel SDK will auto-discover the collector.
+
+### Adding Instrumentation to a Service
+
+**Node.js services:** Install the OTel SDK packages and import a tracing initializer before all other imports:
+
+```bash
+npm install @opentelemetry/api @opentelemetry/auto-instrumentations-node @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/sdk-node @opentelemetry/semantic-conventions
+```
+
+```ts
+// server/tracing.ts — imported first in your entry point
+import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { Resource } from '@opentelemetry/resources'
+import { SEMRESATTRS_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
+import { NodeSDK } from '@opentelemetry/sdk-node'
+
+const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+if (endpoint) {
+  const sdk = new NodeSDK({
+    resource: new Resource({ [SEMRESATTRS_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME }),
+    traceExporter: new OTLPTraceExporter({ url: `${endpoint}/v1/traces` }),
+    instrumentations: [getNodeAutoInstrumentations()],
+  })
+  sdk.start()
+}
+```
 
 ### Notes for opencode and opencode-admin
 

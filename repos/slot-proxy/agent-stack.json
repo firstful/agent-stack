@@ -6,7 +6,12 @@
     "auto_port": true,
     "volumes": [
       "/srv/agent-stack/runtime:/runtime"
-    ]
+    ],
+    "env": {
+      "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
+      "OTEL_SERVICE_NAME": "slot-proxy",
+      "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
+    }
   },
   "expose": {
     "enabled": true,

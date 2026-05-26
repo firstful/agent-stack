@@ -3,7 +3,12 @@
   "version": 1,
   "container": {
     "port": 8000,
-    "auto_port": true
+    "auto_port": true,
+    "env": {
+      "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
+      "OTEL_SERVICE_NAME": "personal-blog",
+      "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
+    }
   },
   "expose": {
     "hostname": "blogpreview.ffilt.us",

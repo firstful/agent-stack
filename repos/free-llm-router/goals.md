@@ -1,3 +1,0 @@
-- Incorporate multiple free inference providers
-- Ensure fallback and model tiering works
-- Maintain fast response times

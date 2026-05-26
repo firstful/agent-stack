@@ -11,7 +11,10 @@
       "AUTH_SECRET": "1ba55914c8c2927aad91b5384f22755189008e67eec5a6d1165c00fdf69feea9",
       "AUTH_TRUSTED_ORIGINS": "https://kilocode.ffilt.us,http://localhost:5173,http://localhost:5003",
       "PASSKEY_ORIGIN": "https://kilocode.ffilt.us",
-      "PASSKEY_RP_ID": "kilocode.ffilt.us"
+      "PASSKEY_RP_ID": "kilocode.ffilt.us",
+      "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
+      "OTEL_SERVICE_NAME": "kilocode-web",
+      "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
     }
   },
   "expose": {

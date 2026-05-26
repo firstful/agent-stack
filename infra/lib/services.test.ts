@@ -69,13 +69,13 @@ describe("resolveSecrets", () => {
     assert.deepStrictEqual(resolveSecrets({ secrets: [] } as any), {});
   });
 
-  it("returns empty object when VAULT_TOKEN not set", () => {
+  it("throws when VAULT_TOKEN not set and secrets requested", () => {
     const old = process.env.VAULT_TOKEN;
     delete process.env.VAULT_TOKEN;
     try {
-      assert.deepStrictEqual(
-        resolveSecrets({ name: "test", secrets: ["KEY"] } as any),
-        {}
+      assert.throws(
+        () => resolveSecrets({ name: "test", secrets: ["KEY"] } as any),
+        /VAULT_TOKEN is not set/
       );
     } finally {
       if (old !== undefined) process.env.VAULT_TOKEN = old;

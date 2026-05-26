@@ -9,7 +9,10 @@
     ],
     "env": {
       "PORT": "3500",
-      "VAULT_PASSWORD": "techdeck-vault-token"
+      "VAULT_PASSWORD": "techdeck-vault-token",
+      "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
+      "OTEL_SERVICE_NAME": "vault",
+      "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
     }
   },
   "expose": {

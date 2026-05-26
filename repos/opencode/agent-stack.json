@@ -11,7 +11,10 @@
       "OPENCODE_CONFIG": "/config/opencode.json",
       "GH_TOKEN": "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",
       "GIT_PROTOCOL": "https",
-      "MCP_ENDPOINT": "http://agent-stack/mcp"
+      "MCP_ENDPOINT": "http://agent-stack/mcp",
+      "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
+      "OTEL_SERVICE_NAME": "opencode",
+      "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
     },
     "volumes": [
       "/srv/agent-stack/config/opencode:/config",

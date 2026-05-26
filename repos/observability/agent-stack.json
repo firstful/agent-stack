@@ -1,0 +1,44 @@
+{
+  "name": "observability",
+  "version": 1,
+  "container": {
+    "port": 3000,
+    "auto_port": true,
+    "env": {
+      "GF_SECURITY_ADMIN_USER": "admin",
+      "GF_SECURITY_ADMIN_PASSWORD": "admin",
+      "GF_AUTH_ANONYMOUS_ENABLED": "true",
+      "GF_AUTH_ANONYMOUS_ORG_ROLE": "Admin",
+      "GF_INSTALL_PLUGINS": ""
+    },
+    "volumes": [
+      "observability-grafana-data:/var/lib/grafana",
+      "/srv/agent-stack/config/observability/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro",
+      "/srv/agent-stack/config/observability/grafana.ini:/etc/grafana/grafana.ini:ro"
+    ],
+    "sidecars": [
+      {
+        "name": "otel-collector",
+        "image": "docker.io/otel/opentelemetry-collector-contrib:latest",
+        "volumes": [
+          "/srv/agent-stack/config/observability/otel-collector-config.yml:/etc/otel-collector-config.yml:ro"
+        ],
+        "command": ["--config", "/etc/otel-collector-config.yml"]
+      },
+      {
+        "name": "tempo",
+        "image": "docker.io/grafana/tempo:latest",
+        "volumes": [
+          "observability-tempo-data:/var/tempo",
+          "/srv/agent-stack/config/observability/tempo-config.yml:/etc/tempo-config.yml:ro"
+        ],
+        "command": ["-config.file=/etc/tempo-config.yml"]
+      }
+    ]
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "observability.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  }
+}

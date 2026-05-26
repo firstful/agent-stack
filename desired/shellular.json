@@ -1,0 +1,12 @@
+{
+  "name": "shellular",
+  "version": 1,
+  "service": {
+    "type": "simple",
+    "exec_start": "npx -y shellular --dir /srv/agent-stack/",
+    "restart": "always"
+  },
+  "expose": {
+    "enabled": false
+  }
+}
