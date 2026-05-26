@@ -261,11 +261,32 @@ function renderCard(svc, status) {
   const color = STATUS_COLORS[status] || "#94a3b8";
   const hostLabel = hostname && hostname !== "*" ? hostname : null;
   const logo = getLogoSvg(name);
+  let sidecarsHtml = "";
+  if (svc.sidecars) {
+    const entries = Object.entries(svc.sidecars);
+    if (entries.length > 0) {
+      const rows = entries.map(([scName, sc]) => {
+        const scColor = sc.running ? STATUS_COLORS.healthy : STATUS_COLORS.down;
+        return `<div class="sidecar-row">
+          <span class="status-dot" style="background:${scColor};width:7px;height:7px"></span>
+          <span class="sidecar-name">${scName}</span>
+          ${sc.port ? `<span class="sidecar-port">:${sc.port}</span>` : ""}
+        </div>`;
+      }).join("");
+      sidecarsHtml = `<div class="sidecars-section">
+        <div class="sidecars-title">Sidecars</div>
+        ${rows}
+      </div>`;
+    }
+  }
+
+  const typeLabel = !port && svc.service ? "systemd" : port ? "container" : "";
   return `<div class="card">
     <div class="card-header">
       ${logo}
       <div class="card-title-row">
         <h2>${name}</h2>
+        ${typeLabel ? `<span class="type-badge">${typeLabel}</span>` : ""}
         <span class="status-dot" style="background:${color}"></span>
       </div>
     </div>
@@ -273,6 +294,8 @@ function renderCard(svc, status) {
       ${port ? `<div class="info"><span class="label">Port</span><span class="value">${port}</span></div>` : ""}
       ${hostLabel ? `<div class="info"><span class="label">URL</span><a href="${url}" target="_blank">${hostLabel}</a></div>` : ""}
       ${svc.repo ? `<div class="info"><span class="label">Repo</span><span class="value mono">${svc.repo}</span></div>` : ""}
+      ${!port && !hostLabel && !svc.repo ? `<div class="info"><span class="label">Type</span><span class="value">${svc.service ? "systemd" : "container"}</span></div>` : ""}
+      ${sidecarsHtml}
     </div>
     <div class="card-footer">
       <span class="status-label ${status}">${status}</span>
@@ -352,6 +375,12 @@ function renderHTML(services, statusMap, health, unknownHost) {
     .status-label.healthy { background: rgba(34,197,94,0.15); color: #22c55e; }
     .status-label.degraded { background: rgba(234,179,8,0.15); color: #eab308; }
     .status-label.down { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .type-badge { font-size: 0.65rem; font-weight: 600; padding: 0.1em 0.5em; border-radius: 4px; background: #334155; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.4; }
+    .sidecars-section { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid #334155; }
+    .sidecars-title { font-size: 0.7rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+    .sidecar-row { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; padding: 0.15rem 0; color: #94a3b8; }
+    .sidecar-name { color: #cbd5e1; }
+    .sidecar-port { color: #64748b; margin-left: auto; font-family: "SF Mono", "Fira Code", monospace; font-size: 0.75rem; }
     .empty { text-align: center; padding: 4rem 2rem; color: #64748b; }
     .empty h2 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #94a3b8; }
     footer { text-align: center; margin-top: 3rem; color: #475569; font-size: 0.875rem; }
