@@ -4,7 +4,7 @@ import { MemoryStore } from "./memory/store.js"
 import { VectorStore } from "./memory/vector.js"
 import { ContextEngine } from "./context/engine.js"
 import { OpenAIProvider } from "./provider/openai.js"
-import { OpenAIEmbeddingsProvider, NoopEmbeddingsProvider } from "./provider/embeddings.js"
+import { createEmbeddingsProvider } from "./provider/embeddings.js"
 import { UserStore } from "./auth/user-store.js"
 import { registerRoutes } from "./gateway/index.js"
 
@@ -21,9 +21,10 @@ async function main() {
   const globalProvider = new OpenAIProvider(API_KEY)
   const engine = new ContextEngine()
 
-  const embeddingsProvider = API_KEY
-    ? new OpenAIEmbeddingsProvider(API_KEY)
-    : new NoopEmbeddingsProvider()
+  const embeddingsProvider = createEmbeddingsProvider({
+    kind: API_KEY ? "openai" : "noop",
+    apiKey: API_KEY,
+  })
 
   const vectorStore = new VectorStore(embeddingsProvider)
 
