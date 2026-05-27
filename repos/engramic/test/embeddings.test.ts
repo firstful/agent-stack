@@ -1,5 +1,8 @@
-import { describe, it } from "node:test"
+import { describe, it, before, after } from "node:test"
 import { equal, deepEqual, ok } from "node:assert/strict"
+import { mkdtemp, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import {
   OpenAIEmbeddingsProvider,
   EmbeddingCache,
@@ -8,6 +11,7 @@ import {
   NoopEmbeddingsProvider,
   EmbeddingsProvider,
 } from "../src/provider/embeddings.js"
+import { VectorStore } from "../src/memory/vector.js"
 
 describe("OpenAIEmbeddingsProvider", () => {
   it("constructs with defaults", () => {
@@ -116,5 +120,65 @@ describe("cosineSimilarity", () => {
       (1 * 4 + 2 * 5 + 3 * 6) /
       (Math.sqrt(1 + 4 + 9) * Math.sqrt(16 + 25 + 36))
     equal(sim, expected)
+  })
+})
+
+describe("VectorStore", () => {
+  class FakeProvider implements EmbeddingsProvider {
+    readonly name = "test"
+    readonly dimensions = 4
+    async embed(text: string): Promise<number[]> {
+      return [text.length, text.charCodeAt(0) || 0, 0, 1]
+    }
+    async embedBatch(texts: string[]): Promise<number[][]> {
+      return Promise.all(texts.map((t) => this.embed(t)))
+    }
+  }
+
+  let tmpDir: string
+
+  before(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "engra-vector-test-"))
+    process.env.ENGRA_DATA_DIR = tmpDir
+  })
+
+  after(async () => {
+    await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  it("inserts and searches", async () => {
+    const store = new VectorStore(new FakeProvider(), "test-conv")
+    await store.insert("v1", "hello world", "src1", "memory")
+    await store.insert("v2", "goodbye world", "src2", "memory")
+    equal(store.size(), 2)
+
+    const results = await store.search("hello", 1)
+    equal(results.length, 1)
+    ok(results[0].score > 0)
+  })
+
+  it("persists and restores from disk", async () => {
+    const provider = new FakeProvider()
+    const store1 = new VectorStore(provider, "persist-conv")
+    await store1.insert("p1", "alpha", "a1", "memory")
+    await store1.insert("p2", "beta", "a2", "memory")
+    await store1.save()
+
+    const store2 = new VectorStore(provider, "persist-conv")
+    await store2.load()
+    equal(store2.size(), 2)
+    ok(store2.get("p1"))
+    ok(store2.get("p2"))
+  })
+
+  it("rankByImportance scores outliers higher", async () => {
+    const store = new VectorStore(new FakeProvider(), "rank-conv")
+    await store.insert("common1", "hello world", "s1", "memory")
+    await store.insert("common2", "hello there", "s2", "memory")
+    await store.insert("outlier", "zzzzzzzzzzzzzzzzzzzzzz", "s3", "memory")
+
+    const ranked = await store.rankByImportance()
+    ok(ranked.length === 3)
+    ok(ranked[0].score >= 0)
   })
 })

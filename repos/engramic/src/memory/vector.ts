@@ -1,4 +1,7 @@
-import { EmbeddingsProvider } from "../provider/embeddings.js"
+import { readFile, writeFile, mkdir } from "node:fs/promises"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+import { EmbeddingsProvider, cosineSimilarity } from "../provider/embeddings.js"
 import type { MemoryHandle } from "../types.js"
 
 export interface VectorRecord {
@@ -15,24 +18,45 @@ export interface ScoredMatch {
   score: number
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length || a.length === 0) return 0
-  let dot = 0, normA = 0, normB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    normA += a[i] * a[i]
-    normB += b[i] * b[i]
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB)
-  return denom === 0 ? 0 : dot / denom
-}
+const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 
 export class VectorStore {
   private records = new Map<string, VectorRecord>()
   private embeddingsProvider: EmbeddingsProvider
+  private convId: string
 
-  constructor(embeddingsProvider: EmbeddingsProvider) {
+  constructor(embeddingsProvider: EmbeddingsProvider, convId?: string) {
     this.embeddingsProvider = embeddingsProvider
+    this.convId = convId || ""
+  }
+
+  bind(convId: string): void {
+    this.convId = convId
+  }
+
+  private storePath(): string {
+    return join(DATA_DIR, `${this.convId}.vectors.json`)
+  }
+
+  async save(): Promise<void> {
+    if (!this.convId) return
+    const dir = DATA_DIR
+    if (!existsSync(dir)) await mkdir(dir, { recursive: true })
+    const data = Array.from(this.records.entries()).map(([key, record]) => ({ key, record }))
+    await writeFile(this.storePath(), JSON.stringify(data, null, 2))
+  }
+
+  async load(convId?: string): Promise<void> {
+    if (convId) this.convId = convId
+    if (!this.convId) return
+    const path = this.storePath()
+    if (!existsSync(path)) return
+    const raw = await readFile(path, "utf-8")
+    const data: Array<{ key: string; record: VectorRecord }> = JSON.parse(raw)
+    this.records.clear()
+    for (const { key, record } of data) {
+      this.records.set(key, record)
+    }
   }
 
   async insert(id: string, text: string, sourceId: string, sourceType: VectorRecord["sourceType"]): Promise<string> {
@@ -102,5 +126,35 @@ export class VectorStore {
 
     scored.sort((a, b) => b.score - a.score)
     return scored.slice(0, topK)
+  }
+
+  async rankByImportance(topK?: number): Promise<ScoredMatch[]> {
+    if (this.records.size === 0) return []
+    if (this.records.size === 1) {
+      const rec = Array.from(this.records.values())[0]
+      return [{ record: rec, score: 1 }]
+    }
+
+    const allVectors = Array.from(this.records.values())
+    const dims = allVectors[0].vector.length
+    const centroid = new Array(dims).fill(0)
+
+    for (const rec of allVectors) {
+      for (let i = 0; i < dims; i++) {
+        centroid[i] += rec.vector[i]
+      }
+    }
+    for (let i = 0; i < dims; i++) {
+      centroid[i] /= allVectors.length
+    }
+
+    const scored: ScoredMatch[] = allVectors.map((record) => {
+      const distance = 1 - cosineSimilarity(record.vector, centroid)
+      const score = 1 / (1 + distance)
+      return { record, score }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    return topK ? scored.slice(0, topK) : scored
   }
 }
