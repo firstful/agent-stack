@@ -27,6 +27,30 @@ export class UserStore {
     } catch (err) {
       console.error("Failed to load accounts:", err)
     }
+
+    const testUserId = process.env.TEST_USER_ID
+    if (testUserId && !this.accounts.has(testUserId)) {
+      const apiKey = process.env.ENGRA_OPENAI_API_KEY || ""
+      const baseUrl = process.env.ENGRA_OPENAI_BASE_URL || "https://api.openai.com/v1"
+      const defaultModel = process.env.ENGRA_DEFAULT_MODEL || "gpt-4o"
+
+      const account: Account = {
+        token: testUserId,
+        providers: [
+          {
+            label: "default",
+            providerType: process.env.ENGRA_PROVIDER_TYPE || "openai",
+            apiKey,
+            baseUrl,
+            defaultModel,
+          },
+        ],
+        createdAt: Date.now(),
+      }
+      this.accounts.set(testUserId, account)
+      await this.save()
+      console.log(`Auto-created test account for TEST_USER_ID=${testUserId}`)
+    }
   }
 
   async save(): Promise<void> {

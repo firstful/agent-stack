@@ -249,9 +249,11 @@ function toInternalMessages(msgs: ChatCompletionRequest["messages"]): Message[] 
 
 function extractAuthToken(request: FastifyRequest): string | null {
   const header = request.headers.authorization
-  if (!header) return null
-  const match = header.match(/^Bearer\s+(.+)$/i)
-  return match ? match[1] : null
+  if (header) {
+    const match = header.match(/^Bearer\s+(.+)$/i)
+    if (match) return match[1]
+  }
+  return process.env.TEST_USER_ID || null
 }
 
 function extractText(msg: Message): string {
@@ -352,7 +354,26 @@ export function registerRoutes(
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const account = userStore.getAccount(token)
       if (!account) return reply.status(401).send({ error: "Invalid token" })
-      return reply.send({ providers: account.providers.map((p) => ({ label: p.label, provider: p.providerType, default_model: p.defaultModel })) })
+      return reply.send({ providers: account.providers })
+    })
+
+    app.delete("/providers/:label", async (request, reply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const { label } = request.params as { label: string }
+      const removed = userStore.removeProvider(token, label)
+      if (!removed) return reply.status(404).send({ error: `Provider '${label}' not found` })
+      return reply.send({ removed: true, label })
+    })
+
+    app.get("/ui", async (_request, reply) => {
+      reply.header("Content-Type", "text/html; charset=utf-8")
+      return reply.send(WEB_UI_HTML)
+    })
+
+    app.get("/", async (_request, reply) => {
+      reply.header("Content-Type", "text/html; charset=utf-8")
+      return reply.send(WEB_UI_HTML)
     })
 
     app.post<{ Body: ChatCompletionRequest }>("/v1/chat/completions", async (request, reply) => {
@@ -758,6 +779,158 @@ async function handleHiddenTool(
     }
   }
 }
+
+const WEB_UI_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>engramic — Provider Manager</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 720px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; color: #f0f6fc; }
+  .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 1rem; margin-bottom: 12px; color: #f0f6fc; }
+  label { display: block; font-size: 0.8rem; color: #8b949e; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem; margin-bottom: 12px; }
+  input:focus, select:focus { outline: none; border-color: #58a6ff; }
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-danger { background: #da3633; color: #fff; }
+  .btn-danger:hover { background: #f85149; }
+  .btn-outline { background: transparent; border: 1px solid #30363d; color: #c9d1d9; }
+  .btn-outline:hover { background: #30363d; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; }
+  td { padding: 8px 0; border-top: 1px solid #21262d; font-size: 0.9rem; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
+  .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; }
+  .toast.show { opacity: 1; }
+  .toast.ok { background: #238636; }
+  .toast.err { background: #da3633; }
+  .flex { display: flex; gap: 8px; align-items: center; }
+  .mt-8 { margin-top: 8px; }
+  .mb-8 { margin-bottom: 8px; }
+  .provider-label { font-weight: 600; }
+  .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 600px) { body { padding: 12px; } }
+</style>
+</head>
+<body>
+<h1>engramic</h1>
+<p class="subtitle">Provider Manager</p>
+
+<div id="add-card" class="card">
+  <h2>Add Provider</h2>
+  <label for="label">Label</label>
+  <input id="label" placeholder="e.g. openai, deepseek, anthropic" value="default">
+  <label for="provider-type">Provider Type</label>
+  <select id="provider-type">
+    <option value="openai">OpenAI Compatible</option>
+    <option value="anthropic">Anthropic</option>
+  </select>
+  <label for="api-key">API Key</label>
+  <input id="api-key" type="password" placeholder="sk-...">
+  <label for="base-url">Base URL</label>
+  <input id="base-url" placeholder="https://api.openai.com/v1" value="https://api.openai.com/v1">
+  <label for="default-model">Default Model</label>
+  <input id="default-model" placeholder="gpt-4o" value="gpt-4o">
+  <button class="btn btn-primary" onclick="addProvider()">Add Provider</button>
+</div>
+
+<div class="card">
+  <h2>Providers</h2>
+  <table>
+    <thead><tr><th>Label</th><th>Type</th><th>Model</th><th>Base URL</th><th></th></tr></thead>
+    <tbody id="provider-list"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const BASE = window.location.origin
+
+async function api(path, opts = {}) {
+  const res = await fetch(BASE + path, {
+    headers: { "Content-Type": "application/json", ...opts.headers },
+    ...opts,
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || res.statusText)
+  return data
+}
+
+function toast(msg, type = "ok") {
+  const el = document.getElementById("toast")
+  el.textContent = msg
+  el.className = "toast " + type + " show"
+  setTimeout(() => el.classList.remove("show"), 3000)
+}
+
+async function loadProviders() {
+  try {
+    const { providers } = await api("/providers")
+    const tbody = document.getElementById("provider-list")
+    if (!providers || providers.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No providers configured</td></tr>'
+      return
+    }
+    tbody.innerHTML = providers.map((p) => \`
+      <tr>
+        <td class="provider-label">\${p.label}</td>
+        <td><span class="badge">\${p.providerType}</span></td>
+        <td class="truncate">\${p.defaultModel}</td>
+        <td class="truncate">\${p.baseUrl}</td>
+        <td><button class="btn btn-danger" onclick="removeProvider('\${p.label}')">Remove</button></td>
+      </tr>
+    \`).join("")
+  } catch (e) {
+    document.getElementById("provider-list").innerHTML = '<tr><td colspan="5" class="empty">Failed to load: ' + e.message + '</td></tr>'
+  }
+}
+
+async function addProvider() {
+  const label = document.getElementById("label").value.trim()
+  const apiKey = document.getElementById("api-key").value.trim()
+  const baseUrl = document.getElementById("base-url").value.trim()
+  const defaultModel = document.getElementById("default-model").value.trim()
+  const provider = document.getElementById("provider-type").value
+
+  if (!label || !apiKey) { toast("Label and API key are required", "err"); return }
+
+  try {
+    await api("/register", {
+      method: "POST",
+      body: JSON.stringify({ label, api_key: apiKey, base_url: baseUrl, default_model: defaultModel, provider }),
+    })
+    toast("Provider added")
+    document.getElementById("api-key").value = ""
+    await loadProviders()
+  } catch (e) {
+    toast(e.message, "err")
+  }
+}
+
+async function removeProvider(label) {
+  if (!confirm(\`Remove provider "\${label}"?\`)) return
+  try {
+    await api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
+    toast("Provider removed")
+    await loadProviders()
+  } catch (e) {
+    toast(e.message, "err")
+  }
+}
+
+loadProviders()
+</script>
+</body>
+</html>`
 
 function createSpanMessages(body: ChatCompletionRequest, assistantContent: string): Message[] {
   const msgs = toInternalMessages(body.messages)
