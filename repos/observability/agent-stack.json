@@ -33,6 +33,15 @@
           "/srv/agent-stack/config/observability/tempo-config.yml:/etc/tempo-config.yml:ro"
         ],
         "command": ["-config.file=/etc/tempo-config.yml"]
+      },
+      {
+        "name": "quickwit",
+        "image": "docker.io/quickwit/quickwit:latest",
+        "volumes": [
+          "observability-quickwit-data:/var/quickwit/data",
+          "/srv/agent-stack/config/observability/quickwit/quickwit.yaml:/etc/quickwit/quickwit.yaml:ro"
+        ],
+        "command": ["run", "--config", "/etc/quickwit/quickwit.yaml"]
       }
     ]
   },

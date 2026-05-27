@@ -12,8 +12,12 @@ processors:
     send_batch_size: 1024
 
 exporters:
-  otlp:
+  otlp/tempo:
     endpoint: observability--tempo:4317
+    tls:
+      insecure: true
+  otlp/quickwit:
+    endpoint: observability--quickwit:7281
     tls:
       insecure: true
   debug:
@@ -24,4 +28,8 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp, debug]
+      exporters: [otlp/tempo, debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/quickwit, debug]

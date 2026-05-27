@@ -1,0 +1,22 @@
+FROM docker.io/node:22-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+
+RUN npx tsc
+RUN npm prune --omit=dev
+
+RUN mkdir -p /data
+VOLUME /data
+
+ENV ENGRA_PORT=3000
+ENV ENGRA_DATA_DIR=/data
+
+EXPOSE 3000
+
+CMD ["node", "dist/index.js"]

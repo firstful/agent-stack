@@ -1,0 +1,23 @@
+{
+  "name": "engramic",
+  "version": 1,
+  "container": {
+    "port": 3000,
+    "auto_port": true,
+    "env": {
+      "ENGRA_PORT": "3000",
+      "ENGRA_DATA_DIR": "/data",
+      "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
+      "OTEL_SERVICE_NAME": "engramic",
+      "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
+    },
+    "volumes": [
+      "engramic-data:/data"
+    ]
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "engramic.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  }
+}

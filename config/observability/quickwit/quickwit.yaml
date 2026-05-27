@@ -1,0 +1,7 @@
+version: 0.8
+node_id: observability--quickwit
+listen_address: 0.0.0.0
+rest_listen_port: 7280
+grpc_listen_port: 7281
+data_dir: /var/quickwit/data
+metastore_uri: file:///var/quickwit/data/metastore
