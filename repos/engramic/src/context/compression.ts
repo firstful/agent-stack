@@ -1,7 +1,7 @@
 import type { Conversation, TranscriptSpan, SummaryNode, MemoryHandle, Message } from "../types.js"
 import type { Provider } from "../provider/index.js"
 import type { EmbeddingsProvider } from "../provider/embeddings.js"
-import type { VectorStore } from "../memory/vector.js"
+import type { IVectorStore } from "../memory/vector.js"
 
 const TOKEN_THRESHOLD = 80_000
 const TURN_THRESHOLD = 20
@@ -45,7 +45,7 @@ export async function compressConversation(
   conv: Conversation,
   provider: Provider,
   embeddings?: EmbeddingsProvider,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
 ): Promise<void> {
   if (!shouldCompress(conv)) return
   const targets = selectSpansForCompression(conv)

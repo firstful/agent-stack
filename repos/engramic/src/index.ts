@@ -2,6 +2,7 @@ import Fastify from "fastify"
 import cors from "@fastify/cors"
 import { MemoryStore } from "./memory/store.js"
 import { VectorStore } from "./memory/vector.js"
+import { PgVectorStore } from "./memory/pg-vector-store.js"
 import { ContextEngine } from "./context/engine.js"
 import { OpenAIProvider } from "./provider/openai.js"
 import { createEmbeddingsProvider } from "./provider/embeddings.js"
@@ -11,6 +12,7 @@ import { registerRoutes } from "./gateway/index.js"
 const PORT = parseInt(process.env.ENGRA_PORT || "3000", 10)
 const HOST = process.env.ENGRA_HOST || "0.0.0.0"
 const API_KEY = process.env.ENGRA_OPENAI_API_KEY || ""
+const DATABASE_URL = process.env.ENGRA_DATABASE_URL || ""
 
 async function main() {
   const app = Fastify({ logger: true })
@@ -26,7 +28,9 @@ async function main() {
     apiKey: API_KEY,
   })
 
-  const vectorStore = new VectorStore(embeddingsProvider)
+  const vectorStore = DATABASE_URL
+    ? new PgVectorStore(embeddingsProvider)
+    : new VectorStore(embeddingsProvider)
 
   const userStore = new UserStore()
   await userStore.load()

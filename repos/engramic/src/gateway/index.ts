@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { Conversation, Message, ChatCompletionRequest, TokenBudget, SummaryNode, RegisterRequest, RegisterResponse, AddProviderResponse, ProviderConfig } from "../types.js"
 import { MemoryStore } from "../memory/store.js"
-import { VectorStore } from "../memory/vector.js"
+import type { IVectorStore } from "../memory/vector.js"
 import { Provider } from "../provider/index.js"
 import { ContextEngine, createBudget } from "../context/engine.js"
 import { compressConversation } from "../context/compression.js"
@@ -265,7 +265,7 @@ export function registerRoutes(
   store: MemoryStore,
   globalProvider: Provider,
   engine: ContextEngine,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
   embeddingsProvider?: EmbeddingsProvider,
   userStore?: UserStore,
 ): void {
@@ -278,7 +278,7 @@ export function registerRoutes(
     summary_hit_rate: 0,
     provider_latency: 0,
     rehydration_frequency: 0,
-    vector_store_size: vectorStore?.size() ?? 0,
+    vector_store_size: (await vectorStore?.size()) ?? 0,
     registered_accounts: userStore ? Array.from(userStore["accounts"].keys()).length : 0,
   }))
 
@@ -421,7 +421,7 @@ async function handleChatRequest(
   store: MemoryStore,
   provider: Provider,
   engine: ContextEngine,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
   embeddingsProvider?: EmbeddingsProvider,
   request?: FastifyRequest,
 ): Promise<void> {
@@ -462,7 +462,7 @@ async function handleStreaming(
   provider: Provider,
   store: MemoryStore,
   engine: ContextEngine,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
 ): Promise<void> {
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -527,7 +527,7 @@ async function handleNonStreaming(
   provider: Provider,
   store: MemoryStore,
   engine: ContextEngine,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
 ): Promise<void> {
   const maxReinferences = 3
   let reinferenceCount = 0
@@ -601,7 +601,7 @@ async function executeHiddenTool(
   args: Record<string, unknown>,
   store: MemoryStore,
   engine: ContextEngine,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
 ): Promise<{ needsReinference: boolean; appendMessages: Message[]; resultText?: string } | null> {
   switch (name) {
     case "remember": {
@@ -719,7 +719,7 @@ async function handleHiddenTool(
   fullContent: string[],
   store: MemoryStore,
   engine: ContextEngine,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
 ): Promise<void> {
   const args = JSON.parse(argsStr)
 

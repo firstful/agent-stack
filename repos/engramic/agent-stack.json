@@ -1,18 +1,34 @@
 {
   "name": "engramic",
-  "version": 1,
+  "version": 2,
   "container": {
     "port": 3000,
     "auto_port": true,
     "env": {
       "ENGRA_PORT": "3000",
       "ENGRA_DATA_DIR": "/data",
+      "ENGRA_DATABASE_URL": "postgres://engramic:engramic@engramic--postgres:5432/engramic",
       "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
       "OTEL_SERVICE_NAME": "engramic",
       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
     },
     "volumes": [
       "engramic-data:/data"
+    ],
+    "sidecars": [
+      {
+        "name": "postgres",
+        "image": "docker.io/pgvector/pgvector:0.8.0-pg16",
+        "env": {
+          "POSTGRES_DB": "engramic",
+          "POSTGRES_USER": "engramic",
+          "POSTGRES_PASSWORD": "engramic"
+        },
+        "volumes": [
+          "engramic-pgdata:/var/lib/postgresql/data",
+          "/srv/agent-stack/repos/engramic/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro"
+        ]
+      }
     ]
   },
   "expose": {

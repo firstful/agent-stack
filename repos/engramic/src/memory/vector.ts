@@ -20,7 +20,20 @@ export interface ScoredMatch {
 
 const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 
-export class VectorStore {
+export interface IVectorStore {
+  bind(convId: string): void
+  insert(id: string, text: string, sourceId: string, sourceType: VectorRecord["sourceType"]): Promise<string>
+  remove(id: string): Promise<void>
+  get(id: string): Promise<VectorRecord | undefined>
+  size(): Promise<number>
+  search(query: string, topK?: number): Promise<ScoredMatch[]>
+  findBySourceId(sourceId: string): Promise<VectorRecord | undefined>
+  findBySourceIds(sourceIds: string[]): Promise<VectorRecord[]>
+  searchMemories(query: string, memories: MemoryHandle[], topK?: number): Promise<Array<{ handle: MemoryHandle; score: number }>>
+  rankByImportance(topK?: number): Promise<ScoredMatch[]>
+}
+
+export class VectorStore implements IVectorStore {
   private records = new Map<string, VectorRecord>()
   private embeddingsProvider: EmbeddingsProvider
   private convId: string
@@ -66,11 +79,11 @@ export class VectorStore {
     return id
   }
 
-  remove(id: string): void {
+  async remove(id: string): Promise<void> {
     this.records.delete(id)
   }
 
-  get(id: string): VectorRecord | undefined {
+  async get(id: string): Promise<VectorRecord | undefined> {
     return this.records.get(id)
   }
 
@@ -89,19 +102,19 @@ export class VectorStore {
     return scored.slice(0, topK)
   }
 
-  findBySourceId(sourceId: string): VectorRecord | undefined {
+  async findBySourceId(sourceId: string): Promise<VectorRecord | undefined> {
     for (const record of this.records.values()) {
       if (record.sourceId === sourceId) return record
     }
     return undefined
   }
 
-  findBySourceIds(sourceIds: string[]): VectorRecord[] {
+  async findBySourceIds(sourceIds: string[]): Promise<VectorRecord[]> {
     const ids = new Set(sourceIds)
     return Array.from(this.records.values()).filter((r) => ids.has(r.sourceId))
   }
 
-  size(): number {
+  async size(): Promise<number> {
     return this.records.size
   }
 

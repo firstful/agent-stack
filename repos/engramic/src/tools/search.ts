@@ -1,5 +1,5 @@
 import type { Conversation, MemoryHandle } from "../types.js"
-import type { VectorStore } from "../memory/vector.js"
+import type { IVectorStore } from "../memory/vector.js"
 
 export interface SearchResult {
   matches: MemoryHandle[]
@@ -9,9 +9,9 @@ export interface SearchResult {
 export async function executeSearch(
   conv: Conversation,
   query: string,
-  vectorStore?: VectorStore,
+  vectorStore?: IVectorStore,
 ): Promise<SearchResult> {
-  if (vectorStore && vectorStore.size() > 0) {
+  if (vectorStore && (await vectorStore.size()) > 0) {
     const scored = await vectorStore.searchMemories(query, conv.memories, 5)
     if (scored.length > 0 && scored[0].score > 0) {
       return { matches: scored.map((s) => s.handle), semantic: true }

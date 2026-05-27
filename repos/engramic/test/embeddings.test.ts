@@ -150,7 +150,7 @@ describe("VectorStore", () => {
     const store = new VectorStore(new FakeProvider(), "test-conv")
     await store.insert("v1", "hello world", "src1", "memory")
     await store.insert("v2", "goodbye world", "src2", "memory")
-    equal(store.size(), 2)
+    equal(await store.size(), 2)
 
     const results = await store.search("hello", 1)
     equal(results.length, 1)
@@ -166,9 +166,9 @@ describe("VectorStore", () => {
 
     const store2 = new VectorStore(provider, "persist-conv")
     await store2.load()
-    equal(store2.size(), 2)
-    ok(store2.get("p1"))
-    ok(store2.get("p2"))
+    equal(await store2.size(), 2)
+    ok(await store2.get("p1"))
+    ok(await store2.get("p2"))
   })
 
   it("rankByImportance scores outliers higher", async () => {
