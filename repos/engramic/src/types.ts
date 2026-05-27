@@ -66,6 +66,20 @@ export interface MemoryEvent {
   spanId?: string
 }
 
+export interface ToolCallRecord {
+  name: string
+  arguments: Record<string, unknown>
+  result: string
+  timestamp: number
+}
+
+export interface SystemEvent {
+  type: "compression" | "expansion" | "search" | "info"
+  description: string
+  details?: Record<string, unknown>
+  timestamp: number
+}
+
 export type BudgetStrategy = "expand_recent" | "preserve_old" | "balanced" | "task_focus"
 
 export type CompressionRate = "low" | "medium" | "high"
@@ -82,6 +96,8 @@ export interface Conversation {
   summaries: Map<string, SummaryNode>
   memories: MemoryHandle[]
   events: MemoryEvent[]
+  toolCalls: ToolCallRecord[]
+  systemEvents: SystemEvent[]
   policy: MemoryPolicy
   createdAt: number
   updatedAt: number
@@ -96,9 +112,35 @@ export interface ProviderConfig {
   defaultModel: string
 }
 
+export interface ModelAssignment {
+  provider: string
+  model: string
+}
+
+export interface ProfileCompression {
+  trigger: "token_count" | "message_count" | "idle_time"
+  threshold: number
+  rate: "low" | "medium" | "high"
+}
+
+export interface Profile {
+  id: string
+  name: string
+  execution: ModelAssignment
+  summarization: ModelAssignment
+  embedding: ModelAssignment
+  compression: ProfileCompression
+  contextWindow: number
+  tools: string[]
+  authToken: string
+  modelPreferences: string[]
+  createdAt: number
+}
+
 export interface Account {
   token: string
   providers: ProviderConfig[]
+  profiles: Profile[]
   createdAt: number
 }
 
@@ -165,7 +207,7 @@ export interface ProviderResponse {
 }
 
 export interface ProviderStreamEvent {
-  type: "chunk" | "done" | "error" | "tool_call"
+  type: "chunk" | "done" | "error" | "tool_call" | "usage"
   data: unknown
 }
 
@@ -189,6 +231,42 @@ export interface TokenBudget {
   workingSetReserve: number
   summaryReserve: number
   currentUsage: number
+}
+
+export interface UsageRecord {
+  id: string
+  userId: string
+  conversationId: string
+  model: string
+  providerLabel: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  cost: number
+  createdAt: number
+}
+
+export interface PricingEntry {
+  modelPrefix: string
+  inputPer1K: number
+  outputPer1K: number
+}
+
+export interface UsageSummary {
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalCost: number
+  requestCount: number
+  byModel: Record<string, { requests: number; promptTokens: number; completionTokens: number; cost: number }>
+}
+
+export interface UsageMetrics {
+  compressionRatio: number
+  memoryExpansionRate: number
+  averageTokenSavings: number
+  summaryHitRate: number
+  providerLatency: number
+  rehydrationFrequency: number
 }
 
 export const HIDDEN_TOOLS = [

@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { createHash, randomBytes } from "node:crypto"
-import type { Account, ProviderConfig } from "../types.js"
+import type { Account, Profile, ProviderConfig } from "../types.js"
 
 const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 const ACCOUNTS_FILE = "accounts.json"
@@ -17,6 +17,12 @@ export interface IUserStore {
   resolveProvider(token: string, modelName: string): Promise<{ provider: ProviderConfig; model: string } | null>
   listModels(token: string): Promise<Array<{ id: string; owned_by: string }>>
   removeProvider(token: string, label: string): Promise<boolean>
+  getAccountByProfileToken(profileToken: string): Promise<Account | undefined>
+  getProfile(accountToken: string, profileId: string): Promise<Profile | undefined>
+  createProfile(accountToken: string, profile: Omit<Profile, "id" | "authToken" | "createdAt">): Promise<Profile>
+  updateProfile(accountToken: string, profileId: string, updates: Partial<Profile>): Promise<Profile | undefined>
+  deleteProfile(accountToken: string, profileId: string): Promise<boolean>
+  regenerateProfileToken(accountToken: string, profileId: string): Promise<string | undefined>
 }
 
 export class UserStore implements IUserStore {
@@ -57,6 +63,7 @@ export class UserStore implements IUserStore {
             defaultModel,
           },
         ],
+        profiles: [],
         createdAt: Date.now(),
       }
       this.accounts.set(testUserId, account)
@@ -84,6 +91,7 @@ export class UserStore implements IUserStore {
     const account: Account = {
       token,
       providers: [firstProvider],
+      profiles: [],
       createdAt: Date.now(),
     }
     this.accounts.set(token, account)
@@ -154,5 +162,67 @@ export class UserStore implements IUserStore {
     if (account.providers.length === before) return false
     await this.save()
     return true
+  }
+
+  async getAccountByProfileToken(profileToken: string): Promise<Account | undefined> {
+    for (const account of this.accounts.values()) {
+      if (account.profiles?.some((p) => p.authToken === profileToken)) {
+        return account
+      }
+    }
+    return undefined
+  }
+
+  async getProfile(accountToken: string, profileId: string): Promise<Profile | undefined> {
+    const account = this.accounts.get(accountToken)
+    if (!account) return undefined
+    return account.profiles?.find((p) => p.id === profileId)
+  }
+
+  async createProfile(accountToken: string, input: Omit<Profile, "id" | "authToken" | "createdAt">): Promise<Profile> {
+    const account = this.accounts.get(accountToken)
+    if (!account) throw new Error("Account not found")
+
+    if (!account.profiles) account.profiles = []
+
+    const profile: Profile = {
+      ...input,
+      id: `prof_${this.generateToken()}`,
+      authToken: `p_${this.generateToken()}`,
+      createdAt: Date.now(),
+    }
+    account.profiles.push(profile)
+    await this.save()
+    return profile
+  }
+
+  async updateProfile(accountToken: string, profileId: string, updates: Partial<Profile>): Promise<Profile | undefined> {
+    const account = this.accounts.get(accountToken)
+    if (!account) return undefined
+    const idx = account.profiles?.findIndex((p) => p.id === profileId) ?? -1
+    if (idx === -1) return undefined
+    account.profiles[idx] = { ...account.profiles[idx], ...updates }
+    await this.save()
+    return account.profiles[idx]
+  }
+
+  async deleteProfile(accountToken: string, profileId: string): Promise<boolean> {
+    const account = this.accounts.get(accountToken)
+    if (!account) return false
+    const before = account.profiles?.length ?? 0
+    account.profiles = (account.profiles || []).filter((p) => p.id !== profileId)
+    if (account.profiles.length === before) return false
+    await this.save()
+    return true
+  }
+
+  async regenerateProfileToken(accountToken: string, profileId: string): Promise<string | undefined> {
+    const account = this.accounts.get(accountToken)
+    if (!account) return undefined
+    const profile = account.profiles?.find((p) => p.id === profileId)
+    if (!profile) return undefined
+    profile.authToken = `p_${this.generateToken()}`
+    await this.save()
+    return profile.authToken
   }
 }
