@@ -17,13 +17,15 @@ export function shouldCompress(conv: Conversation): boolean {
 }
 
 function selectSpansForCompression(conv: Conversation): TranscriptSpan[] {
-  const scored = conv.spans.map((span) => {
-    const summaryCount = span.summaryIds.length
-    const age = Date.now() - span.createdAt
-    const messages = span.messages.length
-    const score = messages * 10 + age / 1000 - summaryCount * 100
-    return { span, score }
-  })
+  const scored = conv.spans
+    .filter((s) => !s.messages.some((m) => m.role === "system"))
+    .map((span) => {
+      const summaryCount = span.summaryIds.length
+      const age = Date.now() - span.createdAt
+      const messages = span.messages.length
+      const score = messages * 10 + age / 1000 - summaryCount * 100
+      return { span, score }
+    })
   scored.sort((a, b) => b.score - a.score)
   return scored.slice(0, Math.max(1, Math.floor(conv.spans.length / 2))).map((s) => s.span)
 }
