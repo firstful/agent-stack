@@ -21,11 +21,18 @@ function rowToRecord(row: Record<string, unknown>): VectorRecord {
   }
 }
 
+function dimsFromColumn(col: string): number {
+  const m = col.match(/^vector\((\d+)\)$/)
+  return m ? parseInt(m[1], 10) : 0
+}
+
 export class PgVectorStore {
   private pool: Pool
   private embeddingsProvider: EmbeddingsProvider
   private convId: string
+  private userId = ""
   private initialized = false
+  private userIdCache = new Map<string, string>()
 
   constructor(embeddingsProvider: EmbeddingsProvider, convId?: string, pool?: Pool) {
     this.embeddingsProvider = embeddingsProvider
@@ -33,15 +40,41 @@ export class PgVectorStore {
     this.pool = pool || new Pool({ connectionString: process.env.ENGRA_DATABASE_URL })
   }
 
+  bind(convId: string): void {
+    this.convId = convId
+    this.userId = ""
+  }
+
+  bindUser(userId: string): void {
+    this.userId = userId
+  }
+
+  private async lookupUserId(): Promise<string> {
+    if (this.userId) return this.userId
+    const cached = this.userIdCache.get(this.convId)
+    if (cached) return cached
+    const r = await this.pool.query("SELECT user_id FROM conversations WHERE id = $1", [this.convId])
+    if (r.rows.length) {
+      const uid = r.rows[0].user_id as string
+      this.userId = uid
+      this.userIdCache.set(this.convId, uid)
+      return uid
+    }
+    return ""
+  }
+
   async init(): Promise<void> {
     if (this.initialized) return
     await this.pool.query("CREATE EXTENSION IF NOT EXISTS vector")
     const test = await this.embeddingsProvider.embed("init")
     const dims = test.length
+
+    await this.pool.query("DROP TABLE IF EXISTS vectors")
     await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS vectors (
+      CREATE TABLE vectors (
         id TEXT PRIMARY KEY,
-        conv_id TEXT NOT NULL,
+        conv_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES accounts(token) ON DELETE CASCADE,
         vector vector(${dims}) NOT NULL,
         text TEXT NOT NULL,
         source_id TEXT NOT NULL,
@@ -51,23 +84,26 @@ export class PgVectorStore {
     `)
     await this.pool.query("CREATE INDEX IF NOT EXISTS idx_vectors_conv_id ON vectors(conv_id)")
     await this.pool.query("CREATE INDEX IF NOT EXISTS idx_vectors_source_id ON vectors(source_id)")
-    await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_vectors_vector ON vectors USING ivfflat (vector vector_cosine_ops) WITH (lists = 100)`)
-    this.initialized = true
-  }
+    await this.pool.query("CREATE INDEX IF NOT EXISTS idx_vectors_user_id ON vectors(user_id)")
+    await this.pool.query("CREATE INDEX IF NOT EXISTS idx_vectors_vector ON vectors USING ivfflat (vector vector_cosine_ops) WITH (lists = 100)")
 
-  bind(convId: string): void {
-    this.convId = convId
+    await this.pool.query("ALTER TABLE vectors ENABLE ROW LEVEL SECURITY")
+    await this.pool.query("DROP POLICY IF EXISTS vectors_user_isolation ON vectors")
+    await this.pool.query(`CREATE POLICY vectors_user_isolation ON vectors USING (user_id = current_setting('app.user_id', true)::TEXT)`)
+
+    this.initialized = true
   }
 
   async insert(id: string, text: string, sourceId: string, sourceType: VectorRecord["sourceType"]): Promise<string> {
     await this.init()
+    const uid = await this.lookupUserId()
     const vector = await this.embeddingsProvider.embed(text)
     const vecStr = `[${vector.join(",")}]`
     await this.pool.query(
-      `INSERT INTO vectors (id, conv_id, vector, text, source_id, source_type, created_at)
-       VALUES ($1, $2, $3::vector, $4, $5, $6, $7)
-       ON CONFLICT (id) DO UPDATE SET text = $4, source_id = $5, source_type = $6, created_at = $7`,
-      [id, this.convId, vecStr, text, sourceId, sourceType, Date.now()],
+      `INSERT INTO vectors (id, conv_id, user_id, vector, text, source_id, source_type, created_at)
+       VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8)
+       ON CONFLICT (id) DO UPDATE SET user_id = $3, text = $5, source_id = $6, source_type = $7, created_at = $8`,
+      [id, this.convId, uid, vecStr, text, sourceId, sourceType, Date.now()],
     )
     return id
   }

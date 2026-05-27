@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { Conversation, Message, ChatCompletionRequest, TokenBudget, SummaryNode, RegisterRequest, RegisterResponse, AddProviderResponse, ProviderConfig } from "../types.js"
-import { MemoryStore } from "../memory/store.js"
+import type { IMemoryStore } from "../memory/store.js"
 import type { IVectorStore } from "../memory/vector.js"
+import type { IUserStore } from "../auth/user-store.js"
 import { Provider } from "../provider/index.js"
 import { ContextEngine, createBudget } from "../context/engine.js"
 import { compressConversation } from "../context/compression.js"
-import { UserStore } from "../auth/user-store.js"
 import { createUserProviders, createFallbackProviders } from "../auth/provider-factory.js"
 import type { UserProviders } from "../auth/provider-factory.js"
 import { executeRemember } from "../tools/remember.js"
@@ -262,12 +262,12 @@ function extractText(msg: Message): string {
 
 export function registerRoutes(
   app: FastifyInstance,
-  store: MemoryStore,
+  store: IMemoryStore,
   globalProvider: Provider,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
   embeddingsProvider?: EmbeddingsProvider,
-  userStore?: UserStore,
+  userStore?: IUserStore,
 ): void {
   app.get("/health", async () => ({ status: "ok" }))
 
@@ -279,7 +279,7 @@ export function registerRoutes(
     provider_latency: 0,
     rehydration_frequency: 0,
     vector_store_size: (await vectorStore?.size()) ?? 0,
-    registered_accounts: userStore ? Array.from(userStore["accounts"].keys()).length : 0,
+    registered_accounts: 0,
   }))
 
   if (userStore) {
@@ -305,11 +305,11 @@ export function registerRoutes(
       }
 
       if (existingToken) {
-        const account = userStore.addProvider(existingToken, config)
+        const account = await userStore.addProvider(existingToken, config)
         if (!account) {
           return reply.status(404).send({ error: "Token not found" })
         }
-        const models = userStore.listModels(existingToken)
+        const models = await userStore.listModels(existingToken)
         const resp: AddProviderResponse = {
           label,
           provider: providerType,
@@ -319,8 +319,8 @@ export function registerRoutes(
         return reply.status(201).send(resp)
       }
 
-      const account = userStore.createAccount(config)
-      const models = userStore.listModels(account.token)
+      const account = await userStore.createAccount(config)
+      const models = await userStore.listModels(account.token)
       const resp: RegisterResponse = {
         token: account.token,
         label,
@@ -334,10 +334,10 @@ export function registerRoutes(
     app.get("/v1/models", async (request, reply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
-      const account = userStore.getAccount(token)
-      if (!account) return reply.status(401).send({ error: "Invalid token" })
+      const account = await userStore.getAccount(token)
+      if (!account) return reply.status(401).send({ error: "Authorization header required" })
 
-      const models = userStore.listModels(token)
+      const models = await userStore.listModels(token)
       return reply.send({
         object: "list",
         data: models.map((m) => ({
@@ -352,7 +352,7 @@ export function registerRoutes(
     app.get("/providers", async (request, reply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
-      const account = userStore.getAccount(token)
+      const account = await userStore.getAccount(token)
       if (!account) return reply.status(401).send({ error: "Invalid token" })
       return reply.send({ providers: account.providers })
     })
@@ -361,7 +361,7 @@ export function registerRoutes(
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const { label } = request.params as { label: string }
-      const removed = userStore.removeProvider(token, label)
+      const removed = await userStore.removeProvider(token, label)
       if (!removed) return reply.status(404).send({ error: `Provider '${label}' not found` })
       return reply.send({ removed: true, label })
     })
@@ -381,9 +381,9 @@ export function registerRoutes(
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
 
       const modelName = request.body.model
-      const resolved = userStore.resolveProvider(token, modelName)
+      const resolved = await userStore.resolveProvider(token, modelName)
       if (!resolved) {
-        const account = userStore.getAccount(token)
+        const account = await userStore.getAccount(token)
         if (!account) return reply.status(401).send({ error: "Invalid token" })
         return reply.status(400).send({
           error: `Unknown model '${modelName}'. Available models: ${account.providers.map((p) => `${p.label}/${p.defaultModel}`).join(", ")}`,
@@ -418,7 +418,7 @@ export function registerRoutes(
 async function handleChatRequest(
   body: ChatCompletionRequest,
   reply: FastifyReply,
-  store: MemoryStore,
+  store: IMemoryStore,
   provider: Provider,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
@@ -460,7 +460,7 @@ async function handleStreaming(
   tools: unknown[],
   body: ChatCompletionRequest,
   provider: Provider,
-  store: MemoryStore,
+  store: IMemoryStore,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
 ): Promise<void> {
@@ -515,7 +515,7 @@ async function handleStreaming(
     embeddingIds: [],
     tokenCount: Math.ceil(fullContent.join("").length / 4),
   })
-  store.saveConversation(conv)
+  await store.saveConversation(conv)
 }
 
 async function handleNonStreaming(
@@ -525,7 +525,7 @@ async function handleNonStreaming(
   tools: unknown[],
   body: ChatCompletionRequest,
   provider: Provider,
-  store: MemoryStore,
+  store: IMemoryStore,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
 ): Promise<void> {
@@ -579,7 +579,7 @@ async function handleNonStreaming(
       embeddingIds: [],
       tokenCount: Math.ceil(finalContent.length / 4),
     })
-    store.saveConversation(conv)
+    await store.saveConversation(conv)
   }
 
   store.addSpan(conv, {
@@ -590,7 +590,7 @@ async function handleNonStreaming(
     embeddingIds: [],
     tokenCount: Math.ceil(finalContent.length / 4),
   })
-  store.saveConversation(conv)
+  await store.saveConversation(conv)
 
   reply.send(JSON.parse(serializeNonStreamResponse(`chat_${Date.now()}`, body.model, finalContent)))
 }
@@ -599,7 +599,7 @@ async function executeHiddenTool(
   conv: Conversation,
   name: string,
   args: Record<string, unknown>,
-  store: MemoryStore,
+  store: IMemoryStore,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
 ): Promise<{ needsReinference: boolean; appendMessages: Message[]; resultText?: string } | null> {
@@ -717,7 +717,7 @@ async function handleHiddenTool(
   body: ChatCompletionRequest,
   reply: FastifyReply,
   fullContent: string[],
-  store: MemoryStore,
+  store: IMemoryStore,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
 ): Promise<void> {

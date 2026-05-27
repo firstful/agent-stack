@@ -5,7 +5,23 @@ import type { Conversation, TranscriptSpan, SummaryNode, MemoryHandle, MemoryEve
 
 const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 
-export class MemoryStore {
+export interface IMemoryStore {
+  getOrCreateConversation(id: string, userId?: string): Promise<Conversation>
+  saveConversation(conv: Conversation): Promise<void>
+  addSpan(conv: Conversation, span: TranscriptSpan): void
+  addSummary(conv: Conversation, summary: SummaryNode): void
+  addMemory(conv: Conversation, handle: MemoryHandle): void
+  getSpan(conv: Conversation, spanId: string): TranscriptSpan | undefined
+  getSummary(conv: Conversation, summaryId: string): SummaryNode | undefined
+  getMemories(conv: Conversation): MemoryHandle[]
+  pinMemory(conv: Conversation, memoryId: string, reason: string): boolean
+  unpinMemory(conv: Conversation, memoryId: string): boolean
+  markEvent(conv: Conversation, event: MemoryEvent): void
+  setPolicy(conv: Conversation, policy: Partial<MemoryPolicy>): MemoryPolicy
+  getMemoryGraph(conv: Conversation, query: string, depth: number): { memories: MemoryHandle[]; summaries: SummaryNode[]; events: MemoryEvent[] }
+}
+
+export class MemoryStore implements IMemoryStore {
   private conversations = new Map<string, Conversation>()
 
   constructor() {
@@ -52,7 +68,7 @@ export class MemoryStore {
     await writeFile(this.convPath(conv.id), JSON.stringify(data, null, 2))
   }
 
-  async getOrCreateConversation(id: string): Promise<Conversation> {
+  async getOrCreateConversation(id: string, _userId?: string): Promise<Conversation> {
     const existing = this.conversations.get(id)
     if (existing) return existing
     const loaded = await this.loadConversation(id)

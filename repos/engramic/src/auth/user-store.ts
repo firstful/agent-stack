@@ -7,7 +7,19 @@ import type { Account, ProviderConfig } from "../types.js"
 const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 const ACCOUNTS_FILE = "accounts.json"
 
-export class UserStore {
+export interface IUserStore {
+  load(): Promise<void>
+  save(): Promise<void>
+  getAccount(token: string): Promise<Account | undefined>
+  createAccount(firstProvider: ProviderConfig): Promise<Account>
+  addProvider(token: string, config: ProviderConfig): Promise<Account | null>
+  getProviderByLabel(token: string, label: string): Promise<ProviderConfig | undefined>
+  resolveProvider(token: string, modelName: string): Promise<{ provider: ProviderConfig; model: string } | null>
+  listModels(token: string): Promise<Array<{ id: string; owned_by: string }>>
+  removeProvider(token: string, label: string): Promise<boolean>
+}
+
+export class UserStore implements IUserStore {
   private accounts = new Map<string, Account>()
   private path: string
 
@@ -63,11 +75,11 @@ export class UserStore {
     return `eng_${hash.slice(0, 24)}`
   }
 
-  getAccount(token: string): Account | undefined {
+  async getAccount(token: string): Promise<Account | undefined> {
     return this.accounts.get(token)
   }
 
-  createAccount(firstProvider: ProviderConfig): Account {
+  async createAccount(firstProvider: ProviderConfig): Promise<Account> {
     const token = this.generateToken()
     const account: Account = {
       token,
@@ -75,11 +87,11 @@ export class UserStore {
       createdAt: Date.now(),
     }
     this.accounts.set(token, account)
-    this.save()
+    await this.save()
     return account
   }
 
-  addProvider(token: string, config: ProviderConfig): Account | null {
+  async addProvider(token: string, config: ProviderConfig): Promise<Account | null> {
     const account = this.accounts.get(token)
     if (!account) return null
 
@@ -90,17 +102,17 @@ export class UserStore {
       account.providers.push(config)
     }
 
-    this.save()
+    await this.save()
     return account
   }
 
-  getProviderByLabel(token: string, label: string): ProviderConfig | undefined {
+  async getProviderByLabel(token: string, label: string): Promise<ProviderConfig | undefined> {
     const account = this.accounts.get(token)
     if (!account) return undefined
     return account.providers.find((p) => p.label === label)
   }
 
-  resolveProvider(token: string, modelName: string): { provider: ProviderConfig; model: string } | null {
+  async resolveProvider(token: string, modelName: string): Promise<{ provider: ProviderConfig; model: string } | null> {
     const account = this.accounts.get(token)
     if (!account) return null
 
@@ -120,7 +132,7 @@ export class UserStore {
     return { provider, model }
   }
 
-  listModels(token: string): Array<{ id: string; owned_by: string }> {
+  async listModels(token: string): Promise<Array<{ id: string; owned_by: string }>> {
     const account = this.accounts.get(token)
     if (!account) return []
 
@@ -134,13 +146,13 @@ export class UserStore {
     return models
   }
 
-  removeProvider(token: string, label: string): boolean {
+  async removeProvider(token: string, label: string): Promise<boolean> {
     const account = this.accounts.get(token)
     if (!account) return false
     const before = account.providers.length
     account.providers = account.providers.filter((p) => p.label !== label)
     if (account.providers.length === before) return false
-    this.save()
+    await this.save()
     return true
   }
 }

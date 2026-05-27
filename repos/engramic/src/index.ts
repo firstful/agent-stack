@@ -1,12 +1,15 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
-import { MemoryStore } from "./memory/store.js"
+import { MemoryStore, type IMemoryStore } from "./memory/store.js"
+import { PgMemoryStore } from "./memory/pg-store.js"
 import { VectorStore } from "./memory/vector.js"
 import { PgVectorStore } from "./memory/pg-vector-store.js"
 import { ContextEngine } from "./context/engine.js"
 import { OpenAIProvider } from "./provider/openai.js"
 import { createEmbeddingsProvider } from "./provider/embeddings.js"
 import { UserStore } from "./auth/user-store.js"
+import { PgUserStore } from "./auth/pg-user-store.js"
+import type { IUserStore } from "./auth/user-store.js"
 import { registerRoutes } from "./gateway/index.js"
 
 const PORT = parseInt(process.env.ENGRA_PORT || "3000", 10)
@@ -19,7 +22,6 @@ async function main() {
 
   await app.register(cors, { origin: true })
 
-  const store = new MemoryStore()
   const globalProvider = new OpenAIProvider(API_KEY)
   const engine = new ContextEngine()
 
@@ -28,11 +30,17 @@ async function main() {
     apiKey: API_KEY,
   })
 
+  const store: IMemoryStore = DATABASE_URL
+    ? new PgMemoryStore()
+    : new MemoryStore()
+
   const vectorStore = DATABASE_URL
     ? new PgVectorStore(embeddingsProvider)
     : new VectorStore(embeddingsProvider)
 
-  const userStore = new UserStore()
+  const userStore: IUserStore = DATABASE_URL
+    ? new PgUserStore()
+    : new UserStore()
   await userStore.load()
 
   registerRoutes(app, store, globalProvider, engine, vectorStore, embeddingsProvider, userStore)
