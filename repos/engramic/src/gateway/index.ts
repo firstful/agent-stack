@@ -357,6 +357,27 @@ export function registerRoutes(
       return reply.send({ providers: account.providers })
     })
 
+    app.post<{ Body: { base_url: string; api_key: string } }>("/test-provider", async (request, reply) => {
+      const { base_url, api_key } = request.body
+      if (!api_key || !base_url) {
+        return reply.status(400).send({ ok: false, error: "base_url and api_key are required" })
+      }
+
+      let modelsUrl = base_url.endsWith("/v1") ? `${base_url}/models` : `${base_url.replace(/\/+$/, "")}/v1/models`
+      try {
+        const res = await fetch(modelsUrl, { headers: { Authorization: `Bearer ${api_key}` } })
+        if (!res.ok) {
+          const text = await res.text().catch(() => "")
+          return reply.send({ ok: false, error: `Provider returned ${res.status}: ${text.slice(0, 200)}` })
+        }
+        const data = await res.json() as { data?: Array<{ id: string; owned_by?: string }> }
+        const models = (data.data || []).map((m: { id: string; owned_by?: string }) => ({ id: m.id, owned_by: m.owned_by || "unknown" }))
+        return reply.send({ ok: true, models })
+      } catch (e: any) {
+        return reply.send({ ok: false, error: e.message })
+      }
+    })
+
     app.delete("/providers/:label", async (request, reply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
@@ -830,8 +851,23 @@ const WEB_UI_HTML = `<!DOCTYPE html>
   <label>Base URL</label>
   <input x-model="form.baseUrl" placeholder="https://api.openai.com/v1">
   <label>Default Model</label>
-  <input x-model="form.defaultModel" placeholder="gpt-4o">
-  <button class="btn btn-primary" x-on:click="addProvider()" x-text="saving ? 'Saving...' : 'Add Provider'" :disabled="saving"></button>
+  <template x-if="!tested">
+    <input x-model="form.defaultModel" placeholder="gpt-4o" disabled>
+  </template>
+  <template x-if="tested">
+    <select x-model="form.defaultModel">
+      <option value="">— Select a model —</option>
+      <template x-for="m in models" :key="m.id">
+        <option x-text="m.id" :value="m.id"></option>
+      </template>
+    </select>
+  </template>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+    <button class="btn btn-primary" x-on:click="testConnection()" x-text="testing ? 'Testing...' : 'Test Connection'" :disabled="testing || !form.baseUrl || !form.apiKey"></button>
+    <span x-show="tested" style="color:#3fb950; font-size:0.85rem;">&#10003; Connected</span>
+    <span x-show="testError" style="color:#f85149; font-size:0.85rem;" x-text="testError"></span>
+  </div>
+  <button class="btn btn-primary" x-on:click="addProvider()" x-text="saving ? 'Saving...' : 'Add Provider'" :disabled="saving || !tested"></button>
 </div>
 
 <div class="card">
@@ -877,6 +913,10 @@ document.addEventListener("alpine:init", () => {
     providers: [],
     loaded: false,
     saving: false,
+    testing: false,
+    tested: false,
+    testError: "",
+    models: [],
     toast: { show: false, message: "", type: "ok" },
     form: {
       label: "default",
@@ -901,6 +941,31 @@ document.addEventListener("alpine:init", () => {
       this.toast = { show: true, message: msg, type }
       setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
     },
+    async testConnection() {
+      this.testing = true
+      this.testError = ""
+      this.tested = false
+      this.models = []
+      try {
+        const data = await this.api("/test-provider", {
+          method: "POST",
+          body: JSON.stringify({ base_url: this.form.baseUrl, api_key: this.form.apiKey }),
+        })
+        if (!data.ok) {
+          this.testError = data.error || "Connection failed"
+          return
+        }
+        this.models = data.models || []
+        this.tested = true
+        if (this.models.length > 0) {
+          this.form.defaultModel = this.models[0].id
+        }
+      } catch (e) {
+        this.testError = e.message
+      } finally {
+        this.testing = false
+      }
+    },
     async loadProviders() {
       try {
         const data = await this.api("/providers")
@@ -913,6 +978,7 @@ document.addEventListener("alpine:init", () => {
     async addProvider() {
       const f = this.form
       if (!f.label || !f.apiKey) { this.notify("Label and API key are required", "err"); return }
+      if (!this.tested) { this.notify("Test the connection first", "err"); return }
       this.saving = true
       try {
         await this.api("/register", {
