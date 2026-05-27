@@ -108,6 +108,9 @@ export async function compressConversation(
       const embeddingId = `emb_mem_${handle.id}`
       await vectorStore.insert(embeddingId, summaryText, handle.id, "memory")
       handle.embeddingId = embeddingId
+      const ranked = await vectorStore.rankByImportance()
+      const self = ranked.find((m) => m.record.id === embeddingId)
+      if (self) summaryNode.importanceScore = self.score
     } catch (err) {
       console.error("Embedding generation failed during compression:", err)
     }
