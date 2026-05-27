@@ -781,11 +781,12 @@ async function handleHiddenTool(
 }
 
 const WEB_UI_HTML = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" x-data="app()">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>engramic — Provider Manager</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 720px; margin: 0 auto; padding: 24px; }
@@ -801,133 +802,149 @@ const WEB_UI_HTML = `<!DOCTYPE html>
   .btn-primary:hover { background: #2ea043; }
   .btn-danger { background: #da3633; color: #fff; }
   .btn-danger:hover { background: #f85149; }
-  .btn-outline { background: transparent; border: 1px solid #30363d; color: #c9d1d9; }
-  .btn-outline:hover { background: #30363d; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; }
   td { padding: 8px 0; border-top: 1px solid #21262d; font-size: 0.9rem; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
   .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
-  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; }
-  .toast.show { opacity: 1; }
-  .toast.ok { background: #238636; }
-  .toast.err { background: #da3633; }
-  .flex { display: flex; gap: 8px; align-items: center; }
-  .mt-8 { margin-top: 8px; }
-  .mb-8 { margin-bottom: 8px; }
   .provider-label { font-weight: 600; }
   .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  @media (max-width: 600px) { body { padding: 12px; } }
 </style>
 </head>
 <body>
+
 <h1>engramic</h1>
 <p class="subtitle">Provider Manager</p>
 
-<div id="add-card" class="card">
+<div class="card">
   <h2>Add Provider</h2>
-  <label for="label">Label</label>
-  <input id="label" placeholder="e.g. openai, deepseek, anthropic" value="default">
-  <label for="provider-type">Provider Type</label>
-  <select id="provider-type">
+  <label>Label</label>
+  <input x-model="form.label" placeholder="e.g. openai, deepseek, anthropic">
+  <label>Provider Type</label>
+  <select x-model="form.providerType">
     <option value="openai">OpenAI Compatible</option>
     <option value="anthropic">Anthropic</option>
   </select>
-  <label for="api-key">API Key</label>
-  <input id="api-key" type="password" placeholder="sk-...">
-  <label for="base-url">Base URL</label>
-  <input id="base-url" placeholder="https://api.openai.com/v1" value="https://api.openai.com/v1">
-  <label for="default-model">Default Model</label>
-  <input id="default-model" placeholder="gpt-4o" value="gpt-4o">
-  <button class="btn btn-primary" onclick="addProvider()">Add Provider</button>
+  <label>API Key</label>
+  <input x-model="form.apiKey" type="password" placeholder="sk-...">
+  <label>Base URL</label>
+  <input x-model="form.baseUrl" placeholder="https://api.openai.com/v1">
+  <label>Default Model</label>
+  <input x-model="form.defaultModel" placeholder="gpt-4o">
+  <button class="btn btn-primary" x-on:click="addProvider()" x-text="saving ? 'Saving...' : 'Add Provider'" :disabled="saving"></button>
 </div>
 
 <div class="card">
   <h2>Providers</h2>
-  <table>
+  <template x-if="!loaded">
+    <p class="empty">Loading...</p>
+  </template>
+  <template x-if="loaded && providers.length === 0">
+    <p class="empty">No providers configured</p>
+  </template>
+  <table x-show="loaded && providers.length > 0">
     <thead><tr><th>Label</th><th>Type</th><th>Model</th><th>Base URL</th><th></th></tr></thead>
-    <tbody id="provider-list"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+    <tbody>
+      <template x-for="p in providers" :key="p.label">
+        <tr>
+          <td class="provider-label" x-text="p.label"></td>
+          <td><span class="badge" x-text="p.providerType"></span></td>
+          <td class="truncate" x-text="p.defaultModel"></td>
+          <td class="truncate" x-text="p.baseUrl"></td>
+          <td><button class="btn btn-danger" x-on:click="removeProvider(p.label)">Remove</button></td>
+        </tr>
+      </template>
+    </tbody>
   </table>
 </div>
 
-<div id="toast" class="toast"></div>
+<div
+  x-show="toast.show"
+  x-text="toast.message"
+  :class="'toast ' + toast.type"
+  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer"
+  x-on:click="toast.show = false"
+></div>
+
+<style>
+  .toast.ok { background: #238636; }
+  .toast.err { background: #da3633; }
+</style>
 
 <script>
-const BASE = window.location.origin
-
-async function api(path, opts = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { "Content-Type": "application/json", ...opts.headers },
-    ...opts,
-  })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || res.statusText)
-  return data
-}
-
-function toast(msg, type = "ok") {
-  const el = document.getElementById("toast")
-  el.textContent = msg
-  el.className = "toast " + type + " show"
-  setTimeout(() => el.classList.remove("show"), 3000)
-}
-
-async function loadProviders() {
-  try {
-    const { providers } = await api("/providers")
-    const tbody = document.getElementById("provider-list")
-    if (!providers || providers.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">No providers configured</td></tr>'
-      return
-    }
-    tbody.innerHTML = providers.map((p) => \`
-      <tr>
-        <td class="provider-label">\${p.label}</td>
-        <td><span class="badge">\${p.providerType}</span></td>
-        <td class="truncate">\${p.defaultModel}</td>
-        <td class="truncate">\${p.baseUrl}</td>
-        <td><button class="btn btn-danger" onclick="removeProvider('\${p.label}')">Remove</button></td>
-      </tr>
-    \`).join("")
-  } catch (e) {
-    document.getElementById("provider-list").innerHTML = '<tr><td colspan="5" class="empty">Failed to load: ' + e.message + '</td></tr>'
-  }
-}
-
-async function addProvider() {
-  const label = document.getElementById("label").value.trim()
-  const apiKey = document.getElementById("api-key").value.trim()
-  const baseUrl = document.getElementById("base-url").value.trim()
-  const defaultModel = document.getElementById("default-model").value.trim()
-  const provider = document.getElementById("provider-type").value
-
-  if (!label || !apiKey) { toast("Label and API key are required", "err"); return }
-
-  try {
-    await api("/register", {
-      method: "POST",
-      body: JSON.stringify({ label, api_key: apiKey, base_url: baseUrl, default_model: defaultModel, provider }),
-    })
-    toast("Provider added")
-    document.getElementById("api-key").value = ""
-    await loadProviders()
-  } catch (e) {
-    toast(e.message, "err")
-  }
-}
-
-async function removeProvider(label) {
-  if (!confirm(\`Remove provider "\${label}"?\`)) return
-  try {
-    await api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
-    toast("Provider removed")
-    await loadProviders()
-  } catch (e) {
-    toast(e.message, "err")
-  }
-}
-
-loadProviders()
+document.addEventListener("alpine:init", () => {
+  Alpine.data("app", () => ({
+    providers: [],
+    loaded: false,
+    saving: false,
+    toast: { show: false, message: "", type: "ok" },
+    form: {
+      label: "default",
+      providerType: "openai",
+      apiKey: "",
+      baseUrl: "https://api.openai.com/v1",
+      defaultModel: "gpt-4o",
+    },
+    async init() {
+      await this.loadProviders()
+    },
+    async api(path, opts = {}) {
+      const res = await fetch(window.location.origin + path, {
+        headers: { "Content-Type": "application/json" },
+        ...opts,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || res.statusText)
+      return data
+    },
+    notify(msg, type = "ok") {
+      this.toast = { show: true, message: msg, type }
+      setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
+    },
+    async loadProviders() {
+      try {
+        const data = await this.api("/providers")
+        this.providers = data.providers || []
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+      this.loaded = true
+    },
+    async addProvider() {
+      const f = this.form
+      if (!f.label || !f.apiKey) { this.notify("Label and API key are required", "err"); return }
+      this.saving = true
+      try {
+        await this.api("/register", {
+          method: "POST",
+          body: JSON.stringify({
+            label: f.label,
+            api_key: f.apiKey,
+            base_url: f.baseUrl,
+            default_model: f.defaultModel,
+            provider: f.providerType,
+          }),
+        })
+        this.notify("Provider added")
+        f.apiKey = ""
+        await this.loadProviders()
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+      this.saving = false
+    },
+    async removeProvider(label) {
+      if (!confirm(\`Remove provider "\${label}"?\`)) return
+      try {
+        await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
+        this.notify("Provider removed")
+        await this.loadProviders()
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+    },
+  }))
+})
 </script>
 </body>
 </html>`
