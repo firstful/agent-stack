@@ -1,6 +1,6 @@
-FROM docker.io/node:22-alpine
+FROM docker.io/node:22-slim
 
-RUN apk add --no-cache libc6-compat
+RUN apt-get update -qq && apt-get install -y -qq ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
