@@ -9,6 +9,11 @@ export interface SidecarConfig {
   command?: string[];
 }
 
+export interface HealthCheckConfig {
+  path?: string;
+  timeout?: number;
+}
+
 export interface ContainerConfig {
   port: number;
   auto_port?: boolean;
@@ -16,6 +21,7 @@ export interface ContainerConfig {
   env?: Record<string, string>;
   volumes?: string[];
   command?: string[];
+  healthCheck?: HealthCheckConfig;
   sidecars?: SidecarConfig[];
 }
 

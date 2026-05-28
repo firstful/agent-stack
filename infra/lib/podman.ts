@@ -98,13 +98,20 @@ export function getContainerPort(name: string): number | null {
 export function waitForHealthy(
   containerName: string,
   port: number,
-  timeout: number
+  timeout: number,
+  healthCheckPath?: string
 ): boolean {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     if (!containerRunning(containerName)) return false;
     try {
-      shCapture(`timeout 2 bash -c 'echo >/dev/tcp/127.0.0.1/${port}' 2>/dev/null`);
+      if (healthCheckPath) {
+        shCapture(
+          `curl -sf http://127.0.0.1:${port}${healthCheckPath} >/dev/null 2>&1`
+        );
+      } else {
+        shCapture(`timeout 2 bash -c 'echo >/dev/tcp/127.0.0.1/${port}' 2>/dev/null`);
+      }
       return true;
     } catch {
       // not ready yet

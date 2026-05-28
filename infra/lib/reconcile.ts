@@ -203,7 +203,8 @@ export function ensureContainer(
       hostPort: idlePort,
     });
 
-    if (waitForHealthy(idleName, idlePort, HEALTH_CHECK_TIMEOUT)) {
+    const healthCheckPath = service.container?.healthCheck?.path;
+    if (waitForHealthy(idleName, idlePort, HEALTH_CHECK_TIMEOUT, healthCheckPath)) {
       console.log(
         `[swap] ${name}: slot ${idleSlot} healthy, swapping (${activeSlot} → ${idleSlot})`
       );

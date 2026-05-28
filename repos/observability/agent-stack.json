@@ -4,6 +4,9 @@
   "container": {
     "port": 3000,
     "auto_port": true,
+    "healthCheck": {
+      "path": "/api/health"
+    },
     "env": {
       "GF_SECURITY_ADMIN_USER": "admin",
       "GF_SECURITY_ADMIN_PASSWORD": "admin",
