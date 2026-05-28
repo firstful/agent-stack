@@ -680,9 +680,14 @@ export function registerRoutes(
       return reply.send(DASHBOARD_HTML)
     })
 
-    app.get("/wizard", async (_request, reply) => {
+    app.get("/add-provider", async (_request, reply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
       return reply.send(WEB_UI_HTML)
+    })
+
+    app.get("/add-profile", async (_request, reply) => {
+      reply.header("Content-Type", "text/html; charset=utf-8")
+      return reply.send(ADD_PROFILE_HTML)
     })
 
     app.post<{ Body: ChatCompletionRequest }>("/v1/chat/completions", async (request, reply) => {
@@ -1440,6 +1445,12 @@ document.addEventListener("alpine:init", () => {
       label: "",
     },
     async init() {
+      // Don't load providers on the wizard if there's no token yet (first visit)
+      const token = localStorage.getItem("engramic_token")
+      if (token) await this.loadProviders()
+      else this.loaded = true
+    },
+    async init() {
       await this.loadProviders()
     },
     async api(path, opts = {}) {
@@ -1497,7 +1508,10 @@ document.addEventListener("alpine:init", () => {
       this.chatTest.error = ""
       this.chatTest.result = ""
       this.chatTest.validated = false
-      const model = this.form.useWildcard ? this.allModels[0].id : this.form.selectedModels[0]
+      const model = this.form.useWildcard
+        ? (this.allModels[0]?.id || "")
+        : (this.form.selectedModels[0] || "")
+      if (!model) { this.chatTest.error = "No model selected"; this.chatTest.loading = false; return }
       try {
         const data = await this.api("/test-chat", {
           method: "POST",
@@ -1616,13 +1630,13 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <div class="card">
   <div class="card-header">
     <h2>Providers</h2>
-    <a href="/wizard" class="btn btn-primary btn-add">+</a>
+    <a href="/add-provider" class="btn btn-primary btn-add">+</a>
   </div>
   <template x-if="!loaded">
     <p class="empty">Loading...</p>
   </template>
   <template x-if="loaded && providers.length === 0">
-    <p class="empty">No providers configured. <a href="/wizard" style="color:#58a6ff;">Add one</a></p>
+    <p class="empty">No providers configured. <a href="/add-provider" style="color:#58a6ff;">Add one</a></p>
   </template>
   <table x-show="loaded && providers.length > 0">
     <thead><tr><th>Label</th><th>Type</th><th>Model</th><th>Base URL</th><th></th></tr></thead>
@@ -1643,12 +1657,13 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <div class="card">
   <div class="card-header">
     <h2>Profiles</h2>
+    <a href="/add-profile" class="btn btn-primary btn-add">+</a>
   </div>
   <template x-if="!profilesLoaded">
     <p class="empty">Loading...</p>
   </template>
   <template x-if="profilesLoaded && profiles.length === 0">
-    <p class="empty">No profiles created</p>
+    <p class="empty">No profiles created. <a href="/add-profile" style="color:#58a6ff;">Add one</a></p>
   </template>
   <table x-show="profilesLoaded && profiles.length > 0">
     <thead><tr><th>Name</th><th>Execution</th><th>Summarization</th><th>Embedding</th><th>Context</th><th></th></tr></thead>
@@ -1733,6 +1748,135 @@ document.addEventListener("alpine:init", () => {
       } catch (e) {
         this.notify(e.message, "err")
       }
+    },
+  }))
+})
+</script>
+</body>
+</html>`
+
+const ADD_PROFILE_HTML = `<!DOCTYPE html>
+<html lang="en" x-data="profileApp()">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>engramic — Add Profile</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 720px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; color: #f0f6fc; }
+  .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 1rem; margin-bottom: 12px; color: #f0f6fc; }
+  label { display: block; font-size: 0.8rem; color: #8b949e; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem; margin-bottom: 12px; }
+  input:focus, select:focus { outline: none; border-color: #58a6ff; }
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
+</style>
+</head>
+<body>
+
+<h1>engramic</h1>
+<p class="subtitle">Add Profile</p>
+
+<div class="card">
+  <h2>New Profile</h2>
+  <label>Name</label>
+  <input x-model="form.name" placeholder="e.g. Default, Fast, Creative">
+
+  <label>Execution Provider</label>
+  <select x-model="form.executionProvider">
+    <template x-for="p in providers" :key="p.label">
+      <option x-text="p.label" :value="p.label"></option>
+    </template>
+  </select>
+
+  <label>Execution Model</label>
+  <input x-model="form.executionModel" placeholder="gpt-4o or * for wildcard">
+
+  <label>Context Window</label>
+  <input x-model.number="form.contextWindow" type="number" placeholder="128000">
+
+  <div class="actions">
+    <a href="/" class="btn" style="background:#21262d; color:#c9d1d9; text-decoration:none;">Cancel</a>
+    <button class="btn btn-primary" @click="saveProfile()" x-text="saving ? 'Saving...' : 'Save Profile'" :disabled="saving || !form.name || !form.executionProvider"></button>
+  </div>
+</div>
+
+<div
+  x-show="toast.show"
+  x-text="toast.message"
+  :class="'toast ' + toast.type"
+  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer"
+  @click="toast.show = false"
+></div>
+
+<style>
+  .toast.ok { background: #238636; }
+  .toast.err { background: #da3633; }
+</style>
+
+<script>
+document.addEventListener("alpine:init", () => {
+  Alpine.data("profileApp", () => ({
+    providers: [],
+    saving: false,
+    toast: { show: false, message: "", type: "ok" },
+    form: {
+      name: "",
+      executionProvider: "",
+      executionModel: "*",
+      contextWindow: 128000,
+    },
+    async init() {
+      await this.loadProviders()
+    },
+    async api(path, opts = {}) {
+      const headers = { "Content-Type": "application/json" }
+      const token = localStorage.getItem("engramic_token")
+      if (token) headers["Authorization"] = "Bearer " + token
+      const res = await fetch(window.location.origin + path, { headers, ...opts })
+      const text = await res.text()
+      let data
+      try { data = JSON.parse(text) } catch { throw new Error(text.slice(0, 200) || res.statusText) }
+      if (!res.ok) throw new Error(data.error || res.statusText)
+      return data
+    },
+    notify(msg, type = "ok") {
+      this.toast = { show: true, message: msg, type }
+      setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
+    },
+    async loadProviders() {
+      try {
+        const data = await this.api("/providers")
+        this.providers = data.providers || []
+        if (this.providers.length > 0) this.form.executionProvider = this.providers[0].label
+      } catch (e) {
+        console.error("Failed to load providers:", e)
+      }
+    },
+    async saveProfile() {
+      this.saving = true
+      try {
+        await this.api("/v1/profiles", {
+          method: "POST",
+          body: JSON.stringify({
+            name: this.form.name,
+            execution: { provider: this.form.executionProvider, model: this.form.executionModel },
+            contextWindow: this.form.contextWindow,
+          }),
+        })
+        this.notify("Profile created")
+        window.location.href = "/"
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+      this.saving = false
     },
   }))
 })
