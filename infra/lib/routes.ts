@@ -371,6 +371,70 @@ const routes: RouteDef[] = [
     },
   },
 
+  // ── Performance ───────────────────────────────────────
+  {
+    method: "GET",
+    pattern: "/api/perf",
+    params: [],
+    handlerName: "handleApiPerf",
+    openapi: {
+      summary: "Get historical performance snapshots",
+      tags: ["Performance"],
+      responses: {
+        "200": {
+          description: "Historical performance data",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  snapshots: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        system: { type: "object" },
+                        containers: { type: "array", items: { type: "object" } },
+                        topCpuProcesses: { type: "array", items: { type: "object" } },
+                        topMemProcesses: { type: "array", items: { type: "object" } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    method: "POST",
+    pattern: "/api/perf/collect",
+    params: [],
+    handlerName: "handleApiPerfCollect",
+    openapi: {
+      summary: "Trigger an immediate performance snapshot collection",
+      tags: ["Performance"],
+      responses: {
+        "200": {
+          description: "Snapshot collected",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  message: { type: "string" },
+                  snapshot: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
   // ── OpenAPI spec ────────────────────────────────────────
   {
     method: "GET",

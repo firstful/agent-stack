@@ -7,7 +7,7 @@
     "start": "tsx controller.ts",
     "generate-openapi": "npx tsx generate-openapi.ts > ../config/wiki/openapi.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test lib/config.test.ts lib/routes.test.ts lib/sidecar.test.ts lib/services.test.ts",
+    "test": "tsx --test lib/config.test.ts lib/routes.test.ts lib/sidecar.test.ts lib/services.test.ts lib/perf.test.ts",
     "test:runtime": "tsx --test lib/runtime.test.ts",
     "test:all": "npm test && npm run test:runtime"
   },
