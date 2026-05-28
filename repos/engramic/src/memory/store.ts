@@ -1,7 +1,7 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises"
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import type { Conversation, TranscriptSpan, SummaryNode, MemoryHandle, MemoryEvent, MemoryPolicy } from "../types.js"
+import type { Conversation, TranscriptSpan, SummaryNode, MemoryHandle, MemoryEvent, MemoryPolicy, ToolCallRecord, SystemEvent } from "../types.js"
 
 const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 
@@ -19,6 +19,7 @@ export interface IMemoryStore {
   markEvent(conv: Conversation, event: MemoryEvent): void
   setPolicy(conv: Conversation, policy: Partial<MemoryPolicy>): MemoryPolicy
   getMemoryGraph(conv: Conversation, query: string, depth: number): { memories: MemoryHandle[]; summaries: SummaryNode[]; events: MemoryEvent[] }
+  listConversationIds(): Promise<string[]>
 }
 
 export class MemoryStore implements IMemoryStore {
@@ -50,6 +51,8 @@ export class MemoryStore implements IMemoryStore {
       summaries: new Map((data.summaries || []) as [string, SummaryNode][]),
       memories: (data.memories || []) as MemoryHandle[],
       events: (data.events || []) as MemoryEvent[],
+      toolCalls: (data.toolCalls || []) as ToolCallRecord[],
+      systemEvents: (data.systemEvents || []) as SystemEvent[],
       policy: (data.policy || defaultPolicy) as MemoryPolicy,
       createdAt: (data.createdAt as number) || Date.now(),
       updatedAt: (data.updatedAt as number) || Date.now(),
@@ -84,6 +87,8 @@ export class MemoryStore implements IMemoryStore {
       summaries: new Map(),
       memories: [],
       events: [],
+      toolCalls: [],
+      systemEvents: [],
       policy: defaultPolicy,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -91,6 +96,12 @@ export class MemoryStore implements IMemoryStore {
     }
     this.conversations.set(id, conv)
     return conv
+  }
+
+  async listConversationIds(): Promise<string[]> {
+    if (!existsSync(DATA_DIR)) return []
+    const entries = await readdir(DATA_DIR)
+    return entries.filter((e) => e.endsWith(".json")).map((e) => e.slice(0, -5))
   }
 
   addSpan(conv: Conversation, span: TranscriptSpan): void {

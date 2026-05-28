@@ -1,5 +1,5 @@
 import { Pool } from "pg"
-import type { Conversation, TranscriptSpan, SummaryNode, MemoryHandle, MemoryEvent, MemoryPolicy } from "../types.js"
+import type { Conversation, TranscriptSpan, SummaryNode, MemoryHandle, MemoryEvent, MemoryPolicy, ToolCallRecord, SystemEvent } from "../types.js"
 
 export class PgMemoryStore {
   private pool: Pool
@@ -27,6 +27,8 @@ export class PgMemoryStore {
       summaries: new Map((raw.summaries || []) as [string, SummaryNode][]),
       memories: (raw.memories || []) as MemoryHandle[],
       events: (raw.events || []) as MemoryEvent[],
+      toolCalls: (raw.toolCalls || []) as ToolCallRecord[],
+      systemEvents: (raw.systemEvents || []) as SystemEvent[],
       policy: (raw.policy || defaultPolicy) as MemoryPolicy,
       createdAt: (raw.createdAt as number) || Date.now(),
       updatedAt: (raw.updatedAt as number) || Date.now(),
@@ -66,6 +68,8 @@ export class PgMemoryStore {
       summaries: new Map(),
       memories: [],
       events: [],
+      toolCalls: [],
+      systemEvents: [],
       policy: defaultPolicy,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -128,6 +132,11 @@ export class PgMemoryStore {
     conv.policy = { ...conv.policy, ...policy }
     conv.updatedAt = Date.now()
     return conv.policy
+  }
+
+  async listConversationIds(): Promise<string[]> {
+    const r = await this.pool.query("SELECT id FROM conversations ORDER BY updated_at DESC")
+    return r.rows.map((row) => row.id)
   }
 
   getMemoryGraph(conv: Conversation, query: string, depth: number): { memories: MemoryHandle[]; summaries: SummaryNode[]; events: MemoryEvent[] } {

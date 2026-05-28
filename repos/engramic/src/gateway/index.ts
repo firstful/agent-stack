@@ -1100,6 +1100,10 @@ async function handleHiddenTool(
 
   if (name === "remember") {
     const result = executeRemember(conv, args.memory_id)
+    const resultText = result.messages
+      ? `Remembered memory ${args.memory_id}, rehydrated ${result.messages.length} messages`
+      : "Memory not found"
+    recordToolCall(conv, name, args, resultText)
     if (result.messages) {
       const reinferenceMessages = [...messages, ...result.messages]
       try {

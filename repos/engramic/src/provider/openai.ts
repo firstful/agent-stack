@@ -16,6 +16,7 @@ interface OpenAIRequest {
   model: string
   messages: OpenAIMessage[]
   stream?: boolean
+  stream_options?: { include_usage: boolean }
   max_tokens?: number
   temperature?: number
   tools?: unknown[]
@@ -171,6 +172,10 @@ export class OpenAIProvider implements Provider {
         }
         try {
           const parsed = JSON.parse(payload)
+          if (parsed.usage) {
+            yield { type: "usage", data: { prompt_tokens: parsed.usage.prompt_tokens, completion_tokens: parsed.usage.completion_tokens, total_tokens: parsed.usage.total_tokens } }
+            continue
+          }
           const delta = parsed.choices?.[0]?.delta
           if (!delta) continue
 
@@ -201,6 +206,7 @@ export class OpenAIProvider implements Provider {
         return toExternalMessage(m, hasToolCalls || hasToolResult)
       }),
       stream,
+      stream_options: stream ? { include_usage: true } : undefined,
       max_tokens: request.max_tokens,
       temperature: request.temperature,
       tools: request.tools as Record<string, unknown>[] | undefined,
