@@ -672,10 +672,15 @@ export function registerRoutes(
 
     app.get("/ui", async (_request, reply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
-      return reply.send(WEB_UI_HTML)
+      return reply.send(DASHBOARD_HTML)
     })
 
     app.get("/", async (_request, reply) => {
+      reply.header("Content-Type", "text/html; charset=utf-8")
+      return reply.send(DASHBOARD_HTML)
+    })
+
+    app.get("/wizard", async (_request, reply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
       return reply.send(WEB_UI_HTML)
     })
@@ -1556,6 +1561,168 @@ document.addEventListener("alpine:init", () => {
         this.notify(e.message, "err")
       }
       this.saving = false
+    },
+    async removeProvider(label) {
+      if (!confirm("Remove provider \"" + label + "\"?")) return
+      try {
+        await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
+        this.notify("Provider removed")
+        await this.loadProviders()
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+    },
+  }))
+})
+</script>
+</body>
+</html>`
+
+const DASHBOARD_HTML = `<!DOCTYPE html>
+<html lang="en" x-data="dashboard()">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>engramic — Dashboard</title>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 900px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; color: #f0f6fc; }
+  .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card h2 { font-size: 1rem; color: #f0f6fc; }
+  .btn { padding: 6px 14px; border: none; border-radius: 6px; font-size: 0.85rem; cursor: pointer; }
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-danger { background: #da3633; color: #fff; }
+  .btn-danger:hover { background: #f85149; }
+  .btn-add { font-size: 1.25rem; line-height: 1; padding: 4px 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; }
+  td { padding: 8px 0; border-top: 1px solid #21262d; font-size: 0.9rem; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
+  .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
+  .provider-label { font-weight: 600; }
+  .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<h1>engramic</h1>
+<p class="subtitle">Dashboard</p>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Providers</h2>
+    <a href="/wizard" class="btn btn-primary btn-add">+</a>
+  </div>
+  <template x-if="!loaded">
+    <p class="empty">Loading...</p>
+  </template>
+  <template x-if="loaded && providers.length === 0">
+    <p class="empty">No providers configured. <a href="/wizard" style="color:#58a6ff;">Add one</a></p>
+  </template>
+  <table x-show="loaded && providers.length > 0">
+    <thead><tr><th>Label</th><th>Type</th><th>Model</th><th>Base URL</th><th></th></tr></thead>
+    <tbody>
+      <template x-for="p in providers" :key="p.label">
+        <tr>
+          <td class="provider-label" x-text="p.label"></td>
+          <td><span class="badge" x-text="p.providerType"></span></td>
+          <td class="truncate" x-text="p.defaultModel"></td>
+          <td class="truncate" x-text="p.baseUrl"></td>
+          <td><button class="btn btn-danger" @click="removeProvider(p.label)">Remove</button></td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2>Profiles</h2>
+  </div>
+  <template x-if="!profilesLoaded">
+    <p class="empty">Loading...</p>
+  </template>
+  <template x-if="profilesLoaded && profiles.length === 0">
+    <p class="empty">No profiles created</p>
+  </template>
+  <table x-show="profilesLoaded && profiles.length > 0">
+    <thead><tr><th>Name</th><th>Execution</th><th>Summarization</th><th>Embedding</th><th>Context</th><th></th></tr></thead>
+    <tbody>
+      <template x-for="p in profiles" :key="p.id">
+        <tr>
+          <td class="provider-label" x-text="p.name"></td>
+          <td><span class="badge" x-text="p.execution.provider + '/' + p.execution.model"></span></td>
+          <td><span class="badge" x-text="p.summarization.provider + '/' + p.summarization.model"></span></td>
+          <td><span class="badge" x-text="p.embedding.provider + '/' + p.embedding.model"></span></td>
+          <td x-text="p.contextWindow"></td>
+        </tr>
+      </template>
+    </tbody>
+  </table>
+</div>
+
+<div
+  x-show="toast.show"
+  x-text="toast.message"
+  :class="'toast ' + toast.type"
+  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer"
+  @click="toast.show = false"
+></div>
+
+<style>
+  .toast.ok { background: #238636; }
+  .toast.err { background: #da3633; }
+</style>
+
+<script>
+document.addEventListener("alpine:init", () => {
+  Alpine.data("dashboard", () => ({
+    providers: [],
+    profiles: [],
+    loaded: false,
+    profilesLoaded: false,
+    toast: { show: false, message: "", type: "ok" },
+    async init() {
+      await this.loadProviders()
+      await this.loadProfiles()
+    },
+    async api(path, opts = {}) {
+      const headers = { "Content-Type": "application/json" }
+      const token = localStorage.getItem("engramic_token")
+      if (token) headers["Authorization"] = "Bearer " + token
+      const res = await fetch(window.location.origin + path, { headers, ...opts })
+      const text = await res.text()
+      let data
+      try { data = JSON.parse(text) } catch { throw new Error(text.slice(0, 200) || res.statusText) }
+      if (!res.ok) throw new Error(data.error || res.statusText)
+      return data
+    },
+    notify(msg, type = "ok") {
+      this.toast = { show: true, message: msg, type }
+      setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
+    },
+    async loadProviders() {
+      try {
+        const data = await this.api("/providers")
+        this.providers = data.providers || []
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+      this.loaded = true
+    },
+    async loadProfiles() {
+      try {
+        const data = await this.api("/v1/profiles")
+        this.profiles = data.profiles || []
+      } catch (e) {
+        console.error("Failed to load profiles:", e)
+      }
+      this.profilesLoaded = true
     },
     async removeProvider(label) {
       if (!confirm("Remove provider \"" + label + "\"?")) return
