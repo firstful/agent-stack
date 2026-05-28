@@ -8,6 +8,7 @@ import { PricingEngine } from "../usage/pricing.js"
 import { MetricsCollector } from "../usage/metrics.js"
 import { randomUUID } from "node:crypto"
 import { Provider } from "../provider/index.js"
+import { OpenAIProvider } from "../provider/openai.js"
 import { ContextEngine, createBudget } from "../context/engine.js"
 import { compressConversation } from "../context/compression.js"
 import { createUserProviders, createFallbackProviders } from "../auth/provider-factory.js"
@@ -498,6 +499,26 @@ export function registerRoutes(
         const data = await res.json() as { data?: Array<{ id: string; owned_by?: string }> }
         const models = (data.data || []).map((m: { id: string; owned_by?: string }) => ({ id: m.id, owned_by: m.owned_by || "unknown" }))
         return reply.send({ ok: true, models })
+      } catch (e: any) {
+        return reply.send({ ok: false, error: e.message })
+      }
+    })
+
+    app.post<{ Body: { base_url: string; api_key: string; provider: string; model: string } }>("/test-chat", async (request, reply) => {
+      const { base_url, api_key, provider: providerType, model } = request.body
+      if (!api_key || !base_url || !model) {
+        return reply.status(400).send({ ok: false, error: "base_url, api_key, and model are required" })
+      }
+      try {
+        const testProvider = new OpenAIProvider(api_key, base_url)
+        const response = await testProvider.chat({
+          model,
+          messages: [
+            { id: "test_1", role: "user", content: [{ type: "text", text: "Say 'pong' and nothing else." }] },
+          ],
+        })
+        const text = response.message.content.filter((p) => p.type === "text").map((p) => (p as { type: "text"; text: string }).text).join("")
+        return reply.send({ ok: true, response: text.trim() })
       } catch (e: any) {
         return reply.send({ ok: false, error: e.message })
       }
@@ -1198,7 +1219,7 @@ const WEB_UI_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>engramic — Provider Manager</title>
+<title>engramic — Add Provider</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1222,48 +1243,141 @@ const WEB_UI_HTML = `<!DOCTYPE html>
   .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
   .provider-label { font-weight: 600; }
   .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wizard-steps { display: flex; gap: 8px; margin-bottom: 24px; }
+  .wizard-steps .step { flex: 1; text-align: center; padding: 8px; border-radius: 6px; background: #161b22; border: 1px solid #30363d; font-size: 0.8rem; color: #8b949e; }
+  .wizard-steps .step.active { border-color: #58a6ff; color: #58a6ff; }
+  .wizard-steps .step.done { border-color: #238636; color: #3fb950; }
+  .type-grid { display: grid; gap: 12px; margin-bottom: 12px; }
+  .type-option { padding: 16px; border-radius: 6px; border: 1px solid #30363d; cursor: pointer; background: #0d1117; }
+  .type-option:hover { border-color: #58a6ff; }
+  .type-option.selected { border-color: #238636; background: #1c3a1c; }
+  .type-name { font-weight: 600; color: #f0f6fc; margin-bottom: 4px; }
+  .type-desc { font-size: 0.8rem; color: #8b949e; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .model-list { max-height: 300px; overflow-y: auto; border: 1px solid #30363d; border-radius: 6px; padding: 8px; margin-bottom: 12px; }
+  .model-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #21262d; cursor: pointer; }
+  .model-row input { width: auto; margin-bottom: 0; }
+  .chat-box { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .chat-bubble { display: inline-block; padding: 8px 12px; border-radius: 6px; }
+  .chat-bubble.user { background: #161b22; }
+  .chat-bubble.assistant { background: #1c3a1c; color: #7ee787; }
+  .summary-row { margin-bottom: 8px; font-size: 0.85rem; }
 </style>
 </head>
 <body>
 
 <h1>engramic</h1>
-<p class="subtitle">Provider Manager</p>
+<p class="subtitle">Add Provider</p>
 
-<div class="card">
-  <h2>Add Provider</h2>
-  <label>Label</label>
-  <input x-model="form.label" placeholder="e.g. openai, deepseek, anthropic">
-  <label>Provider Type</label>
-  <select x-model="form.providerType">
-    <option value="openai">OpenAI Compatible</option>
-    <option value="anthropic">Anthropic</option>
-  </select>
-  <label>API Key</label>
-  <input x-model="form.apiKey" type="password" placeholder="sk-...">
+<div class="wizard-steps">
+  <div class="step" :class="{ active: step === 1, done: step > 1 }">1. Type</div>
+  <div class="step" :class="{ active: step === 2, done: step > 2 }">2. Connect</div>
+  <div class="step" :class="{ active: step === 3, done: step > 3 }">3. Models</div>
+  <div class="step" :class="{ active: step === 4, done: step > 4 }">4. Validate</div>
+  <div class="step" :class="{ active: step === 5, done: step > 5 }">5. Save</div>
+</div>
+
+<!-- Step 1: Select Type -->
+<div class="card" x-show="step === 1">
+  <h2>Select Provider Type</h2>
+  <div class="type-grid">
+    <div class="type-option" :class="{ selected: form.providerType === 'openai' }" @click="form.providerType = 'openai'">
+      <div class="type-name">OpenAI Compatible</div>
+      <div class="type-desc">Any provider using the OpenAI API format (OpenAI, DeepSeek, local proxies, etc.)</div>
+    </div>
+    <div class="type-option" :class="{ selected: form.providerType === 'anthropic' }" @click="form.providerType = 'anthropic'">
+      <div class="type-name">Anthropic</div>
+      <div class="type-desc">Claude API via Anthropic or an OpenAI-compatible proxy</div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-primary" @click="nextStep()">Next</button>
+  </div>
+</div>
+
+<!-- Step 2: Connection -->
+<div class="card" x-show="step === 2">
+  <h2>Connection</h2>
   <label>Base URL</label>
   <input x-model="form.baseUrl" placeholder="https://api.openai.com/v1">
-  <label>Default Model</label>
-  <template x-if="!tested">
-    <input x-model="form.defaultModel" placeholder="gpt-4o" disabled>
-  </template>
-  <template x-if="tested">
-    <select x-model="form.defaultModel">
-      <option value="">— Select a model —</option>
-      <template x-for="m in models" :key="m.id">
-        <option x-text="m.id" :value="m.id"></option>
-      </template>
-    </select>
-  </template>
+  <label>API Key</label>
+  <input x-model="form.apiKey" type="password" placeholder="sk-...">
   <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
-    <button class="btn btn-primary" x-on:click="testConnection()" x-text="testing ? 'Testing...' : 'Test Connection'" :disabled="testing || !form.baseUrl || !form.apiKey"></button>
+    <button class="btn btn-primary" @click="testConnection()" x-text="testing ? 'Testing...' : 'Test Connection'" :disabled="testing || !form.baseUrl || !form.apiKey"></button>
     <span x-show="tested" style="color:#3fb950; font-size:0.85rem;">&#10003; Connected</span>
     <span x-show="testError" style="color:#f85149; font-size:0.85rem;" x-text="testError"></span>
   </div>
-  <button class="btn btn-primary" x-on:click="addProvider()" x-text="saving ? 'Saving...' : 'Add Provider'" :disabled="saving || !tested"></button>
+  <div class="actions">
+    <button class="btn" @click="prevStep()">Back</button>
+    <button class="btn btn-primary" @click="nextStep()" :disabled="!tested">Next</button>
+  </div>
 </div>
 
-<div class="card">
-  <h2>Providers</h2>
+<!-- Step 3: Select Models -->
+<div class="card" x-show="step === 3">
+  <h2>Select Models</h2>
+  <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:12px;">
+    <input type="checkbox" x-model="form.useWildcard" style="width:auto; margin-bottom:0;">
+    <span>Allow any model (wildcard)</span>
+  </label>
+  <div x-show="!form.useWildcard" class="model-list">
+    <template x-for="m in allModels" :key="m.id">
+      <div class="model-row" @click="toggleModel(m.id)">
+        <input type="checkbox" :checked="form.selectedModels.includes(m.id)" @click.stop style="width:auto; margin-bottom:0;">
+        <span x-text="m.id"></span>
+        <span class="badge" x-text="m.owned_by"></span>
+      </div>
+    </template>
+    <p x-show="allModels.length === 0" class="empty">No models found</p>
+  </div>
+  <div class="actions">
+    <button class="btn" @click="prevStep()">Back</button>
+    <button class="btn btn-primary" @click="nextStep()" :disabled="!canProceedFromModels()">Next</button>
+  </div>
+</div>
+
+<!-- Step 4: Validate Chat -->
+<div class="card" x-show="step === 4">
+  <h2>Validate Chat Endpoint</h2>
+  <p style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Send a test message to verify the completions endpoint works.</p>
+  <div class="chat-box">
+    <div style="color:#8b949e; font-size:0.8rem; margin-bottom:4px;">User</div>
+    <div class="chat-bubble user">Say 'pong' and nothing else.</div>
+  </div>
+  <div x-show="chatTest.result" class="chat-box">
+    <div style="color:#8b949e; font-size:0.8rem; margin-bottom:4px;">Assistant</div>
+    <div class="chat-bubble assistant" x-text="chatTest.result"></div>
+  </div>
+  <div x-show="chatTest.error" style="color:#f85149; font-size:0.85rem; margin-bottom:12px;" x-text="chatTest.error"></div>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+    <button class="btn btn-primary" @click="testChat()" x-text="chatTest.loading ? 'Testing...' : 'Send Test'" :disabled="chatTest.loading"></button>
+    <span x-show="chatTest.validated" style="color:#3fb950; font-size:0.85rem;">&#10003; Chat works</span>
+  </div>
+  <div class="actions">
+    <button class="btn" @click="prevStep()">Back</button>
+    <button class="btn btn-primary" @click="nextStep()" :disabled="!chatTest.validated">Next</button>
+  </div>
+</div>
+
+<!-- Step 5: Save -->
+<div class="card" x-show="step === 5">
+  <h2>Save Provider</h2>
+  <div class="card" style="background:#0d1117; margin-bottom:16px;">
+    <div class="summary-row"><strong>Type:</strong> <span x-text="form.providerType"></span></div>
+    <div class="summary-row"><strong>URL:</strong> <span x-text="form.baseUrl"></span></div>
+    <div class="summary-row"><strong>Models:</strong> <span x-text="modelSummary()"></span></div>
+  </div>
+  <label>Provider Label / ID</label>
+  <input x-model="form.label" placeholder="e.g. openai, deepseek, local-llm">
+  <div class="actions">
+    <button class="btn" @click="prevStep()">Back</button>
+    <button class="btn btn-primary" @click="saveProvider()" x-text="saving ? 'Saving...' : 'Save Provider'" :disabled="saving || !form.label"></button>
+  </div>
+</div>
+
+<!-- Existing Providers -->
+<div class="card" x-show="step === 1">
+  <h2>Existing Providers</h2>
   <template x-if="!loaded">
     <p class="empty">Loading...</p>
   </template>
@@ -1279,7 +1393,7 @@ const WEB_UI_HTML = `<!DOCTYPE html>
           <td><span class="badge" x-text="p.providerType"></span></td>
           <td class="truncate" x-text="p.defaultModel"></td>
           <td class="truncate" x-text="p.baseUrl"></td>
-          <td><button class="btn btn-danger" x-on:click="removeProvider(p.label)">Remove</button></td>
+          <td><button class="btn btn-danger" @click="removeProvider(p.label)">Remove</button></td>
         </tr>
       </template>
     </tbody>
@@ -1291,7 +1405,7 @@ const WEB_UI_HTML = `<!DOCTYPE html>
   x-text="toast.message"
   :class="'toast ' + toast.type"
   style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer"
-  x-on:click="toast.show = false"
+  @click="toast.show = false"
 ></div>
 
 <style>
@@ -1302,30 +1416,35 @@ const WEB_UI_HTML = `<!DOCTYPE html>
 <script>
 document.addEventListener("alpine:init", () => {
   Alpine.data("app", () => ({
+    step: 1,
     providers: [],
     loaded: false,
     saving: false,
     testing: false,
     tested: false,
     testError: "",
-    models: [],
+    allModels: [],
+    chatTest: { loading: false, result: "", error: "", validated: false },
     toast: { show: false, message: "", type: "ok" },
     form: {
-      label: "default",
       providerType: "openai",
+      baseUrl: "",
       apiKey: "",
-      baseUrl: "https://api.openai.com/v1",
-      defaultModel: "gpt-4o",
+      useWildcard: false,
+      selectedModels: [],
+      label: "",
     },
     async init() {
       await this.loadProviders()
     },
     async api(path, opts = {}) {
-      const res = await fetch(window.location.origin + path, {
-        headers: { "Content-Type": "application/json" },
-        ...opts,
-      })
-      const data = await res.json()
+      const headers = { "Content-Type": "application/json" }
+      const token = localStorage.getItem("engramic_token")
+      if (token) headers["Authorization"] = "Bearer " + token
+      const res = await fetch(window.location.origin + path, { headers, ...opts })
+      const text = await res.text()
+      let data
+      try { data = JSON.parse(text) } catch { throw new Error(text.slice(0, 200) || res.statusText) }
       if (!res.ok) throw new Error(data.error || res.statusText)
       return data
     },
@@ -1333,11 +1452,13 @@ document.addEventListener("alpine:init", () => {
       this.toast = { show: true, message: msg, type }
       setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
     },
+    nextStep() { if (this.step < 5) this.step++ },
+    prevStep() { if (this.step > 1) this.step-- },
     async testConnection() {
       this.testing = true
       this.testError = ""
       this.tested = false
-      this.models = []
+      this.allModels = []
       try {
         const data = await this.api("/test-provider", {
           method: "POST",
@@ -1347,16 +1468,51 @@ document.addEventListener("alpine:init", () => {
           this.testError = data.error || "Connection failed"
           return
         }
-        this.models = data.models || []
+        this.allModels = data.models || []
         this.tested = true
-        if (this.models.length > 0) {
-          this.form.defaultModel = this.models[0].id
+        if (this.allModels.length > 0) {
+          this.form.selectedModels = [this.allModels[0].id]
         }
       } catch (e) {
         this.testError = e.message
       } finally {
         this.testing = false
       }
+    },
+    toggleModel(id) {
+      const idx = this.form.selectedModels.indexOf(id)
+      if (idx >= 0) this.form.selectedModels.splice(idx, 1)
+      else this.form.selectedModels.push(id)
+    },
+    canProceedFromModels() {
+      return this.form.useWildcard || this.form.selectedModels.length > 0
+    },
+    async testChat() {
+      this.chatTest.loading = true
+      this.chatTest.error = ""
+      this.chatTest.result = ""
+      this.chatTest.validated = false
+      const model = this.form.useWildcard ? this.allModels[0].id : this.form.selectedModels[0]
+      try {
+        const data = await this.api("/test-chat", {
+          method: "POST",
+          body: JSON.stringify({ base_url: this.form.baseUrl, api_key: this.form.apiKey, provider: this.form.providerType, model: model }),
+        })
+        if (!data.ok) {
+          this.chatTest.error = data.error || "Chat test failed"
+          return
+        }
+        this.chatTest.result = data.response
+        this.chatTest.validated = true
+      } catch (e) {
+        this.chatTest.error = e.message
+      } finally {
+        this.chatTest.loading = false
+      }
+    },
+    modelSummary() {
+      if (this.form.useWildcard) return "Any"
+      return this.form.selectedModels.join(", ")
     },
     async loadProviders() {
       try {
@@ -1367,24 +1523,34 @@ document.addEventListener("alpine:init", () => {
       }
       this.loaded = true
     },
-    async addProvider() {
+    async saveProvider() {
       const f = this.form
       if (!f.label || !f.apiKey) { this.notify("Label and API key are required", "err"); return }
-      if (!this.tested) { this.notify("Test the connection first", "err"); return }
       this.saving = true
       try {
-        await this.api("/register", {
+        const defaultModel = f.useWildcard ? "*" : (f.selectedModels[0] || "")
+        const data = await this.api("/register", {
           method: "POST",
           body: JSON.stringify({
             label: f.label,
             api_key: f.apiKey,
             base_url: f.baseUrl,
-            default_model: f.defaultModel,
+            default_model: defaultModel,
             provider: f.providerType,
           }),
         })
-        this.notify("Provider added")
+        if (data.token) {
+          localStorage.setItem("engramic_token", data.token)
+        }
+        this.notify("Provider saved")
         f.apiKey = ""
+        f.baseUrl = ""
+        f.selectedModels = []
+        f.useWildcard = false
+        f.label = ""
+        this.step = 1
+        this.tested = false
+        this.chatTest = { loading: false, result: "", error: "", validated: false }
         await this.loadProviders()
       } catch (e) {
         this.notify(e.message, "err")
@@ -1392,7 +1558,7 @@ document.addEventListener("alpine:init", () => {
       this.saving = false
     },
     async removeProvider(label) {
-      if (!confirm(\`Remove provider "\${label}"?\`)) return
+      if (!confirm("Remove provider \"" + label + "\"?")) return
       try {
         await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
         this.notify("Provider removed")
