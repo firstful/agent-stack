@@ -69,9 +69,8 @@ export class PgVectorStore {
     const test = await this.embeddingsProvider.embed("init")
     const dims = test.length
 
-    await this.pool.query("DROP TABLE IF EXISTS vectors")
     await this.pool.query(`
-      CREATE TABLE vectors (
+      CREATE TABLE IF NOT EXISTS vectors (
         id TEXT PRIMARY KEY,
         conv_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
         user_id TEXT NOT NULL REFERENCES accounts(token) ON DELETE CASCADE,

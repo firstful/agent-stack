@@ -16,6 +16,7 @@ import type { IUsageStore } from "./usage/store.js"
 import { PricingEngine } from "./usage/pricing.js"
 import { MetricsCollector } from "./usage/metrics.js"
 import { registerRoutes } from "./gateway/index.js"
+import { runMigrations } from "./db/migrate.js"
 
 const PORT = parseInt(process.env.ENGRA_PORT || "3000", 10)
 const HOST = process.env.ENGRA_HOST || "0.0.0.0"
@@ -26,6 +27,10 @@ async function main() {
   const app = Fastify({ logger: true })
 
   await app.register(cors, { origin: true })
+
+  if (DATABASE_URL) {
+    await runMigrations(DATABASE_URL)
+  }
 
   const globalProvider = new OpenAIProvider(API_KEY)
   const engine = new ContextEngine()

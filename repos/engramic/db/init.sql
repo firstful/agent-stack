@@ -7,8 +7,6 @@ CREATE TABLE IF NOT EXISTS accounts (
   created_at BIGINT NOT NULL
 );
 
-ALTER TABLE accounts ADD COLUMN IF NOT EXISTS profiles JSONB NOT NULL DEFAULT '[]'::jsonb;
-
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES accounts(token) ON DELETE CASCADE,
