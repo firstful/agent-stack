@@ -23,6 +23,8 @@ import {
   HEALTH_CHECK_TIMEOUT,
 } from "./config";
 
+// ── State ──
+
 const buildBackoffs: Record<string, { retryCycle: number; failures: number }> =
   {};
 const buildErrors: Record<
@@ -31,10 +33,18 @@ const buildErrors: Record<
 > = {};
 let cycle = 0;
 
+// ── Tick & Error Tracking ──
+
+/**
+ * Increment the reconciliation cycle counter.
+ */
 export function tick(): void {
   cycle++;
 }
 
+/**
+ * Return a snapshot of current build errors for the controller's status endpoint.
+ */
 export function getBuildErrors(): {
   service: string;
   error: string;
@@ -87,6 +97,8 @@ function allocateFreshPort(
   );
 }
 
+// ── Slot Helpers ──
+
 function readSlot(name: string): string {
   try {
     return fs.readFileSync(slotMarker(name), "utf-8").trim();
@@ -99,6 +111,8 @@ function writeSlot(name: string, slot: string): void {
   fs.writeFileSync(slotMarker(name), slot);
 }
 
+// ── Container Lifecycle ──
+
 function stopAndRemove(containerName: string): void {
   try {
     if (containerRunning(containerName)) sh(`podman stop ${containerName}`);
@@ -108,6 +122,10 @@ function stopAndRemove(containerName: string): void {
   }
 }
 
+/**
+ * Ensure a single service's container is running, building and blue-green
+ * swapping if the source hash has changed.
+ */
 export function ensureContainer(
   service: Service,
   allServices: Service[]
@@ -265,6 +283,9 @@ export function ensureContainer(
   }
 }
 
+/**
+ * Remove a service's containers (both slots), sidecars, and marker files.
+ */
 export function removeContainer(name: string, sidecarNames?: string[]): void {
   console.log(`[cleanup] removing ${name}`);
   const slots = [name, slotContainerName(name, "a"), slotContainerName(name, "b")];

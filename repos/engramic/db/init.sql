@@ -4,8 +4,11 @@ CREATE TABLE IF NOT EXISTS accounts (
   token TEXT PRIMARY KEY,
   providers JSONB NOT NULL DEFAULT '[]'::jsonb,
   profiles JSONB NOT NULL DEFAULT '[]'::jsonb,
+  global_memories JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at BIGINT NOT NULL
 );
+
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS global_memories JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,

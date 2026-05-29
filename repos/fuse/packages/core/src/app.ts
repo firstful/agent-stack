@@ -7,11 +7,14 @@
  *
  * Mount order:
  *   helmet → cors → json/urlencoded body parsers → query string parser →
- *   auth middleware (from src/auth/) → API router (createApiRouter) → error handler
+ *   auth middleware (from src/auth/) → API router (createApiRouter) →
+ *   webui static files → SPA catch-all → error handler
  */
 
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import type { HelmetOptions } from "helmet";
+import path from "node:path";
+import fs from "node:fs";
 import cors from "cors";
 import helmet from "helmet";
 import express from "express";
@@ -34,6 +37,8 @@ const helmetOptions: HelmetOptions = config.NODE_ENV === "production"
       },
     }
   : {};
+
+const WEBUI_DIR = path.resolve(process.cwd(), "packages/webui");
 
 /**
  * createApp — builds and returns a fully wired Express application instance.
@@ -67,6 +72,19 @@ export function createApp(): import("express").Express {
   // ── API routes ─────────────────────────────────────────────────────────
   const apiRouter = createApiRouter();
   app.use("/api/v1", authMiddleware, apiRouter);
+
+  // ── Web UI static files ────────────────────────────────────────────────
+  if (fs.existsSync(WEBUI_DIR)) {
+    app.use(express.static(WEBUI_DIR));
+    app.get("*", (_req: Request, res: Response) => {
+      const indexPath = path.join(WEBUI_DIR, "index.html");
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).json({ error: "Not found" });
+      }
+    });
+  }
 
   // ── Post-handler error collector ───────────────────────────────────────
   app.use(errorMiddleware);

@@ -4,6 +4,8 @@ import { sh } from "./podman";
 import type { Service } from "./types";
 import { CLOUDFLARED_CONFIG, RESTART_COOLDOWN, RUNTIME_FILE } from "./config";
 
+// ── Helpers ──
+
 let lastRestart = 0;
 
 function fmtHostname(h: string): string {
@@ -29,6 +31,12 @@ function getActualPort(svc: Record<string, any>): number | null {
   return svc.port || null;
 }
 
+// ── Config Generation ──
+
+/**
+ * Write the cloudflared config.yml based on exposed services and restart
+ * the tunnel if the config changed and the cooldown period has elapsed.
+ */
 export function writeCloudflaredConfig(services: Service[]): void {
   const enabled = services.filter((s) => s.expose?.enabled);
   if (enabled.length === 0) return;

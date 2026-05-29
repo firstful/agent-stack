@@ -5,6 +5,8 @@ import { execSync } from "child_process";
 import type { Service } from "./types";
 import { DESIRED_DIR, REPOS_DIR, CLONES_DIR, INFRA_DIR, RUNTIME_FILE } from "./config";
 
+// ── Secrets ──
+
 function discoverVaultUrl(): string {
   // 1. Read vault's host port from the previous runtime state
   try {
@@ -21,6 +23,10 @@ function discoverVaultUrl(): string {
   return "http://localhost:4000";
 }
 
+/**
+ * Resolve secrets for a service from the vault, returning a flat env dict.
+ * @throws if VAULT_TOKEN is missing or vault is unreachable
+ */
 export function resolveSecrets(service: Service): Record<string, string> {
   if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
   if (!process.env.VAULT_TOKEN) {
@@ -50,6 +56,11 @@ export function resolveSecrets(service: Service): Record<string, string> {
   }
 }
 
+// ── Hashing ──
+
+/**
+ * Recursively MD5-hash a directory tree (ignoring dotfiles and node_modules).
+ */
 export function hashDir(dir: string): string {
   try {
     const hash = crypto.createHash("md5");
@@ -78,6 +89,10 @@ export function hashDir(dir: string): string {
 const MONOREPO_ROOT = path.resolve(REPOS_DIR, "..");
 const MONOREPO_GIT = path.join(MONOREPO_ROOT, ".git");
 
+/**
+ * Git-aware hash for a repo path: uses last commit hash for monorepo
+ * subdirectories, falls back to filesystem hash otherwise.
+ */
 export function repoHashForPath(repoPath: string): string {
   if (fs.existsSync(MONOREPO_GIT)) {
     try {
@@ -95,6 +110,12 @@ export function repoHashForPath(repoPath: string): string {
   return hashDir(repoPath);
 }
 
+// ── Git Cloning ──
+
+/**
+ * Clone a service repo (via git archive) and prune old clones.
+ * @returns path to the clone, or null if not applicable
+ */
 export function ensureServiceClone(service: Service): string | null {
   const repoPath = service.repo;
   if (!repoPath) return null;
@@ -150,6 +171,8 @@ export function ensureServiceClone(service: Service): string | null {
   }
 }
 
+// ── Service Loading ──
+
 function scanRepoAgentConfigs(): Service[] {
   const results: Service[] = [];
   let repos: fs.Dirent[];
@@ -183,6 +206,10 @@ function scanRepoAgentConfigs(): Service[] {
   return results;
 }
 
+/**
+ * Load the desired set of services from repo agent-stack.json files
+ * and desired/*.json.  Repo-based services take precedence.
+ */
 export function loadDesired(): Service[] {
   const services: Service[] = [];
   const nameIndex: Record<string, Service> = {};

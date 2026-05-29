@@ -11,8 +11,8 @@ import { Provider } from "../provider/index.js"
 import { OpenAIProvider } from "../provider/openai.js"
 import { ContextEngine, createBudget } from "../context/engine.js"
 import { compressConversation } from "../context/compression.js"
-import { createUserProviders, createFallbackProviders } from "../auth/provider-factory.js"
-import type { UserProviders } from "../auth/provider-factory.js"
+import { createUserProviders, createFallbackProviders, createProfileProviders } from "../auth/provider-factory.js"
+import type { UserProviders, ProfileProviders } from "../auth/provider-factory.js"
 import { executeRemember } from "../tools/remember.js"
 import { executeSearch } from "../tools/search.js"
 import { executeCompressMemory } from "../tools/compress_memory.js"
@@ -27,7 +27,7 @@ import { executeExplainMemoryState } from "../tools/explain_memory_state.js"
 import { executeSimulateExpansionCost } from "../tools/simulate_expansion_cost.js"
 import { executeMarkEvent } from "../tools/mark_event.js"
 import { executeRebuildContextWindow } from "../tools/rebuild_context_window.js"
-import { createStreamBuffer, appendToBuffer, flushBuffer, serializeNonStreamResponse, serializeStreamChunk, serializeStreamDone } from "./stream.js"
+import { serializeNonStreamResponse, serializeStreamChunk, serializeStreamDone } from "./stream.js"
 import type { CompressionLevel } from "../tools/compress_memory.js"
 import type { EventType } from "../tools/mark_event.js"
 import type { FocusType } from "../tools/rebuild_context_window.js"
@@ -636,20 +636,19 @@ export function registerRoutes(
       if ("error" in resolved) return reply.status(resolved.error.status).send(resolved.error.body)
       const { account, profile } = resolved
 
-      const providerConfig = account.providers.find((p) => p.label === profile.execution.provider)
-      if (!providerConfig) return reply.status(400).send({ error: `Provider '${profile.execution.provider}' not found in account` })
-
-      let model = profile.execution.model
-      if (model === "auto") {
-        for (const pref of profile.modelPreferences) {
-          if (providerConfig.defaultModel === pref || pref === "*") { model = providerConfig.defaultModel; break }
-        }
-        if (model === "auto") model = providerConfig.defaultModel
+      let providers: ProfileProviders
+      try {
+        providers = createProfileProviders(profile, account)
+      } catch (e: any) {
+        return reply.status(400).send({ error: e.message })
       }
 
-      const chatBody = { ...request.body, model }
-      const providers = createUserProviders(providerConfig)
-      return handleChatRequest(chatBody, reply, store, providers.chat, engine, vectorStore, providers.embeddings, request)
+      const chatBody = { ...request.body, model: providers.chatModel }
+      return handleChatRequest(
+        chatBody, reply, store, providers.chat, engine, vectorStore, providers.embeddings,
+        request, token, profile.execution.provider, usageStore, metricsCollector,
+        providers.summarization, providers.summarizationModel, userStore,
+      )
     })
 
     app.get<{ Params: { profileId: string } }>("/v1/:profileId/models", async (request, reply) => {
@@ -707,7 +706,7 @@ export function registerRoutes(
       const { provider: providerConfig, model } = resolved
       const chatBody = { ...request.body, model }
       const providers = createUserProviders(providerConfig)
-      return handleChatRequest(chatBody, reply, store, providers.chat, engine, vectorStore, providers.embeddings, request, token, providerConfig.label, usageStore, metricsCollector)
+      return handleChatRequest(chatBody, reply, store, providers.chat, engine, vectorStore, providers.embeddings, request, token, providerConfig.label, usageStore, metricsCollector, undefined, undefined, userStore)
     })
 
     return
@@ -726,7 +725,7 @@ export function registerRoutes(
   app.post<{ Body: ChatCompletionRequest }>("/v1/chat/completions", async (request, reply) => {
     const defaults = createFallbackProviders()
     const token = extractAuthToken(request)
-    return handleChatRequest(request.body, reply, store, defaults.chat, engine, vectorStore, defaults.embeddings, request, token || undefined, "default", usageStore, metricsCollector)
+    return handleChatRequest(request.body, reply, store, defaults.chat, engine, vectorStore, defaults.embeddings, request, token || undefined, "default", usageStore, metricsCollector, undefined, undefined, userStore)
   })
 }
 
@@ -743,6 +742,9 @@ async function handleChatRequest(
   providerLabel?: string,
   usageStore?: IUsageStore,
   metricsCollector?: MetricsCollector,
+  summarizationProvider?: Provider,
+  summarizationModel?: string,
+  userStore?: IUserStore,
 ): Promise<void> {
   const req = request!
   const convId = (body.messages[0] as Record<string, unknown>)?.conversation_id as string || `conv_${Date.now()}`
@@ -763,14 +765,24 @@ async function handleChatRequest(
     ...ALL_HIDDEN_TOOL_SCHEMAS,
   ]
 
-  await compressConversation(conv, provider, embeddingsProvider, vectorStore)
+  const newMemory = await compressConversation(
+    conv,
+    summarizationProvider || provider,
+    summarizationModel || "gpt-4o-mini",
+    embeddingsProvider,
+    vectorStore,
+  )
+
+  if (newMemory && userStore && userId) {
+    await userStore.addAccountMemory(userId, newMemory)
+  }
 
   metricsCollector?.recordRequest()
 
   if (stream) {
-    return handleStreaming(req, reply, conv, combinedMessages, toolsWithHidden, body, provider, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector)
+    return handleStreaming(req, reply, conv, combinedMessages, toolsWithHidden, body, provider, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector, userStore, summarizationProvider, summarizationModel)
   } else {
-    return handleNonStreaming(reply, conv, combinedMessages, toolsWithHidden, body, provider, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector)
+    return handleNonStreaming(reply, conv, combinedMessages, toolsWithHidden, body, provider, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector, userStore, summarizationProvider, summarizationModel)
   }
 }
 
@@ -790,6 +802,9 @@ async function handleStreaming(
   providerLabel?: string,
   usageStore?: IUsageStore,
   metricsCollector?: MetricsCollector,
+  userStore?: IUserStore,
+  summarizationProvider?: Provider,
+  summarizationModel?: string,
 ): Promise<void> {
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -797,39 +812,104 @@ async function handleStreaming(
     Connection: "keep-alive",
   })
 
-  const buffer = createStreamBuffer()
-  const fullContent: string[] = []
   const startTime = Date.now()
-  let streamUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null = null
+  const pricing = new PricingEngine()
+  const resolvedModel = model || body.model
+  const MAX_PASSES = 3
+
+  let currentMessages = messages
+  let finalContent = ""
+  let finalUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null = null
 
   try {
-    for await (const event of provider.chatStream({
-      model: body.model,
-      messages,
-      tools,
-      stream: true,
-      max_tokens: body.max_tokens,
-      temperature: body.temperature,
-    })) {
-      appendToBuffer(buffer, event)
+    for (let pass = 0; pass < MAX_PASSES; pass++) {
+      const passEvents = []
+      let passContent = ""
+      let passUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null = null
+      let hasToolCalls = false
 
-      if (event.type === "usage") {
-        streamUsage = event.data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }
-      } else if (event.type === "chunk" && typeof event.data === "string") {
-        fullContent.push(event.data)
-        reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, event.data))
-      } else if (event.type === "tool_call") {
-        const toolCalls = Array.isArray(event.data) ? event.data : [event.data]
-        for (const tc of toolCalls) {
-          const name = tc.function?.name
-          if (name) {
-            await handleHiddenTool(conv, name, tc.function?.arguments || "{}", provider, messages, body, reply, fullContent, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector)
+      try {
+        for await (const event of provider.chatStream({
+          model: body.model,
+          messages: currentMessages,
+          tools,
+          stream: true,
+          max_tokens: body.max_tokens,
+          temperature: body.temperature,
+        })) {
+          passEvents.push(event)
+          if (event.type === "usage") {
+            passUsage = event.data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+          } else if (event.type === "chunk" && typeof event.data === "string") {
+            passContent += event.data
+          } else if (event.type === "tool_call") {
+            hasToolCalls = true
           }
         }
-      } else if (event.type === "done") {
-        reply.raw.write(serializeStreamDone())
+      } catch (err) {
+        console.error(`Stream pass ${pass + 1} error:`, err)
+        finalContent = passContent
+        finalUsage = passUsage
+        break
+      }
+
+      // Record usage for every pass (including reinference overhead)
+      if (usageStore && userId && resolvedModel && passUsage) {
+        usageStore.record({
+          id: randomUUID(),
+          userId,
+          conversationId: conv.id,
+          model: resolvedModel,
+          providerLabel: providerLabel || "default",
+          promptTokens: passUsage.prompt_tokens,
+          completionTokens: passUsage.completion_tokens,
+          totalTokens: passUsage.total_tokens,
+          cost: pricing.computeCost(resolvedModel, passUsage.prompt_tokens, passUsage.completion_tokens),
+          createdAt: Date.now(),
+        })
+      }
+
+      if (!hasToolCalls) {
+        finalContent = passContent
+        finalUsage = passUsage
+        break
+      }
+
+      // Execute hidden tools from this pass
+      let needsReinference = false
+      const toolCallEvents = passEvents.filter((e: any) => e.type === "tool_call")
+      for (const tcEvent of toolCallEvents) {
+        const tcs = Array.isArray(tcEvent.data) ? tcEvent.data : [tcEvent.data]
+        for (const tc of tcs) {
+          const name = tc.function?.name
+          if (!name) continue
+          const args = JSON.parse(tc.function?.arguments || "{}")
+          const result = await executeHiddenTool(conv, name, args, store, engine, vectorStore, userStore, userId, summarizationProvider, summarizationModel)
+          if (result) {
+            recordToolCall(conv, name, args, result.resultText || "")
+            if (result.appendMessages.length > 0) {
+              currentMessages = [...currentMessages, ...result.appendMessages]
+              needsReinference = true
+            }
+          }
+        }
+      }
+
+      if (!needsReinference || pass === MAX_PASSES - 1) {
+        finalContent = passContent
+        finalUsage = passUsage
+        if (pass === MAX_PASSES - 1) {
+          console.warn("Max streaming reinference passes reached")
+        }
+        break
       }
     }
+
+    // Stream the stabilized final content to the client
+    if (finalContent) {
+      reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, finalContent))
+    }
+    reply.raw.write(serializeStreamDone())
   } catch (err) {
     console.error("Stream error:", err)
     reply.raw.write(serializeStreamDone())
@@ -840,31 +920,14 @@ async function handleStreaming(
   const latency = Date.now() - startTime
   metricsCollector?.recordLatency(latency)
 
-  if (usageStore && userId && model) {
-    const pricing = new PricingEngine()
-    const usage: UsageRecord = {
-      id: randomUUID(),
-      userId,
-      conversationId: conv.id,
-      model,
-      providerLabel: providerLabel || "default",
-      promptTokens: streamUsage?.prompt_tokens ?? 0,
-      completionTokens: streamUsage?.completion_tokens ?? 0,
-      totalTokens: streamUsage?.total_tokens ?? 0,
-      cost: pricing.computeCost(model, streamUsage?.prompt_tokens ?? 0, streamUsage?.completion_tokens ?? 0),
-      createdAt: Date.now(),
-    }
-    usageStore.record(usage)
-  }
-
-  const newMessages = createSpanMessages(body, fullContent.join(""))
+  const newMessages = createSpanMessages(body, finalContent)
   store.addSpan(conv, {
     id: `span_${Date.now()}`,
     messages: newMessages,
     createdAt: Date.now(),
     summaryIds: [],
     embeddingIds: [],
-    tokenCount: Math.ceil(fullContent.join("").length / 4),
+    tokenCount: Math.ceil(finalContent.length / 4),
   })
   await store.saveConversation(conv)
 }
@@ -884,6 +947,9 @@ async function handleNonStreaming(
   providerLabel?: string,
   usageStore?: IUsageStore,
   metricsCollector?: MetricsCollector,
+  userStore?: IUserStore,
+  summarizationProvider?: Provider,
+  summarizationModel?: string,
 ): Promise<void> {
   const maxReinferences = 3
   let reinferenceCount = 0
@@ -929,7 +995,7 @@ async function handleNonStreaming(
     for (const tc of toolCalls) {
       const name = tc.function.name
       const args = JSON.parse(tc.function.arguments)
-      const result = await executeHiddenTool(conv, name, args, store, engine, vectorStore)
+      const result = await executeHiddenTool(conv, name, args, store, engine, vectorStore, userStore, userId, summarizationProvider, summarizationModel)
       if (result && result.needsReinference) {
         currentMessages = [...currentMessages, ...result.appendMessages]
         needsReinference = true
@@ -980,12 +1046,16 @@ async function executeHiddenTool(
   store: IMemoryStore,
   engine: ContextEngine,
   vectorStore?: IVectorStore,
+  userStore?: IUserStore,
+  userId?: string,
+  summarizationProvider?: Provider,
+  summarizationModel?: string,
 ): Promise<{ needsReinference: boolean; appendMessages: Message[]; resultText?: string } | null> {
   let result: { needsReinference: boolean; appendMessages: Message[]; resultText?: string } | null = null
 
   switch (name) {
     case "remember": {
-      const r = executeRemember(conv, args.memory_id as string)
+      const r = await executeRemember(conv, args.memory_id as string, userStore, userId)
       if (r.messages) {
         result = { needsReinference: true, appendMessages: r.messages }
       } else {
@@ -995,7 +1065,7 @@ async function executeHiddenTool(
     }
 
     case "search_memory": {
-      const r = await executeSearch(conv, args.query as string, vectorStore)
+      const r = await executeSearch(conv, args.query as string, vectorStore, userStore, userId)
       const label = r.semantic ? "Semantic search results" : "Search results (keyword fallback)"
       const text = `${label}:\n${r.matches.map((m) => `- ${m.id}: ${m.topic} (turns ${m.turnRange})`).join("\n")}`
       const toolMsg: Message = {
@@ -1008,7 +1078,7 @@ async function executeHiddenTool(
     }
 
     case "compress_memory": {
-      const r = executeCompressMemory(conv, args.scope_id as string, args.level as CompressionLevel)
+      const r = await executeCompressMemory(conv, args.scope_id as string, args.level as CompressionLevel, summarizationProvider, summarizationModel)
       result = { needsReinference: false, appendMessages: [], resultText: r.message }
       break
     }
@@ -1105,123 +1175,6 @@ async function executeHiddenTool(
 
   recordToolCall(conv, name, args, result?.resultText || "")
   return result
-}
-
-async function handleHiddenTool(
-  conv: Conversation,
-  name: string,
-  argsStr: string,
-  provider: Provider,
-  messages: Message[],
-  body: ChatCompletionRequest,
-  reply: FastifyReply,
-  fullContent: string[],
-  store: IMemoryStore,
-  engine: ContextEngine,
-  vectorStore?: IVectorStore,
-  userId?: string,
-  modelName?: string,
-  providerLabel?: string,
-  usageStore?: IUsageStore,
-  metricsCollector?: MetricsCollector,
-): Promise<void> {
-  const args = JSON.parse(argsStr)
-  const model = modelName || body.model
-  const pricing = new PricingEngine()
-
-  if (name === "remember") {
-    const result = executeRemember(conv, args.memory_id)
-    const resultText = result.messages
-      ? `Remembered memory ${args.memory_id}, rehydrated ${result.messages.length} messages`
-      : "Memory not found"
-    recordToolCall(conv, name, args, resultText)
-    if (result.messages) {
-      const reinferenceMessages = [...messages, ...result.messages]
-      try {
-        const stream = provider.chatStream({
-          model: body.model,
-          messages: reinferenceMessages,
-          stream: true,
-          max_tokens: body.max_tokens,
-          temperature: body.temperature,
-        })
-        for await (const event of stream) {
-          if (event.type === "chunk" && typeof event.data === "string") {
-            fullContent.push(event.data)
-            reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, event.data))
-          } else if (event.type === "usage") {
-            if (usageStore && userId) {
-              const u = event.data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }
-              usageStore.record({
-                id: randomUUID(),
-                userId,
-                conversationId: conv.id,
-                model,
-                providerLabel: providerLabel || "default",
-                promptTokens: u.prompt_tokens,
-                completionTokens: u.completion_tokens,
-                totalTokens: u.total_tokens,
-                cost: pricing.computeCost(model, u.prompt_tokens, u.completion_tokens),
-                createdAt: Date.now(),
-              })
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Hidden reinference error:", err)
-        const fallbackSummary = result.replacedSummary
-        if (fallbackSummary) {
-          const fallbackText = `[Memory recalled: ${fallbackSummary.summaryText}]`
-          fullContent.push(fallbackText)
-          reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, fallbackText))
-        }
-      }
-    }
-    return
-  }
-
-  const execResult = await executeHiddenTool(conv, name, args, store, engine, vectorStore)
-  if (execResult && execResult.resultText) {
-    fullContent.push(execResult.resultText)
-    reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, execResult.resultText))
-
-    if (execResult.needsReinference) {
-      const reinferenceMessages = [...messages, ...execResult.appendMessages]
-      try {
-        const stream = provider.chatStream({
-          model: body.model,
-          messages: reinferenceMessages,
-          stream: true,
-          max_tokens: body.max_tokens,
-          temperature: body.temperature,
-        })
-        for await (const event of stream) {
-          if (event.type === "chunk" && typeof event.data === "string") {
-            fullContent.push(event.data)
-            reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, event.data))
-          } else if (event.type === "usage") {
-            if (usageStore && userId) {
-              const u = event.data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }
-              usageStore.record({
-                id: randomUUID(),
-                userId,
-                conversationId: conv.id,
-                model,
-                providerLabel: providerLabel || "default",
-                promptTokens: u.prompt_tokens,
-                completionTokens: u.completion_tokens,
-                totalTokens: u.total_tokens,
-                cost: pricing.computeCost(model, u.prompt_tokens, u.completion_tokens),
-                createdAt: Date.now(),
-              })
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Hidden reinference error:", err)
-      }
-    }
-  }
 }
 
 const WEB_UI_HTML = `<!DOCTYPE html>
@@ -1577,7 +1530,7 @@ document.addEventListener("alpine:init", () => {
       this.saving = false
     },
     async removeProvider(label) {
-      if (!confirm("Remove provider \"" + label + "\"?")) return
+      if (!confirm('Remove provider "' + label + '"?')) return
       try {
         await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
         this.notify("Provider removed")
@@ -1740,7 +1693,7 @@ document.addEventListener("alpine:init", () => {
       this.profilesLoaded = true
     },
     async removeProvider(label) {
-      if (!confirm("Remove provider \"" + label + "\"?")) return
+      if (!confirm('Remove provider "' + label + '"?')) return
       try {
         await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
         this.notify("Provider removed")

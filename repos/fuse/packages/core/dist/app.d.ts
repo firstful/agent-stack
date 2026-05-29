@@ -7,7 +7,8 @@
  *
  * Mount order:
  *   helmet → cors → json/urlencoded body parsers → query string parser →
- *   auth middleware (from src/auth/) → API router (createApiRouter) → error handler
+ *   auth middleware (from src/auth/) → API router (createApiRouter) →
+ *   webui static files → SPA catch-all → error handler
  */
 /**
  * createApp — builds and returns a fully wired Express application instance.

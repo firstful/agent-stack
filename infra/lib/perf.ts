@@ -3,6 +3,8 @@ import fs from "fs";
 import path from "path";
 import { RUNTIME_DIR } from "./config";
 
+// ── Config ──
+
 export const PERF_HISTORY_FILE = path.join(RUNTIME_DIR, "perf-history.json");
 export const MAX_SNAPSHOTS = 288; // 24 hours at 5-minute intervals
 
@@ -13,6 +15,8 @@ export function setHistoryFile(filepath: string): void {
 function historyFile(): string {
   return _historyFile;
 }
+
+// ── Types ──
 
 export interface SystemSnapshot {
   ts: string;
@@ -56,6 +60,8 @@ export interface PerfHistory {
   snapshots: PerfSnapshot[];
 }
 
+// ── State ──
+
 // In-memory previous readings for delta calculations
 let prevCpuStat: CpuStat | null = null;
 let prevDiskStats: Map<string, DiskStat> | null = null;
@@ -78,6 +84,8 @@ interface DiskStat {
   sectorsWritten: number;
 }
 
+// ── Helpers ──
+
 function safeExec(cmd: string): string {
   try {
     return execSync(cmd, { timeout: 30000 }).toString().trim();
@@ -91,6 +99,8 @@ function safeExecAsReeds(cmd: string): string {
   // This function exists as a readable alias for rootless podman commands.
   return safeExec(cmd);
 }
+
+// ── CPU ──
 
 function parseCpuStat(): CpuStat {
   const line = fs.readFileSync("/proc/stat", "utf-8").split("\n")[0];
@@ -129,6 +139,8 @@ function calcCpuPercent(prev: CpuStat, curr: CpuStat): number {
   if (diffTotal <= 0) return 0;
   return Math.min(100, Math.max(0, (100 * diffActive) / diffTotal));
 }
+
+// ── Disk ──
 
 function parseDiskStats(): Map<string, DiskStat> {
   const map = new Map<string, DiskStat>();
@@ -171,6 +183,8 @@ function calcDiskThroughput(
     writeKBps: (writeSectors * bytesPerSector) / 1024 / seconds,
   };
 }
+
+// ── System ──
 
 function parseLoadAvg(): [number, number, number] {
   try {
@@ -223,6 +237,8 @@ function parseMemory(): { usedMB: number; totalMB: number; percent: number } {
   return { totalMB: 0, usedMB: 0, percent: 0 };
 }
 
+// ── Parsing Utilities ──
+
 function parseSizeToKB(value: string): number {
   const trimmed = value.trim();
   const match = trimmed.match(/^([0-9.]+)\s*(B|kB|MB|GB|TB)?$/i);
@@ -250,6 +266,8 @@ function parsePercent(value: string): number {
   const n = parseFloat(trimmed);
   return isNaN(n) ? 0 : n;
 }
+
+// ── Container Stats ──
 
 function parsePodmanStats(): ContainerSnapshot[] {
   const out = safeExecAsReeds(
@@ -291,6 +309,8 @@ function parsePodmanStats(): ContainerSnapshot[] {
   return containers;
 }
 
+// ── Process Stats ──
+
 function parseProcesses(sortBy: "cpu" | "mem"): ProcessSnapshot[] {
   const sortFlag = sortBy === "cpu" ? "--sort=-%cpu" : "--sort=-%mem";
   const out = safeExec(`ps aux ${sortFlag} | head -21`);
@@ -326,6 +346,11 @@ function parseProcesses(sortBy: "cpu" | "mem"): ProcessSnapshot[] {
   return processes.slice(0, 20);
 }
 
+// ── Persistence ──
+
+/**
+ * Load performance history from disk.
+ */
 export function loadHistory(): PerfHistory {
   try {
     const raw = fs.readFileSync(historyFile(), "utf-8");
@@ -345,6 +370,12 @@ function saveHistory(history: PerfHistory): void {
   }
 }
 
+// ── Snapshot Collection ──
+
+/**
+ * Collect a full performance snapshot (system + containers + processes),
+ * append it to the history, and trim to MAX_SNAPSHOTS.
+ */
 export function collectSnapshot(): PerfSnapshot {
   const now = Date.now();
   const currCpu = parseCpuStat();
@@ -399,10 +430,18 @@ export function collectSnapshot(): PerfSnapshot {
   return snapshot;
 }
 
+// ── API ──
+
+/**
+ * Return the full performance history.
+ */
 export function getHistory(): PerfHistory {
   return loadHistory();
 }
 
+/**
+ * Return the most recent performance snapshot, or null if none exist.
+ */
 export function getLatestSnapshot(): PerfSnapshot | null {
   const history = loadHistory();
   return history.snapshots[history.snapshots.length - 1] || null;

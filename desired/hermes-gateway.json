@@ -1,0 +1,12 @@
+{
+  "name": "hermes-gateway",
+  "version": 1,
+  "service": {
+    "type": "simple",
+    "exec_start": "hermes gateway run --replace",
+    "restart": "always"
+  },
+  "expose": {
+    "enabled": false
+  }
+}

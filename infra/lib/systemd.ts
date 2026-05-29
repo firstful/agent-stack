@@ -6,6 +6,8 @@ import { SUDO_PASSWORD_FILE, SYSTEMD_UNIT_PREFIX } from "./config";
 
 const SUDO_PASSWORD = fs.readFileSync(SUDO_PASSWORD_FILE, "utf-8").trim() + "\n";
 
+// ── Helpers ──
+
 function sh(cmd: string): string {
   return execSync(cmd, { stdio: "pipe" }).toString();
 }
@@ -25,6 +27,11 @@ function unitPath(name: string): string {
   return `/etc/systemd/system/${unitName(name)}`;
 }
 
+// ── Query ──
+
+/**
+ * Check whether a systemd unit exists.
+ */
 export function exists(name: string): boolean {
   try {
     sh(`systemctl cat ${unitName(name)}`);
@@ -34,6 +41,9 @@ export function exists(name: string): boolean {
   }
 }
 
+/**
+ * Check whether a systemd service is currently active.
+ */
 export function isRunning(name: string): boolean {
   try {
     const out = sh(`systemctl is-active ${unitName(name)}`).trim();
@@ -43,6 +53,9 @@ export function isRunning(name: string): boolean {
   }
 }
 
+/**
+ * List all agent-stack-managed systemd units.
+ */
 export function getManaged(): string[] {
   try {
     const out = sh(
@@ -63,6 +76,8 @@ export function getManaged(): string[] {
     return [];
   }
 }
+
+// ── Unit Management ──
 
 function generateUnitContent(service: Service): string {
   const svc = service.service!;
@@ -91,6 +106,12 @@ WantedBy=multi-user.target
 `;
 }
 
+// ── Lifecycle ──
+
+/**
+ * Ensure a systemd service unit exists and is running.
+ * Creates/updates the unit file, reloads systemd, enables, and starts.
+ */
 export function ensure(service: Service): void {
   console.log(`[service] ensuring ${service.name}`);
   const content = generateUnitContent(service);
@@ -132,6 +153,9 @@ export function ensure(service: Service): void {
   }
 }
 
+/**
+ * Disable, stop, and remove a systemd service unit.
+ */
 export function remove(name: string): void {
   console.log(`[service] removing ${unitName(name)}`);
   try {

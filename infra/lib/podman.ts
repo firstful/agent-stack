@@ -3,10 +3,20 @@ import { resolveSecrets } from "./services";
 import type { Service } from "./types";
 import { CONTAINER_LABEL, NETWORK_NAME } from "./config";
 
+// ── Shell Helpers ──
+
+/**
+ * Execute a shell command with inherited stdio.
+ * @param cmd - command string
+ * @param _ignore - unused, kept for compatibility
+ */
 export function sh(cmd: string, _ignore?: boolean): Buffer {
   return execSync(cmd, { stdio: "inherit" }) as unknown as Buffer;
 }
 
+/**
+ * Execute a command and capture both stdout and stderr.
+ */
 export function shWithStderr(cmd: string): { stdout: string; stderr: string } {
   try {
     const r = execSync(cmd, { stdio: ["inherit", "pipe", "pipe"] });
@@ -16,10 +26,18 @@ export function shWithStderr(cmd: string): { stdout: string; stderr: string } {
   }
 }
 
+/**
+ * Execute a command and capture stdout only.
+ */
 export function shCapture(cmd: string): string {
   return execSync(cmd).toString().trim();
 }
 
+// ── Image Ops ──
+
+/**
+ * Build a fully qualified image tag for a named service.
+ */
 export function imageTag(name: string): string {
   return `stack/${name}:latest`;
 }
@@ -28,6 +46,9 @@ export function containerLabel(): string {
   return CONTAINER_LABEL;
 }
 
+/**
+ * Check whether a tagged image already exists in local podman storage.
+ */
 export function imageExists(name: string): boolean {
   try {
     execSync(`podman image exists ${imageTag(name)}`, { stdio: "ignore" });
@@ -37,6 +58,11 @@ export function imageExists(name: string): boolean {
   }
 }
 
+// ── Container Ops ──
+
+/**
+ * Check whether a named container exists (in any state).
+ */
 export function containerExists(name: string): boolean {
   try {
     execSync(`podman inspect ${name}`, { stdio: "ignore" });
@@ -46,6 +72,9 @@ export function containerExists(name: string): boolean {
   }
 }
 
+/**
+ * Check whether a named container is currently running.
+ */
 export function containerRunning(name: string): boolean {
   try {
     const out = shCapture(`podman ps --format "{{.Names}}"`);
@@ -55,6 +84,9 @@ export function containerRunning(name: string): boolean {
   }
 }
 
+/**
+ * List all managed containers (labelled with stack-managed=true).
+ */
 export function getManagedContainers(): string[] {
   try {
     const out = shCapture(
@@ -66,6 +98,9 @@ export function getManagedContainers(): string[] {
   }
 }
 
+/**
+ * Build a podman image for a service from its repo directory.
+ */
 export function buildImage(service: Service): void {
   console.log(`[build] ${imageTag(service.name)} from ${service.repo}`);
   const cfg = service.build || {};
@@ -85,6 +120,9 @@ export function buildImage(service: Service): void {
   }
 }
 
+/**
+ * Get the host-side port a container is publishing.
+ */
 export function getContainerPort(name: string): number | null {
   try {
     const out = shCapture(`podman port ${name}`);
@@ -95,6 +133,10 @@ export function getContainerPort(name: string): number | null {
   }
 }
 
+/**
+ * Poll a container until its health check passes or the timeout expires.
+ * @returns true if healthy, false if container stopped or timed out
+ */
 export function waitForHealthy(
   containerName: string,
   port: number,
@@ -120,6 +162,9 @@ export function waitForHealthy(
   return false;
 }
 
+/**
+ * Collect the set of host ports currently bound by podman containers.
+ */
 export function getUsedHostPorts(): Set<number> {
   try {
     const out = shCapture(`podman ps -a --format "{{.Ports}}"`);
@@ -135,6 +180,11 @@ export function getUsedHostPorts(): Set<number> {
   }
 }
 
+// ── Network ──
+
+/**
+ * Create the shared podman network if it does not already exist.
+ */
 export function ensureNetwork(): void {
   try {
     sh(`podman network create ${NETWORK_NAME}`);
@@ -144,6 +194,12 @@ export function ensureNetwork(): void {
   }
 }
 
+// ── Service Discovery ──
+
+/**
+ * Build -e CONTAINERS_* environment variables for all services
+ * so containers can discover each other by name.
+ */
 export function buildDiscoveryEnv(allServices: Service[] | undefined): string {
   if (!allServices || allServices.length === 0) return "";
   const pairs: string[] = [];
@@ -168,11 +224,19 @@ export function buildDiscoveryEnv(allServices: Service[] | undefined): string {
   return pairs.join(" ");
 }
 
+// ── Run Containers ──
+
+/**
+ * Options for runContainer.
+ */
 export interface RunContainerOptions {
   containerName?: string;
   hostPort?: number;
 }
 
+/**
+ * Start a podman container for a service with discovery, secrets, and networking.
+ */
 export function runContainer(
   service: Service,
   allServices: Service[],

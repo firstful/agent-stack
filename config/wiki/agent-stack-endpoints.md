@@ -126,11 +126,15 @@ In addition to HTTP, the controller also listens on a Unix socket:
 When services are running and healthy, the `/proxy/<service_name>` endpoint allows access to:
 - Each service's native API/web interface
 - Service-specific endpoints (varies by service)
+- Public FQDNs (via slot-proxy → Cloudflare Tunnel):
+  - `hermes.ffilt.us` → Hermes Agent Dashboard (port 9119, systemd service)
+  - Others as configured per-service in `expose.hostname`
 - Examples:
   - `/proxy/opencode` → OpenCode API/UI
   - `/proxy/kilocode-web` → Kilocode web interface
   - `/proxy/dash` → Dashboard interface
   - `/proxy/techdeck` → Techdeck application
+  - `/proxy/hermes` → Hermes Agent Dashboard
   - And others as defined in their respective configurations
 
 ## Implementation Notes

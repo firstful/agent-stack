@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { createHash, randomBytes } from "node:crypto"
-import type { Account, Profile, ProviderConfig } from "../types.js"
+import type { Account, Profile, ProviderConfig, MemoryHandle } from "../types.js"
 
 const DATA_DIR = process.env.ENGRA_DATA_DIR || "/data"
 const ACCOUNTS_FILE = "accounts.json"
@@ -23,6 +23,8 @@ export interface IUserStore {
   updateProfile(accountToken: string, profileId: string, updates: Partial<Profile>): Promise<Profile | undefined>
   deleteProfile(accountToken: string, profileId: string): Promise<boolean>
   regenerateProfileToken(accountToken: string, profileId: string): Promise<string | undefined>
+  getAccountMemories(token: string): Promise<MemoryHandle[]>
+  addAccountMemory(token: string, handle: MemoryHandle): Promise<void>
 }
 
 export class UserStore implements IUserStore {
@@ -224,5 +226,18 @@ export class UserStore implements IUserStore {
     profile.authToken = `p_${this.generateToken()}`
     await this.save()
     return profile.authToken
+  }
+
+  async getAccountMemories(token: string): Promise<MemoryHandle[]> {
+    const account = this.accounts.get(token)
+    return account?.globalMemories || []
+  }
+
+  async addAccountMemory(token: string, handle: MemoryHandle): Promise<void> {
+    const account = this.accounts.get(token)
+    if (!account) return
+    if (!account.globalMemories) account.globalMemories = []
+    account.globalMemories.push(handle)
+    await this.save()
   }
 }

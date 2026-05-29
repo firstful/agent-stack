@@ -43,13 +43,14 @@ ${transcript}`
 
 export async function compressConversation(
   conv: Conversation,
-  provider: Provider,
+  summarizationProvider: Provider,
+  summarizationModel: string,
   embeddings?: EmbeddingsProvider,
   vectorStore?: IVectorStore,
-): Promise<void> {
-  if (!shouldCompress(conv)) return
+): Promise<MemoryHandle | null> {
+  if (!shouldCompress(conv)) return null
   const targets = selectSpansForCompression(conv)
-  if (targets.length === 0) return
+  if (targets.length === 0) return null
 
   const summaryMsg: Message[] = [
     {
@@ -64,8 +65,8 @@ export async function compressConversation(
     },
   ]
 
-  const response = await provider.chat({
-    model: "gpt-4o-mini",
+  const response = await summarizationProvider.chat({
+    model: summarizationModel,
     messages: summaryMsg,
     max_tokens: 2000,
   })
@@ -79,14 +80,24 @@ export async function compressConversation(
   const summaryTokens = Math.ceil(summaryText.length / 4)
   const compressionRatio = summaryTokens > 0 ? totalTokens / summaryTokens : 1
 
+  const existingParentIds = [...new Set(targets.flatMap((s) => s.summaryIds))]
+  const parentSummaryIds = existingParentIds.filter((id) => conv.summaries.has(id))
+
   const summaryNode: SummaryNode = {
     id: `sum_${Math.random().toString(36).slice(2, 9)}`,
     sourceSpanIds: targets.map((s) => s.id),
     summaryText,
     importanceScore: 0.5,
     compressionRatio,
-    parentSummaryIds: [],
+    parentSummaryIds,
     childSummaryIds: [],
+  }
+
+  for (const parentId of parentSummaryIds) {
+    const parent = conv.summaries.get(parentId)
+    if (parent) {
+      parent.childSummaryIds.push(summaryNode.id)
+    }
   }
 
   conv.summaries.set(summaryNode.id, summaryNode)
@@ -119,4 +130,5 @@ export async function compressConversation(
   }
 
   conv.updatedAt = Date.now()
+  return handle
 }

@@ -10,6 +10,9 @@ import {
   sidecarContainerName,
 } from "./config";
 
+/**
+ * Read the slot marker file for a service, defaulting to "a" if absent.
+ */
 function readSlot(name: string): string {
   try {
     return fs.readFileSync(slotMarker(name), "utf-8").trim();
@@ -18,6 +21,11 @@ function readSlot(name: string): string {
   }
 }
 
+/**
+ * Persist the current state of all services to runtime/services.json.
+ * Captures container slot status, port assignments, sidecar status,
+ * systemd service running state, and exposure configuration.
+ */
 export function writeRuntimeState(services: Service[]): void {
   const state: Record<string, any> = {};
   for (const s of services) {

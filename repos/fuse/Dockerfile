@@ -33,6 +33,9 @@ RUN npm ci --omit=dev --workspaces --include-workspace-root
 COPY --from=builder /app/packages/core/dist packages/core/dist
 COPY --from=builder /app/packages/server/dist packages/server/dist
 
+# Copy web UI
+COPY packages/webui packages/webui
+
 USER fuse
 EXPOSE 3000 587
 CMD ["node", "packages/server/dist/index.js"]

@@ -1,6 +1,6 @@
 import { Pool } from "pg"
 import { createHash, randomBytes } from "node:crypto"
-import type { Account, Profile, ProviderConfig } from "../types.js"
+import type { Account, Profile, ProviderConfig, MemoryHandle } from "../types.js"
 
 export class PgUserStore {
   private pool: Pool
@@ -40,10 +40,16 @@ export class PgUserStore {
   }
 
   async getAccount(token: string): Promise<Account | undefined> {
-    const r = await this.pool.query("SELECT token, providers, profiles, created_at FROM accounts WHERE token = $1", [token])
+    const r = await this.pool.query("SELECT token, providers, profiles, global_memories, created_at FROM accounts WHERE token = $1", [token])
     if (!r.rows.length) return undefined
     const row = r.rows[0]
-    return { token: row.token, providers: row.providers || [], profiles: row.profiles || [], createdAt: row.created_at }
+    return {
+      token: row.token,
+      providers: row.providers || [],
+      profiles: row.profiles || [],
+      globalMemories: row.global_memories || [],
+      createdAt: row.created_at,
+    }
   }
 
   async createAccount(firstProvider: ProviderConfig): Promise<Account> {
@@ -119,12 +125,18 @@ export class PgUserStore {
 
   async getAccountByProfileToken(profileToken: string): Promise<Account | undefined> {
     const r = await this.pool.query(
-      "SELECT token, providers, profiles, created_at FROM accounts WHERE profiles @> $1::jsonb",
+      "SELECT token, providers, profiles, global_memories, created_at FROM accounts WHERE profiles @> $1::jsonb",
       [JSON.stringify([{ authToken: profileToken }])],
     )
     if (!r.rows.length) return undefined
     const row = r.rows[0]
-    return { token: row.token, providers: row.providers || [], profiles: row.profiles || [], createdAt: row.created_at }
+    return {
+      token: row.token,
+      providers: row.providers || [],
+      profiles: row.profiles || [],
+      globalMemories: row.global_memories || [],
+      createdAt: row.created_at,
+    }
   }
 
   async getProfile(accountToken: string, profileId: string): Promise<Profile | undefined> {
@@ -180,5 +192,20 @@ export class PgUserStore {
     await this.pool.query("UPDATE accounts SET profiles = $1::jsonb WHERE token = $2",
       [JSON.stringify(account.profiles), accountToken])
     return profile.authToken
+  }
+
+  async getAccountMemories(token: string): Promise<MemoryHandle[]> {
+    const r = await this.pool.query("SELECT global_memories FROM accounts WHERE token = $1", [token])
+    if (!r.rows.length) return []
+    return r.rows[0].global_memories || []
+  }
+
+  async addAccountMemory(token: string, handle: MemoryHandle): Promise<void> {
+    const account = await this.getAccount(token)
+    if (!account) return
+    const memories = account.globalMemories || []
+    memories.push(handle)
+    await this.pool.query("UPDATE accounts SET global_memories = $1::jsonb WHERE token = $2",
+      [JSON.stringify(memories), token])
   }
 }

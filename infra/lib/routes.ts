@@ -452,6 +452,8 @@ const routes: RouteDef[] = [
   },
 ];
 
+// ── Route Compilation ──
+
 // Converts a pattern like "/api/services/:name" to a RegExp
 function patternToRegex(pattern: string): { regex: RegExp; paramNames: string[] } {
   const paramNames: string[] = [];
@@ -468,6 +470,8 @@ const compiled: CompiledRoute[] = routes.map((r) => {
   return { ...r, regex, paramNames };
 });
 
+// ── Dispatch ──
+
 // Match a (method, pathname) pair against the route table
 function matchRoute(method: string, pathname: string): RouteMatch | null {
   for (const route of compiled) {
@@ -482,6 +486,8 @@ function matchRoute(method: string, pathname: string): RouteMatch | null {
   }
   return null;
 }
+
+// ── OpenAPI Specification ──
 
 // Build full OpenAPI 3.0 spec from route metadata
 export interface OpenApiSpec {

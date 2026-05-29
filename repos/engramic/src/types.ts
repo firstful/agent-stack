@@ -141,6 +141,7 @@ export interface Account {
   token: string
   providers: ProviderConfig[]
   profiles: Profile[]
+  globalMemories?: MemoryHandle[]
   createdAt: number
 }
 

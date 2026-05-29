@@ -24,8 +24,9 @@ RUN npm install -g pnpm@9
 
 COPY --from=builder /app /app
 
+WORKDIR /app/apps/api
 ENV NODE_ENV=production
 ENV APP_PORT=3000
 EXPOSE 3000
 
-CMD ["pnpm", "exec", "tsx", "apps/api/src/index.ts"]
+CMD ["pnpm", "exec", "tsx", "src/index.ts"]

@@ -1,5 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
+import { initTracing } from "./tracing.js"
 import { MemoryStore, type IMemoryStore } from "./memory/store.js"
 import { PgMemoryStore } from "./memory/pg-store.js"
 import { VectorStore } from "./memory/vector.js"
@@ -24,6 +25,8 @@ const API_KEY = process.env.ENGRA_OPENAI_API_KEY || ""
 const DATABASE_URL = process.env.ENGRA_DATABASE_URL || ""
 
 async function main() {
+  initTracing()
+
   const app = Fastify({ logger: true })
 
   await app.register(cors, { origin: true })

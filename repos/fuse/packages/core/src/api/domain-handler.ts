@@ -9,6 +9,7 @@ import { getPool } from "../db/pool.js";
 import {
   createDomain,
   getDomainById,
+  listDomains,
   updateDomain,
   setTrustLevel,
 } from "../db/domain-repo.js";
@@ -20,6 +21,18 @@ export function mountDomainRoutes(parent: Router): void {
   const r = parent;
 
   r.get("/domains/status", (_req, res) => res.json(STATUS_OK));
+
+  r.get(
+    "/domains",
+    typedRoute(
+      z.object({ params: z.object({}), query: z.object({}), body: z.object({}) }),
+      async ({ response }) => {
+        const pool = getPool();
+        const domains = await listDomains(pool);
+        response.json(domains);
+      }
+    )
+  );
 
   r.post(
     "/domains",

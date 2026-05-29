@@ -4,7 +4,7 @@ import { typedRoute, ApiError, PaginationSchema } from "./router.js";
 import type { Channel, ChannelType } from "../types/channel.js";
 import { getPool } from "../db/pool.js";
 import {
-  createChannel, getChannelById, updateChannel, deleteChannel,
+  createChannel, getChannelById, listChannelsByDomain, updateChannel, deleteChannel,
   addMember, removeMember, getMembers,
 } from "../db/channel-repo.js";
 
@@ -17,6 +17,20 @@ const STATUS_OK = { status: "channel-handler active" };
 export function mountChannelRoutes(parent: Router): void {
   const r = parent;
   r.get("/channels/status", (_req, res) => res.json(STATUS_OK));
+
+  r.get(
+    "/channels",
+    typedRoute(
+      z.object({ params: z.object({}), query: z.object({ domainId: z.string().uuid() }), body: z.object({}) }),
+      async ({ input, request, response, next }) => {
+        const identity = (request as any).identity;
+        if (!identity) { next(new ApiError(401, "Not authenticated")); return; }
+        const pool = getPool();
+        const channels = await listChannelsByDomain(pool, input.query.domainId);
+        response.json(channels);
+      },
+    ),
+  );
 
   r.post(
     "/channels",

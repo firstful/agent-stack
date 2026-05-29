@@ -1,1 +1,1 @@
-{"version":3,"file":"channel-handler.d.ts","sourceRoot":"","sources":["../../src/api/channel-handler.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAgBtC,wBAAgB,kBAAkB,CAAC,MAAM,EAAE,MAAM,GAAG,IAAI,CAmGvD"}
+{"version":3,"file":"channel-handler.d.ts","sourceRoot":"","sources":["../../src/api/channel-handler.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,SAAS,CAAC;AAgBtC,wBAAgB,kBAAkB,CAAC,MAAM,EAAE,MAAM,GAAG,IAAI,CAiHvD"}

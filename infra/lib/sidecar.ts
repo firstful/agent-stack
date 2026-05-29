@@ -13,6 +13,8 @@ export function sh(cmd: string): Buffer {
   return execSync(cmd, { stdio: "inherit" }) as unknown as Buffer;
 }
 
+// ── Image Management ──
+
 export function imageExists(image: string): boolean {
   try {
     execSync(`podman image exists ${image}`, { stdio: "ignore" });
@@ -22,12 +24,20 @@ export function imageExists(image: string): boolean {
   }
 }
 
+/**
+ * Ensure a sidecar image is pulled locally.
+ */
 export function ensureImage(image: string): void {
   if (imageExists(image)) return;
   console.log(`[sidecar] pulling ${image}...`);
   sh(`podman pull ${image}`);
 }
 
+// ── Sidecar Lifecycle ──
+
+/**
+ * Ensure a single sidecar container exists and is running.
+ */
 export function ensureSidecar(
   service: Service,
   sidecar: SidecarConfig,
@@ -65,6 +75,9 @@ export function ensureSidecar(
   }
 }
 
+/**
+ * Ensure all sidecars defined for a service are running.
+ */
 export function ensureSidecars(
   service: Service,
   allServices: Service[]
@@ -75,6 +88,11 @@ export function ensureSidecars(
   }
 }
 
+// ── Cleanup ──
+
+/**
+ * Stop and remove a container, ignoring errors.
+ */
 export function stopAndRemoveContainer(name: string): void {
   try {
     if (containerRunning(name)) sh(`podman stop ${name}`);
@@ -84,6 +102,9 @@ export function stopAndRemoveContainer(name: string): void {
   }
 }
 
+/**
+ * Remove a single sidecar container.
+ */
 export function removeSidecar(
   serviceName: string,
   sidecar: SidecarConfig
@@ -95,6 +116,9 @@ export function removeSidecar(
   }
 }
 
+/**
+ * Remove all sidecar containers for a service.
+ */
 export function removeSidecars(service: Service): void {
   if (!service.container?.sidecars) return;
   for (const sc of service.container.sidecars) {

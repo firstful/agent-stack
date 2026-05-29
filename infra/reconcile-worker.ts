@@ -1,3 +1,17 @@
+/**
+ * reconcile-worker.ts — Background reconciliation loop for agent-stack.
+ *
+ * Runs as a worker_thread spawned by controller.ts.  On each tick (every 5 s):
+ *   1. Load the desired service set (repo agent-stack.json + desired/*.json)
+ *   2. Garbage-collect managed containers that are no longer in the desired set
+ *   3. Garbage-collect old systemd services not in the desired set
+ *   4. For each desired service, ensure it's running (container or systemd)
+ *   5. Write cloudflared tunnel config if exposure is enabled
+ *   6. Persist runtime state for the controller's /api/status endpoint
+ *   7. Prune unused podman images
+ *   8. Send a status_update message back to the parent thread
+ */
+
 import {
   loadDesired,
 } from "./lib/services";
@@ -18,6 +32,8 @@ import { getManagedContainers, sh } from "./lib/podman";
 import { sidecarContainerName, baseServiceName } from "./lib/config";
 import { parentPort } from "worker_threads";
 
+// ── Fatal error handling ──
+
 process.on("uncaughtException", (err) => {
   console.error(`[fatal] uncaught exception: ${err.message}`);
   process.exit(1);
@@ -29,6 +45,8 @@ process.on("unhandledRejection", (err) => {
 
 let reconciling = false;
 
+// ── Message bridge ──
+
 function send(msg: any): void {
   try {
     parentPort!.postMessage(msg);
@@ -36,6 +54,8 @@ function send(msg: any): void {
     // parent might be gone
   }
 }
+
+// ── Main reconciliation loop ──
 
 function reconcile(): void {
   if (reconciling) return;
@@ -47,6 +67,7 @@ function reconcile(): void {
 
     const managedContainers = getManagedContainers();
     const managedContainerSet = new Set(managedContainers);
+    // ── Garbage-collect orphaned containers ──
     for (const name of managedContainers) {
       if (desiredNames.has(name)) continue;
       const baseName = name.replace(/--[ab]$/, '');
@@ -66,6 +87,7 @@ function reconcile(): void {
     }
 
     const managedServices = getManagedSystemdServices();
+    // ── Garbage-collect orphaned systemd services ──
     for (const name of managedServices) {
       if (!desiredNames.has(name)) {
         removeSystemdService(name);
@@ -77,6 +99,7 @@ function reconcile(): void {
       error: string;
       time: string;
     }[] = [];
+    // ── Ensure each desired service is running ──
     for (const service of desired) {
       try {
         if (service.service) {
@@ -106,6 +129,7 @@ function reconcile(): void {
     }
 
     let lastCloudflaredError: { error: string; time: string } | null = null;
+    // ── Write Cloudflare Tunnel config ──
     try {
       writeCloudflaredConfig(desired);
     } catch (e: any) {
@@ -121,12 +145,14 @@ function reconcile(): void {
       });
     }
 
+    // ── Persist runtime state ──
     try {
       writeRuntimeState(desired);
     } catch (e: any) {
       console.error(`[runtime] failed to write runtime state: ${e.message}`);
     }
 
+    // ── Prune unused images ──
     try {
       sh(`podman image prune -f`);
     } catch {
@@ -147,12 +173,16 @@ function reconcile(): void {
   }
 }
 
+// ── Message handler — trigger reconcile on parent request ──
+
 parentPort!.on("message", (msg) => {
   if (msg === "reconcile") {
     reconcile();
     send({ type: "reconcile_done" });
   }
 });
+
+// ── Schedule ──
 
 setTimeout(reconcile, 100);
 setInterval(reconcile, 5000);

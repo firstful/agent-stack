@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { typedRoute, ApiError, PaginationSchema } from "./router.js";
 import { getPool } from "../db/pool.js";
-import { createChannel, getChannelById, updateChannel, deleteChannel, addMember, removeMember, } from "../db/channel-repo.js";
+import { createChannel, getChannelById, listChannelsByDomain, updateChannel, deleteChannel, addMember, removeMember, } from "../db/channel-repo.js";
 function isChannelType(v) {
     return ["public", "private", "dm", "group", "cross_org"].includes(v);
 }
@@ -9,6 +9,16 @@ const STATUS_OK = { status: "channel-handler active" };
 export function mountChannelRoutes(parent) {
     const r = parent;
     r.get("/channels/status", (_req, res) => res.json(STATUS_OK));
+    r.get("/channels", typedRoute(z.object({ params: z.object({}), query: z.object({ domainId: z.string().uuid() }), body: z.object({}) }), async ({ input, request, response, next }) => {
+        const identity = request.identity;
+        if (!identity) {
+            next(new ApiError(401, "Not authenticated"));
+            return;
+        }
+        const pool = getPool();
+        const channels = await listChannelsByDomain(pool, input.query.domainId);
+        response.json(channels);
+    }));
     r.post("/channels", typedRoute(z.object({ params: z.object({}), query: z.object({}), body: z.object({ name: z.string().min(1), type: z.string(), domainId: z.string().uuid() }) }), async ({ input, request, response, next }) => {
         const identity = request.identity;
         if (!identity) {

@@ -1,0 +1,15 @@
+{
+  "name": "hermes",
+  "version": 1,
+  "service": {
+    "type": "simple",
+    "exec_start": "hermes dashboard --host 0.0.0.0 --port 9119 --insecure --skip-build",
+    "port": 9119,
+    "restart": "always"
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "hermes.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  }
+}

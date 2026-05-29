@@ -1,3 +1,0 @@
-# Posts By Tag
-
-[TAGS]
