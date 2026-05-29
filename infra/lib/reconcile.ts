@@ -1,4 +1,6 @@
 import fs from "fs";
+import path from "path";
+import { execSync } from "child_process";
 import {
   imageExists,
   buildImage,
@@ -21,6 +23,7 @@ import {
   slotContainerName,
   oppositeSlot,
   HEALTH_CHECK_TIMEOUT,
+  REPOS_DIR,
 } from "./config";
 
 // ── State ──
@@ -99,6 +102,30 @@ function allocateFreshPort(
 
 // ── Slot Helpers ──
 
+const MONOREPO_ROOT = path.resolve(REPOS_DIR, "..");
+const MONOREPO_GIT = path.join(MONOREPO_ROOT, ".git");
+
+/**
+ * Check if the latest commit for a service repo path contains
+ * [stack skip-build] in its message. When true, the controller
+ * defers the rebuild so the agent can make multiple commits
+ * without triggering a build per commit.
+ */
+function isSkipBuild(repoPath: string): boolean {
+  if (!repoPath || !repoPath.startsWith(REPOS_DIR)) return false;
+  if (!fs.existsSync(MONOREPO_GIT)) return false;
+  try {
+    const relPath = path.relative(MONOREPO_ROOT, repoPath);
+    const msg = execSync(
+      `git -C ${MONOREPO_ROOT} log -1 --format=%s -- "${relPath}"`,
+      { encoding: "utf-8", timeout: 5000 }
+    ).toString().trim();
+    return msg.includes("[stack skip-build]");
+  } catch {
+    return false;
+  }
+}
+
 function readSlot(name: string): string {
   try {
     return fs.readFileSync(slotMarker(name), "utf-8").trim();
@@ -139,6 +166,17 @@ export function ensureContainer(
   const hashChanged =
     !fs.existsSync(marker) ||
     fs.readFileSync(marker, "utf-8") !== service._hash;
+
+  // Commit-level skip-build flag: defer rebuild when commit message
+  // contains [stack skip-build]. Update marker so next commit without
+  // the flag triggers a rebuild.
+  if (hashChanged && service.repo && isSkipBuild(service.repo)) {
+    console.log(
+      `[skip-build] ${name}: commit flagged with [stack skip-build], deferring rebuild`
+    );
+    fs.writeFileSync(marker, service._hash);
+    return;
+  }
 
   const backoff = buildBackoffs[name];
   const needsBuild = !imageExists(name) || hashChanged;

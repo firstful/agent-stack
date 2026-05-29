@@ -5,28 +5,167 @@ import { execSync } from "child_process";
 import type { Service } from "./types";
 import { DESIRED_DIR, REPOS_DIR, CLONES_DIR, INFRA_DIR, RUNTIME_FILE } from "./config";
 
+// ── .stackignore ───────────────────────────────────────────────────────
+
+/**
+ * Parse a gitignore-style pattern file into an array of patterns.
+ * Returns { patterns, negations } where each is an array of compiled pattern strings.
+ */
+function parseStackignore(content: string): { patterns: RegExp[]; negations: RegExp[] } {
+  const patterns: RegExp[] = [];
+  const negations: RegExp[] = [];
+
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    // Strip trailing comment (after space+#)
+    const commentIdx = line.indexOf(" #");
+    const cleanLine = commentIdx >= 0 ? line.slice(0, commentIdx).trim() : line;
+    if (!cleanLine) continue;
+
+    const isNegation = cleanLine.startsWith("!");
+    const pattern = isNegation ? cleanLine.slice(1).trim() : cleanLine;
+    if (!pattern) continue;
+
+    // Convert gitignore glob to regex
+    const regex = globToRegex(pattern);
+    if (isNegation) {
+      negations.push(regex);
+    } else {
+      patterns.push(regex);
+    }
+  }
+
+  return { patterns, negations };
+}
+
+/**
+ * Convert a gitignore-style glob to a RegExp.
+ * Supports: *, **, ?, [...], leading / (anchor to root), trailing / (dirs only)
+ */
+function globToRegex(glob: string): RegExp {
+  let source = "";
+
+  // Anchored at root if starts with /
+  const anchored = glob.startsWith("/");
+  let g = anchored ? glob.slice(1) : glob;
+
+  // Trailing / means match directories only
+  const dirOnly = g.endsWith("/");
+  if (dirOnly) g = g.slice(0, -1);
+
+  // Split on /
+  const parts = g.split("/");
+  let i = 0;
+
+  while (i < parts.length) {
+    const part = parts[i];
+
+    if (part === "**") {
+      // ** matches zero or more directories
+      source += "(?:.+/)?";
+      i++;
+      // If ** is the last part, it matches everything inside
+      if (i >= parts.length) {
+        source += ".*";
+      }
+      continue;
+    }
+
+    // Convert the glob part to regex
+    const re = convertGlobPart(part);
+    if (!anchored && i === 0) {
+      // Not anchored: match anywhere (but start matching at path separators)
+      source += `(?:${re}(?:/|$))`;
+    } else if (i < parts.length - 1) {
+      source += `${re}/`;
+    } else {
+      source += re;
+    }
+    i++;
+  }
+
+  if (dirOnly) {
+    source += "(?:/.*)?";
+  }
+
+  // If not anchored, allow matching anywhere in path
+  if (!anchored) {
+    source = `(?:^|/)${source}$`;
+  } else {
+    source = `^${source}$`;
+  }
+
+  return new RegExp(source);
+}
+
+function convertGlobPart(part: string): string {
+  let result = "";
+  for (let i = 0; i < part.length; i++) {
+    const ch = part[i];
+    if (ch === "*") {
+      result += "[^/]*";
+    } else if (ch === "?") {
+      result += "[^/]";
+    } else if (ch === "[" && i + 1 < part.length) {
+      // Character class [...]
+      const close = part.indexOf("]", i + 1);
+      if (close >= 0) {
+        result += part.slice(i, close + 1);
+        i = close;
+      } else {
+        result += "\\" + ch;
+      }
+    } else {
+      result += "\\" + ch;
+    }
+  }
+  return result;
+}
+
+/**
+ * Check if a file path relative to the repo root should be ignored.
+ * Returns true if the file matches any ignore pattern (and is not negated).
+ */
+function isIgnored(relativePath: string, patterns: RegExp[], negations: RegExp[]): boolean {
+  // Negations take priority: if explicitly un-ignored, it's not ignored
+  for (const neg of negations) {
+    if (neg.test(relativePath)) return false;
+  }
+  for (const pat of patterns) {
+    if (pat.test(relativePath)) return true;
+  }
+  return false;
+}
+
+/**
+ * Load .stackignore from a repo directory and return parsed patterns,
+ * or null if no .stackignore exists.
+ */
+function loadStackignore(repoPath: string): { patterns: RegExp[]; negations: RegExp[] } | null {
+  const ignorePath = path.join(repoPath, ".stackignore");
+  try {
+    const content = fs.readFileSync(ignorePath, "utf-8");
+    return parseStackignore(content);
+  } catch {
+    return null;
+  }
+}
+
 // ── Secrets ──
 
 function discoverVaultUrl(): string {
-  // 1. Read vault's host port from the previous runtime state
   try {
     const raw = fs.readFileSync(RUNTIME_FILE, "utf-8");
     const runtime = JSON.parse(raw);
     const port = runtime.vault?.port;
     if (port) return `http://localhost:${port}`;
-  } catch {
-    // runtime file not available yet
-  }
-  // 2. Fall back to env var (legacy)
+  } catch {}
   if (process.env.VAULT_URL) return process.env.VAULT_URL;
-  // 3. Hardcoded fallback
   return "http://localhost:4000";
 }
 
-/**
- * Resolve secrets for a service from the vault, returning a flat env dict.
- * @throws if VAULT_TOKEN is missing or vault is unreachable
- */
 export function resolveSecrets(service: Service): Record<string, string> {
   if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
   if (!process.env.VAULT_TOKEN) {
@@ -59,19 +198,30 @@ export function resolveSecrets(service: Service): Record<string, string> {
 // ── Hashing ──
 
 /**
- * Recursively MD5-hash a directory tree (ignoring dotfiles and node_modules).
+ * Recursively MD5-hash a directory tree, optionally excluding files
+ * matching a .stackignore pattern set.
  */
-export function hashDir(dir: string): string {
+export function hashDir(dir: string, ignore?: { patterns: RegExp[]; negations: RegExp[] } | null): string {
   try {
     const hash = crypto.createHash("md5");
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      if (entry.name.startsWith(".") && entry.name !== ".stackignore") continue;
+      if (entry.name === "node_modules") continue;
       const fullPath = path.join(dir, entry.name);
+      const relPath = entry.name;
+
       try {
         if (entry.isDirectory()) {
-          hash.update(hashDir(fullPath));
+          // Check if the directory itself is ignored
+          if (ignore && isIgnored(relPath + "/", ignore.patterns, ignore.negations)) continue;
+          const subHash = hashDir(fullPath, ignore);
+          if (subHash) {
+            hash.update(relPath);
+            hash.update(subHash);
+          }
         } else {
+          if (ignore && isIgnored(relPath, ignore.patterns, ignore.negations)) continue;
           hash.update(fs.readFileSync(fullPath));
         }
       } catch {
@@ -84,16 +234,26 @@ export function hashDir(dir: string): string {
   }
 }
 
-// When REPOS_DIR is inside a monorepo (parent has .git), use the last commit
-// hash for the subdirectory instead of hashing all files. Faster and git-aware.
 const MONOREPO_ROOT = path.resolve(REPOS_DIR, "..");
 const MONOREPO_GIT = path.join(MONOREPO_ROOT, ".git");
 
 /**
- * Git-aware hash for a repo path: uses last commit hash for monorepo
- * subdirectories, falls back to filesystem hash otherwise.
+ * Compute a content hash for a service repo, respecting .stackignore.
+ *
+ * When .stackignore exists, uses content-based hashing (respecting ignore
+ * patterns) so changes to ignored files don't trigger container rebuilds.
+ *
+ * When no .stackignore exists, falls back to git commit hash (fast path)
+ * when inside a monorepo, or content hash otherwise.
  */
 export function repoHashForPath(repoPath: string): string {
+  // Check for .stackignore first — content hash with exclusions
+  const ignore = loadStackignore(repoPath);
+  if (ignore) {
+    return hashDir(repoPath, ignore);
+  }
+
+  // No .stackignore: use git commit hash for speed (monorepo only)
   if (fs.existsSync(MONOREPO_GIT)) {
     try {
       const relPath = path.relative(MONOREPO_ROOT, repoPath);
@@ -112,15 +272,10 @@ export function repoHashForPath(repoPath: string): string {
 
 // ── Git Cloning ──
 
-/**
- * Clone a service repo (via git archive) and prune old clones.
- * @returns path to the clone, or null if not applicable
- */
 export function ensureServiceClone(service: Service): string | null {
   const repoPath = service.repo;
   if (!repoPath) return null;
 
-  // Only clone repos inside the monorepo
   if (!repoPath.startsWith(REPOS_DIR)) return null;
   if (!fs.existsSync(MONOREPO_GIT)) return null;
 
@@ -156,7 +311,6 @@ export function ensureServiceClone(service: Service): string | null {
         }))
         .sort((a, b) => b.mtime - a.mtime);
 
-      // Keep the current one at index 0 plus up to 3 more
       for (const entry of entries.slice(4)) {
         const oldDir = path.join(parentDir, entry.name);
         fs.rmSync(oldDir, { recursive: true, force: true });
@@ -214,20 +368,17 @@ export function loadDesired(): Service[] {
   const services: Service[] = [];
   const nameIndex: Record<string, Service> = {};
 
-  // 1. Scan repos for agent-stack.json — these are the source of truth
   const repoServices = scanRepoAgentConfigs();
   for (const svc of repoServices) {
     nameIndex[svc.name] = svc;
     services.push(svc);
   }
 
-  // 2. Load desired/*.json — only for services WITHOUT a repo directory
   let files: string[] = [];
   try {
     files = fs.readdirSync(DESIRED_DIR).filter((f) => f.endsWith(".json"));
-  } catch {
-    // dir might not exist
-  }
+  } catch {}
+
   for (const f of files) {
     try {
       const raw = fs.readFileSync(path.join(DESIRED_DIR, f), "utf-8");
@@ -238,9 +389,7 @@ export function loadDesired(): Service[] {
         continue;
       }
       if (nameIndex[service.name]) {
-        console.error(
-          `[services] ${f} skipped — ${service.name} already defined by repo agent-stack.json`
-        );
+        console.error(`[services] ${f} skipped — ${service.name} already defined by repo agent-stack.json`);
         continue;
       }
 
