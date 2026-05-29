@@ -1,0 +1,20 @@
+[Unit]
+Description=agent-stack log collector — tails logs → Quickwit
+Documentation=https://github.com/ffilt/us/tree/main/repos/observability/log-collector
+After=network-online.target podman.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /srv/agent-stack/repos/observability/log-collector/collector.py
+Restart=always
+RestartSec=5
+User=root
+Group=root
+Environment=QUICKWIT_URL=http://127.0.0.1:7280
+Environment=INDEX_ID=otel-logs-v1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

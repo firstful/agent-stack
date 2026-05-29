@@ -2,18 +2,12 @@
   "name": "observability",
   "version": 1,
   "container": {
-    "port": 3000,
+    "port": 7280,
     "auto_port": true,
     "healthCheck": {
-      "path": "/api/health"
+      "path": "/api/v1/version"
     },
-    "env": {
-      "GF_SECURITY_ADMIN_USER": "admin",
-      "GF_SECURITY_ADMIN_PASSWORD": "admin",
-      "GF_AUTH_ANONYMOUS_ENABLED": "true",
-      "GF_AUTH_ANONYMOUS_ORG_ROLE": "Admin",
-      "GF_INSTALL_PLUGINS": ""
-    },
+    "env": {},
     "volumes": [
       "observability-grafana-data:/var/lib/grafana",
       "/srv/agent-stack/config/observability/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro",
@@ -26,16 +20,10 @@
         "volumes": [
           "/srv/agent-stack/config/observability/otel-collector-config.yml:/etc/otel-collector-config.yml:ro"
         ],
-        "command": ["--config", "/etc/otel-collector-config.yml"]
-      },
-      {
-        "name": "tempo",
-        "image": "docker.io/grafana/tempo:latest",
-        "volumes": [
-          "observability-tempo-data:/var/tempo",
-          "/srv/agent-stack/config/observability/tempo-config.yml:/etc/tempo-config.yml:ro"
-        ],
-        "command": ["-config.file=/etc/tempo-config.yml"]
+        "command": [
+          "--config",
+          "/etc/otel-collector-config.yml"
+        ]
       },
       {
         "name": "quickwit",
@@ -44,7 +32,11 @@
           "observability-quickwit-data:/var/quickwit/data",
           "/srv/agent-stack/config/observability/quickwit/quickwit.yaml:/etc/quickwit/quickwit.yaml:ro"
         ],
-        "command": ["run", "--config", "/etc/quickwit/quickwit.yaml"]
+        "command": [
+          "run",
+          "--config",
+          "/etc/quickwit/quickwit.yaml"
+        ]
       }
     ]
   },
