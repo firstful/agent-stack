@@ -8,6 +8,18 @@ import {
   jsonb,
 } from "drizzle-orm/pg-core";
 
+// ── Group Blocks ──
+export const groupBlocks = pgTable("group_blocks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  blockerGroupId: uuid("blocker_group_id")
+    .references(() => groups.id)
+    .notNull(),
+  blockedGroupId: uuid("blocked_group_id")
+    .references(() => groups.id)
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ── Users ──
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -35,6 +47,9 @@ export const groups = pgTable("groups", {
   lastEnergyChangeAt: timestamp("last_energy_change_at")
     .defaultNow()
     .notNull(),
+  minInteractionTier: text("min_interaction_tier", {
+    enum: ["fringe", "small", "medium", "large", "huge", "massive"],
+  }).default("fringe"),
 });
 
 // ── Group Nicknames (group gives another group a flair) ──

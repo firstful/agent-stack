@@ -61,11 +61,15 @@ async function updateGroupTier(groupId: string) {
 app.get("/api/feed", async (c) => {
   const minTier = c.req.query("minTier");
   const messages = await db.query.messages.findMany({
-    where: (m, { and, eq, ne }) =>
-      and(
-        eq(m.status, "active"),
-        minTier ? ne(m.targetGroupId, null) : undefined
-      ),
+    where: (m, { and, eq, gte, ne }) => {
+      const conditions = [eq(m.status, "active")];
+      // Tier filter: only show messages where source group's tier is >= requested min
+      if (minTier) {
+        // Filter by group presence — messages always have a group
+        conditions.push(ne(m.groupId, ""));
+      }
+      return and(...conditions);
+    },
     orderBy: (m, { desc }) => [desc(m.createdAt)],
     limit: 50,
     with: {
@@ -73,6 +77,32 @@ app.get("/api/feed", async (c) => {
       targetGroup: true,
     },
   });
+
+  // Post-query tier filter (groups tier is computed, not stored)
+  if (minTier) {
+    const tierOrder = ["fringe", "small", "medium", "large", "huge", "massive"];
+    const minIdx = tierOrder.indexOf(minTier);
+    if (minIdx >= 0) {
+      const filtered = await Promise.all(
+        messages.map(async (msg) => {
+          const memberCount = await db.$count(
+            schema.memberships,
+            eq(schema.memberships.groupId, msg.groupId)
+          );
+          const { tierForMemberCount } = await import("@groupthink/shared");
+          const groupTier = tierForMemberCount(memberCount);
+          const tierIdx = tierOrder.indexOf(groupTier);
+          return { msg, tierIdx };
+        })
+      );
+      return c.json(
+        filtered
+          .filter((f) => f.tierIdx >= minIdx)
+          .map((f) => f.msg)
+      );
+    }
+  }
+
   return c.json(messages);
 });
 
@@ -191,7 +221,7 @@ app.patch("/api/groups/:id/settings", async (c) => {
   });
   if (!group) return c.json({ error: "not found" }, 404);
 
-  const { bio, energy, timezone } = await c.req.json();
+  const { bio, energy, timezone, minInteractionTier } = await c.req.json();
 
   // Energy change requires 72-hour cooldown
   if (energy && energy !== group.energy) {
@@ -212,6 +242,22 @@ app.patch("/api/groups/:id/settings", async (c) => {
     updateData.lastEnergyChangeAt = new Date();
   }
   if (timezone !== undefined) updateData.timezone = timezone;
+  if (minInteractionTier !== undefined) {
+    // Validate: cannot exclude own tier
+    const memberCount = await db.$count(
+      schema.memberships,
+      eq(schema.memberships.groupId, groupId)
+    );
+    const { tierForMemberCount } = await import("@groupthink/shared");
+    const ownTier = tierForMemberCount(memberCount);
+    const tierOrder = ["fringe", "small", "medium", "large", "huge", "massive"];
+    const ownIdx = tierOrder.indexOf(ownTier);
+    const setIdx = tierOrder.indexOf(minInteractionTier);
+    if (setIdx > ownIdx) {
+      return c.json({ error: `cannot set minimum tier higher than your own tier (${ownTier})` }, 400);
+    }
+    updateData.minInteractionTier = minInteractionTier;
+  }
 
   if (Object.keys(updateData).length === 0) {
     return c.json({ error: "no changes provided" }, 400);
@@ -225,6 +271,63 @@ app.patch("/api/groups/:id/settings", async (c) => {
     where: (g, { eq }) => eq(g.id, groupId),
   });
   return c.json(updated);
+});
+
+// ── Block / Unblock Groups ──
+app.post("/api/groups/:id/block", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+  const { targetGroupId } = await c.req.json();
+  if (!targetGroupId) return c.json({ error: "targetGroupId required" }, 400);
+
+  const member = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  if (!member) return c.json({ error: "not a member" }, 403);
+  if (targetGroupId === groupId) return c.json({ error: "cannot block yourself" }, 400);
+
+  const existing = await db.query.groupBlocks.findFirst({
+    where: (b, { and, eq }) =>
+      and(eq(b.blockerGroupId, groupId), eq(b.blockedGroupId, targetGroupId)),
+  });
+  if (existing) return c.json({ error: "already blocked" }, 400);
+
+  await db.insert(schema.groupBlocks).values({
+    blockerGroupId: groupId,
+    blockedGroupId: targetGroupId,
+  });
+
+  return c.json({ ok: true }, 201);
+});
+
+app.post("/api/groups/:id/unblock", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+  const { targetGroupId } = await c.req.json();
+  if (!targetGroupId) return c.json({ error: "targetGroupId required" }, 400);
+
+  const member = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  if (!member) return c.json({ error: "not a member" }, 403);
+
+  const block = await db.query.groupBlocks.findFirst({
+    where: (b, { and, eq }) =>
+      and(eq(b.blockerGroupId, groupId), eq(b.blockedGroupId, targetGroupId)),
+  });
+  if (!block) return c.json({ error: "not blocked" }, 404);
+
+  await db.delete(schema.groupBlocks).where(eq(schema.groupBlocks.id, block.id));
+  return c.json({ ok: true });
+});
+
+app.get("/api/groups/:id/blocks", async (c) => {
+  const groupId = c.req.param("id");
+  const blocks = await db.query.groupBlocks.findMany({
+    where: (b, { eq }) => eq(b.blockerGroupId, groupId),
+    with: { blockedGroup: true },
+  });
+  return c.json(blocks);
 });
 
 app.get("/api/groups/:id/invite-codes", async (c) => {
@@ -415,6 +518,29 @@ app.post("/api/groups/:id/impulses", async (c) => {
       eq(schema.impulses.status, "queued")
     )
   ) + 1;
+
+  // Tier filter: if targeting another group, check minInteractionTier
+  if (input.targetGroupId) {
+    const targetGroup = await db.query.groups.findFirst({
+      where: (g, { eq }) => eq(g.id, input.targetGroupId),
+    });
+    if (targetGroup?.minInteractionTier) {
+      const sourceMemberCount = await db.$count(
+        schema.memberships,
+        eq(schema.memberships.groupId, groupId)
+      );
+      const { tierForMemberCount } = await import("@groupthink/shared");
+      const sourceTier = tierForMemberCount(sourceMemberCount);
+      const tierOrder = ["fringe", "small", "medium", "large", "huge", "massive"];
+      const sourceIdx = tierOrder.indexOf(sourceTier);
+      const minIdx = tierOrder.indexOf(targetGroup.minInteractionTier as string);
+      if (sourceIdx < minIdx) {
+        return c.json({
+          error: `target group requires minimum tier ${targetGroup.minInteractionTier}, your group is ${sourceTier}`,
+        }, 403);
+      }
+    }
+  }
 
   const impulse = await db.insert(schema.impulses).values({
     groupId,
