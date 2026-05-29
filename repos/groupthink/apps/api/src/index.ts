@@ -176,6 +176,57 @@ app.get("/api/groups/:id/members", async (c) => {
   return c.json(members);
 });
 
+// ── Update Group Settings (bio, energy, timezone) ──
+app.patch("/api/groups/:id/settings", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+
+  const membership = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  if (!membership) return c.json({ error: "not a member" }, 403);
+
+  const group = await db.query.groups.findFirst({
+    where: (g, { eq }) => eq(g.id, groupId),
+  });
+  if (!group) return c.json({ error: "not found" }, 404);
+
+  const { bio, energy, timezone } = await c.req.json();
+
+  // Energy change requires 72-hour cooldown
+  if (energy && energy !== group.energy) {
+    const hoursSinceLastChange =
+      (Date.now() - new Date(group.lastEnergyChangeAt).getTime()) / 3600000;
+    if (hoursSinceLastChange < 72) {
+      const hoursRemaining = Math.ceil(72 - hoursSinceLastChange);
+      return c.json({
+        error: `energy cooldown active — change available in ${hoursRemaining} hours`,
+      }, 400);
+    }
+  }
+
+  const updateData: Record<string, any> = {};
+  if (bio !== undefined) updateData.bio = bio;
+  if (energy !== undefined && energy !== group.energy) {
+    updateData.energy = energy;
+    updateData.lastEnergyChangeAt = new Date();
+  }
+  if (timezone !== undefined) updateData.timezone = timezone;
+
+  if (Object.keys(updateData).length === 0) {
+    return c.json({ error: "no changes provided" }, 400);
+  }
+
+  await db.update(schema.groups)
+    .set(updateData)
+    .where(eq(schema.groups.id, groupId));
+
+  const updated = await db.query.groups.findFirst({
+    where: (g, { eq }) => eq(g.id, groupId),
+  });
+  return c.json(updated);
+});
+
 app.get("/api/groups/:id/invite-codes", async (c) => {
   const userId = c.req.header("x-user-id")!;
   const groupId = c.req.param("id");
@@ -250,6 +301,104 @@ app.post("/api/join", async (c) => {
     .where(eq(schema.inviteCodes.id, invite.id));
 
   return c.json({ ok: true, groupId: invite.groupId }, 200);
+});
+
+// ── Leave Group ──
+app.post("/api/groups/:id/leave", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+
+  const membership = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  if (!membership) return c.json({ error: "not a member" }, 404);
+
+  // Cannot leave if you are the only member (would orphan the group)
+  const memberCount = await db.$count(
+    schema.memberships,
+    eq(schema.memberships.groupId, groupId)
+  );
+  if (memberCount <= 1) {
+    return c.json({ error: "cannot leave: you are the only member" }, 400);
+  }
+
+  await db.delete(schema.memberships)
+    .where(eq(schema.memberships.id, membership.id));
+
+  return c.json({ ok: true });
+});
+
+// ── Group Nicknames ──
+app.get("/api/groups/:id/nicknames", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+
+  const member = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  if (!member) return c.json({ error: "not a member" }, 403);
+
+  const nicknames = await db.query.groupNicknames.findMany({
+    where: (n, { eq }) => eq(n.sourceGroupId, groupId),
+    with: { targetGroup: true },
+  });
+  return c.json(nicknames);
+});
+
+app.post("/api/groups/:id/nicknames", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+  const { targetGroupId, nickname } = await c.req.json();
+  if (!targetGroupId || !nickname) {
+    return c.json({ error: "targetGroupId and nickname required" }, 400);
+  }
+
+  const member = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  if (!member) return c.json({ error: "not a member" }, 403);
+
+  // Upsert: replace any existing nickname for this target
+  const existing = await db.query.groupNicknames.findFirst({
+    where: (n, { and, eq }) =>
+      and(eq(n.sourceGroupId, groupId), eq(n.targetGroupId, targetGroupId)),
+  });
+
+  if (existing) {
+    await db.update(schema.groupNicknames)
+      .set({ nickname })
+      .where(eq(schema.groupNicknames.id, existing.id));
+  } else {
+    await db.insert(schema.groupNicknames).values({
+      sourceGroupId: groupId,
+      targetGroupId,
+      nickname,
+    });
+  }
+
+  return c.json({ ok: true });
+});
+
+app.delete("/api/nicknames/:id", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const nicknameId = c.req.param("id");
+
+  const nickname = await db.query.groupNicknames.findFirst({
+    where: (n, { eq }) => eq(n.id, nicknameId),
+  });
+  if (!nickname) return c.json({ error: "not found" }, 404);
+
+  // Verify membership in source group
+  const member = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) =>
+      and(eq(m.userId, userId), eq(m.groupId, nickname.sourceGroupId)),
+  });
+  if (!member) return c.json({ error: "not authorized" }, 403);
+
+  await db.delete(schema.groupNicknames)
+    .where(eq(schema.groupNicknames.id, nicknameId));
+
+  return c.json({ ok: true });
 });
 
 // ── Impulses ──
@@ -346,6 +495,55 @@ app.post("/api/impulses/:id/vote", async (c) => {
   return c.json({ ok: true, voteCount });
 });
 
+// ── Vote Tally (weighted by tenure cohort) ──
+app.get("/api/impulses/:id/tally", async (c) => {
+  const impulseId = c.req.param("id");
+  const impulse = await db.query.impulses.findFirst({
+    where: (i, { eq }) => eq(i.id, impulseId),
+  });
+  if (!impulse) return c.json({ error: "not found" }, 404);
+
+  const votes = await db.query.votes.findMany({
+    where: (v, { eq }) => eq(v.impulseId, impulseId),
+    with: { user: true },
+  });
+
+  // Tenure cohorts: <30d, 30-89d, 90-364d, 365d+
+  const cohorts = [
+    { range: "< 30 days", minDays: 0, maxDays: 29, yesWeight: 0, noWeight: 0, voterCount: 0 },
+    { range: "30–89 days", minDays: 30, maxDays: 89, yesWeight: 0, noWeight: 0, voterCount: 0 },
+    { range: "90–364 days", minDays: 90, maxDays: 364, yesWeight: 0, noWeight: 0, voterCount: 0 },
+    { range: "365+ days", minDays: 365, maxDays: Infinity, yesWeight: 0, noWeight: 0, voterCount: 0 },
+  ];
+
+  let totalYesWeight = 0;
+  let totalNoWeight = 0;
+  let totalVoters = 0;
+
+  for (const v of votes) {
+    const daysSinceJoining = v.user
+      ? Math.floor((Date.now() - new Date(v.user.createdAt).getTime()) / 86400000)
+      : 0;
+    const cohort = cohorts.find(
+      (c) => daysSinceJoining >= c.minDays && daysSinceJoining <= c.maxDays
+    );
+    if (!cohort) continue;
+
+    if (v.vote === "yes") cohort.yesWeight += v.weight;
+    else if (v.vote === "no") cohort.noWeight += v.weight;
+    cohort.voterCount++;
+
+    if (v.vote === "yes") totalYesWeight += v.weight;
+    else if (v.vote === "no") totalNoWeight += v.weight;
+    totalVoters++;
+  }
+
+  return c.json({
+    cohorts,
+    totals: { yesWeight: totalYesWeight, noWeight: totalNoWeight, totalVoters },
+  });
+});
+
 // ── Composer / Drafts ──
 app.post("/api/impulses/:id/draft", async (c) => {
   const body = await c.req.json();
@@ -412,6 +610,73 @@ app.post("/api/messages/:id/revoke", async (c) => {
     .where(eq(schema.messages.id, c.req.param("id")));
 
   return c.json({ ok: true });
+});
+
+// ── Retweet / Endorsement (with global rate limit) ──
+const ENDORSE_RATE_LIMIT = 10;
+const ENDORSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+app.post("/api/messages/:id/endorse", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const messageId = c.req.param("id");
+
+  const message = await db.query.messages.findFirst({
+    where: (m, { and, eq }) => and(eq(m.id, messageId), eq(m.status, "active")),
+  });
+  if (!message) return c.json({ error: "message not found or revoked" }, 404);
+
+  const existing = await db.query.retweets.findFirst({
+    where: (r, { and, eq }) =>
+      and(eq(r.messageId, messageId), eq(r.groupId, message.groupId)),
+  });
+  if (existing) return c.json({ error: "already endorsed" }, 400);
+
+  const rateKey = `rate:endorse:${new Date().toISOString().slice(0, 10)}`;
+  const currentRate = parseInt((await redis.get(rateKey)) || "0", 10);
+  if (currentRate >= ENDORSE_RATE_LIMIT) {
+    return c.json({ error: "global endorsement rate limit reached (max 10/day)" }, 429);
+  }
+
+  await db.insert(schema.retweets).values({
+    messageId,
+    groupId: message.groupId,
+  });
+
+  await redis.incr(rateKey);
+  await redis.expire(rateKey, Math.ceil(ENDORSE_WINDOW_MS / 1000));
+
+  const endorsements = await db.$count(
+    schema.retweets,
+    eq(schema.retweets.messageId, messageId)
+  );
+
+  return c.json({ ok: true, endorsements }, 201);
+});
+
+app.delete("/api/messages/:id/endorse", async (c) => {
+  const messageId = c.req.param("id");
+
+  const message = await db.query.messages.findFirst({
+    where: (m, { eq }) => eq(m.id, messageId),
+  });
+  if (!message) return c.json({ error: "not found" }, 404);
+
+  // Find retweet by the message's group
+  const retweet = await db.query.retweets.findFirst({
+    where: (r, { and, eq }) =>
+      and(eq(r.messageId, messageId), eq(r.groupId, message.groupId)),
+  });
+  if (!retweet) return c.json({ error: "not endorsed" }, 404);
+
+  await db.delete(schema.retweets)
+    .where(eq(schema.retweets.id, retweet.id));
+
+  const endorsements = await db.$count(
+    schema.retweets,
+    eq(schema.retweets.messageId, messageId)
+  );
+
+  return c.json({ ok: true, endorsements });
 });
 
 // ── Search ──
