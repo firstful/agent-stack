@@ -686,7 +686,7 @@ export function registerRoutes(
 
     app.get("/add-profile", async (_request, reply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
-      return reply.send(ADD_PROFILE_HTML)
+      return reply.send(PROFILE_MANAGER_HTML)
     })
 
     app.post<{ Body: ChatCompletionRequest }>("/v1/chat/completions", async (request, reply) => {
@@ -1567,12 +1567,22 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .btn-danger:hover { background: #f85149; }
   .btn-add { font-size: 1.25rem; line-height: 1; padding: 4px 10px; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; }
-  td { padding: 8px 0; border-top: 1px solid #21262d; font-size: 0.9rem; }
+  th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; padding-right: 8px; }
+  td { padding: 8px 8px; border-top: 1px solid #21262d; font-size: 0.9rem; vertical-align: middle; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
+  .badge-green { background: #23863622; color: #3fb950; }
+  .badge-purple { background: #8957e522; color: #d2a8ff; }
   .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
   .provider-label { font-weight: 600; }
   .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .action-cell { white-space: nowrap; }
+  .btn-sm { padding: 4px 10px; font-size: 0.78rem; border: none; border-radius: 4px; cursor: pointer; }
+  .btn-sm-primary { background: #238636; color: #fff; }
+  .btn-sm-primary:hover { background: #2ea043; }
+  .btn-sm-danger { background: #da3633; color: #fff; }
+  .btn-sm-danger:hover { background: #f85149; }
+  .btn-sm-ghost { background: #21262d; color: #c9d1d9; }
+  .btn-sm-ghost:hover { background: #30363d; }
 </style>
 </head>
 <body>
@@ -1619,15 +1629,20 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     <p class="empty">No profiles created. <a href="/add-profile" style="color:#58a6ff;">Add one</a></p>
   </template>
   <table x-show="profilesLoaded && profiles.length > 0">
-    <thead><tr><th>Name</th><th>Execution</th><th>Summarization</th><th>Embedding</th><th>Context</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Execution</th><th>Sum.</th><th>Emb.</th><th>Context</th><th>Actions</th></tr></thead>
     <tbody>
       <template x-for="p in profiles" :key="p.id">
         <tr>
           <td class="provider-label" x-text="p.name"></td>
           <td><span class="badge" x-text="p.execution.provider + '/' + p.execution.model"></span></td>
-          <td><span class="badge" x-text="p.summarization.provider + '/' + p.summarization.model"></span></td>
-          <td><span class="badge" x-text="p.embedding.provider + '/' + p.embedding.model"></span></td>
-          <td x-text="p.contextWindow"></td>
+          <td><span class="badge badge-green" x-text="p.summarization.provider + '/' + p.summarization.model"></span></td>
+          <td><span class="badge badge-purple" x-text="p.embedding.provider + '/' + p.embedding.model"></span></td>
+          <td x-text="Number(p.contextWindow).toLocaleString()"></td>
+          <td class="action-cell">
+            <a :href="'/add-profile?id=' + p.id" class="btn btn-sm btn-sm-primary" style="text-decoration:none;">Edit</a>
+            <button class="btn btn-sm btn-sm-ghost" @click="showProfileToken(p)" title="View token">Token</button>
+            <button class="btn btn-sm btn-sm-danger" @click="deleteProfile(p)">Delete</button>
+          </td>
         </tr>
       </template>
     </tbody>
@@ -1702,22 +1717,49 @@ document.addEventListener("alpine:init", () => {
         this.notify(e.message, "err")
       }
     },
+    showProfileToken(profile) {
+      if (!profile.authToken) {
+        this.notify("No auth token available for this profile", "err")
+        return
+      }
+      navigator.clipboard.writeText(profile.authToken).then(() => {
+        this.notify("Token copied: " + profile.name)
+      }).catch(() => {
+        const ta = document.createElement("textarea")
+        ta.value = profile.authToken
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+        this.notify("Token copied: " + profile.name)
+      })
+    },
+    async deleteProfile(profile) {
+      if (!confirm('Delete profile "' + profile.name + '"? This cannot be undone.')) return
+      try {
+        await this.api("/v1/profiles/" + profile.id, { method: "DELETE" })
+        this.notify("Profile deleted")
+        await this.loadProfiles()
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+    },
   }))
 })
 </script>
 </body>
 </html>`
 
-const ADD_PROFILE_HTML = `<!DOCTYPE html>
-<html lang="en" x-data="profileApp()">
+const PROFILE_MANAGER_HTML = `<!DOCTYPE html>
+<html lang="en" x-data="profileManager()">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>engramic — Add Profile</title>
+<title>engramic — Profile Manager</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 720px; margin: 0 auto; padding: 24px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 860px; margin: 0 auto; padding: 24px; }
   h1 { font-size: 1.5rem; margin-bottom: 4px; color: #f0f6fc; }
   .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 24px; }
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
@@ -1725,47 +1767,214 @@ const ADD_PROFILE_HTML = `<!DOCTYPE html>
   label { display: block; font-size: 0.8rem; color: #8b949e; margin-bottom: 4px; }
   input, select { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem; margin-bottom: 12px; }
   input:focus, select:focus { outline: none; border-color: #58a6ff; }
-  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
+  textarea { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; margin-bottom: 12px; font-family: monospace; resize: vertical; }
+  textarea:focus { outline: none; border-color: #58a6ff; }
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-primary { background: #238636; color: #fff; }
-  .btn-primary:hover { background: #2ea043; }
-  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .btn-primary:hover:not(:disabled) { background: #2ea043; }
+  .btn-danger { background: #da3633; color: #fff; }
+  .btn-danger:hover:not(:disabled) { background: #f85149; }
+  .btn-ghost { background: #21262d; color: #c9d1d9; }
+  .btn-ghost:hover:not(:disabled) { background: #30363d; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .actions-right { justify-content: flex-end; }
+  .actions-between { justify-content: space-between; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
+  .badge-green { background: #23863622; color: #3fb950; }
+  .badge-purple { background: #8957e522; color: #d2a8ff; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .role-section { border: 1px solid #30363d; border-radius: 6px; padding: 12px; margin-bottom: 16px; background: #0d1117; }
+  .role-section h3 { font-size: 0.9rem; color: #f0f6fc; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .role-section h3 .role-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .token-display { display: flex; align-items: center; gap: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; }
+  .token-display code { flex: 1; font-size: 0.8rem; color: #d2a8ff; word-break: break-all; }
+  .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
+  .meta-row { display: flex; gap: 16px; font-size: 0.8rem; color: #8b949e; margin-bottom: 12px; }
+  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .section-header .help { font-size: 0.75rem; color: #8b949e; font-weight: normal; }
+  .loading-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
 <h1>engramic</h1>
-<p class="subtitle">Add Profile</p>
+<p class="subtitle">
+  <span x-text="isEditing ? 'Edit Profile' : 'New Profile'"></span>
+  <span x-show="profileId"> &middot; <code style="color:#8b949e; font-size:0.75rem;" x-text="profileId"></code></span>
+</p>
 
-<div class="card">
-  <h2>New Profile</h2>
-  <label>Name</label>
-  <input x-model="form.name" placeholder="e.g. Default, Fast, Creative">
+<!-- Loading state -->
+<div class="card" x-show="loading">
+  <p class="empty"><span class="loading-spinner"></span> Loading...</p>
+</div>
 
-  <label>Execution Provider</label>
-  <select x-model="form.executionProvider">
-    <template x-for="p in providers" :key="p.label">
-      <option x-text="p.label" :value="p.label"></option>
-    </template>
-  </select>
+<!-- Main form -->
+<div x-show="!loading">
+  <!-- Basic Info -->
+  <div class="card">
+    <h2>Basic Information</h2>
+    <div class="form-grid">
+      <div class="full">
+        <label>Profile Name</label>
+        <input x-model="form.name" placeholder="e.g. Default, Fast, Creative, Research">
+      </div>
+      <div style="margin-right:8px;">
+        <label>Context Window (tokens)</label>
+        <input x-model.number="form.contextWindow" type="number" placeholder="128000">
+      </div>
+      <div style="margin-left:8px;">
+        <label>Tools</label>
+        <input x-model="form.toolsStr" placeholder="e.g. remember, search_memory (comma sep)">
+      </div>
+    </div>
+  </div>
 
-  <label>Execution Model</label>
-  <input x-model="form.executionModel" placeholder="gpt-4o or * for wildcard">
+  <!-- Model Assignments -->
+  <div class="card">
+    <h2>Model Assignments</h2>
+    <p style="color:#8b949e; font-size:0.8rem; margin-bottom:16px;">Each profile assigns a provider + model to each role.</p>
 
-  <label>Context Window</label>
-  <input x-model.number="form.contextWindow" type="number" placeholder="128000">
+    <!-- Execution Role -->
+    <div class="role-section">
+      <h3><span class="role-dot" style="background:#58a6ff;"></span> Execution</h3>
+      <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">The primary chat/completions model. Required.</p>
+      <div class="form-grid">
+        <div style="margin-right:8px;">
+          <label>Provider</label>
+          <select x-model="form.execution.provider">
+            <option value="">Select a provider</option>
+            <template x-for="p in providers" :key="p.label">
+              <option x-text="p.label" :value="p.label"></option>
+            </template>
+          </select>
+        </div>
+        <div style="margin-left:8px;">
+          <label>Model</label>
+          <input x-model="form.execution.model" placeholder="gpt-4o, claude-3, or * for wildcard">
+        </div>
+      </div>
+    </div>
 
-  <div class="actions">
-    <a href="/" class="btn" style="background:#21262d; color:#c9d1d9; text-decoration:none;">Cancel</a>
-    <button class="btn btn-primary" @click="saveProfile()" x-text="saving ? 'Saving...' : 'Save Profile'" :disabled="saving || !form.name || !form.executionProvider"></button>
+    <!-- Summarization Role -->
+    <div class="role-section">
+      <h3><span class="role-dot" style="background:#3fb950;"></span> Summarization</h3>
+      <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">Used for context compression and summarization. Falls back to Execution if not set.</p>
+      <div class="form-grid">
+        <div style="margin-right:8px;">
+          <label>Provider</label>
+          <select x-model="form.summarization.provider">
+            <option value="">Same as Execution</option>
+            <template x-for="p in providers" :key="p.label">
+              <option x-text="p.label" :value="p.label"></option>
+            </template>
+          </select>
+        </div>
+        <div style="margin-left:8px;">
+          <label>Model</label>
+          <input x-model="form.summarization.model" placeholder="Leave blank to use execution model">
+        </div>
+      </div>
+    </div>
+
+    <!-- Embedding Role -->
+    <div class="role-section">
+      <h3><span class="role-dot" style="background:#d2a8ff;"></span> Embedding</h3>
+      <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">Used for semantic search and memory retrieval. Falls back to Execution if not set.</p>
+      <div class="form-grid">
+        <div style="margin-right:8px;">
+          <label>Provider</label>
+          <select x-model="form.embedding.provider">
+            <option value="">Same as Execution</option>
+            <template x-for="p in providers" :key="p.label">
+              <option x-text="p.label" :value="p.label"></option>
+            </template>
+          </select>
+        </div>
+        <div style="margin-left:8px;">
+          <label>Model</label>
+          <input x-model="form.embedding.model" placeholder="Leave blank to use execution model">
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Preferences -->
+    <div class="full">
+      <label>Model Preferences (ordered priority)</label>
+      <input x-model="form.modelPreferencesStr" placeholder="e.g. gpt-4o, gpt-4o-mini, claude-sonnet (comma sep)">
+      <p style="color:#6e7681; font-size:0.75rem; margin-top:-10px; margin-bottom:8px;">Fallback model preference order when the primary is unavailable.</p>
+    </div>
+  </div>
+
+  <!-- Compression Policy -->
+  <div class="card">
+    <h2>Compression Policy</h2>
+    <p style="color:#8b949e; font-size:0.8rem; margin-bottom:16px;">Controls when and how aggressively context is compressed.</p>
+    <div class="form-grid">
+      <div style="margin-right:8px;">
+        <label>Trigger</label>
+        <select x-model="form.compression.trigger">
+          <option value="token_count">Token Count</option>
+          <option value="message_count">Message Count</option>
+          <option value="idle_time">Idle Time</option>
+        </select>
+      </div>
+      <div style="margin-left:8px;">
+        <label>Threshold</label>
+        <input x-model.number="form.compression.threshold" type="number" placeholder="80000">
+      </div>
+      <div style="margin-right:8px;">
+        <label>Compression Rate</label>
+        <select x-model="form.compression.rate">
+          <option value="low">Low (conservative)</option>
+          <option value="medium">Medium (balanced)</option>
+          <option value="high">High (aggressive)</option>
+        </select>
+      </div>
+      <div style="margin-left:8px;">
+        <!-- placeholder for alignment -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Token -->
+  <div class="card" x-show="profile.authToken">
+    <h2>Scoped Auth Token</h2>
+    <div class="token-display">
+      <code x-text="profile.authToken"></code>
+      <button class="btn btn-ghost" @click="copyToken()" title="Copy token" style="padding:4px 10px; font-size:0.8rem;">Copy</button>
+    </div>
+    <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">This token is scoped to this profile. Use it in the Authorization header: <code style="color:#58a6ff;">Bearer &lt;token&gt;</code></p>
+    <div class="actions actions-right">
+      <button class="btn btn-ghost" @click="regenerateToken()" x-text="regenerating ? 'Regenerating...' : 'Regenerate Token'" :disabled="regenerating"></button>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="card">
+    <div class="actions actions-between">
+      <div>
+        <a href="/" class="btn btn-ghost" style="text-decoration:none;">&larr; Back to Dashboard</a>
+      </div>
+      <div>
+        <button x-show="isEditing" class="btn btn-danger" @click="deleteProfile()" x-text="deleting ? 'Deleting...' : 'Delete Profile'" :disabled="deleting" style="margin-right:8px;">Delete</button>
+        <button class="btn btn-primary" @click="saveProfile()" :disabled="saving || !form.name || !form.execution.provider || !form.execution.model">
+          <span x-show="saving"><span class="loading-spinner"></span> </span>
+          <span x-text="saving ? 'Saving...' : (isEditing ? 'Update Profile' : 'Create Profile')"></span>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
+<!-- Toast -->
 <div
   x-show="toast.show"
   x-text="toast.message"
   :class="'toast ' + toast.type"
-  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer"
+  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer; z-index: 1000;"
   @click="toast.show = false"
 ></div>
 
@@ -1776,19 +1985,39 @@ const ADD_PROFILE_HTML = `<!DOCTYPE html>
 
 <script>
 document.addEventListener("alpine:init", () => {
-  Alpine.data("profileApp", () => ({
+  Alpine.data("profileManager", () => ({
     providers: [],
+    profile: {},
+    profileId: null,
+    isEditing: false,
+    loading: true,
     saving: false,
+    deleting: false,
+    regenerating: false,
     toast: { show: false, message: "", type: "ok" },
     form: {
       name: "",
-      executionProvider: "",
-      executionModel: "*",
       contextWindow: 128000,
+      toolsStr: "",
+      execution: { provider: "", model: "" },
+      summarization: { provider: "", model: "" },
+      embedding: { provider: "", model: "" },
+      compression: { trigger: "token_count", threshold: 80000, rate: "medium" },
+      modelPreferencesStr: "",
     },
+
     async init() {
+      // Check if editing — look for ?id= in URL
+      const params = new URLSearchParams(window.location.search)
+      this.profileId = params.get("id")
+      this.isEditing = !!this.profileId
       await this.loadProviders()
+      if (this.isEditing) {
+        await this.loadProfile()
+      }
+      this.loading = false
     },
+
     async api(path, opts = {}) {
       const headers = { "Content-Type": "application/json" }
       const token = localStorage.getItem("engramic_token")
@@ -1800,36 +2029,147 @@ document.addEventListener("alpine:init", () => {
       if (!res.ok) throw new Error(data.error || res.statusText)
       return data
     },
+
     notify(msg, type = "ok") {
       this.toast = { show: true, message: msg, type }
       setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
     },
+
     async loadProviders() {
       try {
         const data = await this.api("/providers")
         this.providers = data.providers || []
-        if (this.providers.length > 0) this.form.executionProvider = this.providers[0].label
+        if (!this.isEditing && this.providers.length > 0) {
+          this.form.execution.provider = this.providers[0].label
+        }
       } catch (e) {
         console.error("Failed to load providers:", e)
       }
     },
+
+    async loadProfile() {
+      try {
+        this.profile = await this.api("/v1/profiles/" + this.profileId)
+        this.form.name = this.profile.name || ""
+        this.form.contextWindow = this.profile.contextWindow || 128000
+        this.form.toolsStr = (this.profile.tools || []).join(", ")
+        this.form.execution = {
+          provider: this.profile.execution?.provider || "",
+          model: this.profile.execution?.model || "",
+        }
+        this.form.summarization = {
+          provider: this.profile.summarization?.provider || "",
+          model: this.profile.summarization?.model || "",
+        }
+        this.form.embedding = {
+          provider: this.profile.embedding?.provider || "",
+          model: this.profile.embedding?.model || "",
+        }
+        this.form.compression = {
+          trigger: this.profile.compression?.trigger || "token_count",
+          threshold: this.profile.compression?.threshold || 80000,
+          rate: this.profile.compression?.rate || "medium",
+        }
+        this.form.modelPreferencesStr = (this.profile.modelPreferences || []).join(", ")
+      } catch (e) {
+        this.notify("Failed to load profile: " + e.message, "err")
+      }
+    },
+
+    buildProfilePayload() {
+      const payload = {
+        name: this.form.name,
+        contextWindow: this.form.contextWindow,
+        execution: this.form.execution,
+        summarization: this.form.summarization.provider
+          ? this.form.summarization
+          : this.form.execution,
+        embedding: this.form.embedding.provider
+          ? this.form.embedding
+          : this.form.execution,
+        compression: this.form.compression,
+        tools: this.form.toolsStr
+          ? this.form.toolsStr.split(/\\s*,\\s*/).filter(Boolean)
+          : [],
+        modelPreferences: this.form.modelPreferencesStr
+          ? this.form.modelPreferencesStr.split(/\\s*,\\s*/).filter(Boolean)
+          : [],
+      }
+      return payload
+    },
+
     async saveProfile() {
       this.saving = true
       try {
-        await this.api("/v1/profiles", {
-          method: "POST",
-          body: JSON.stringify({
-            name: this.form.name,
-            execution: { provider: this.form.executionProvider, model: this.form.executionModel },
-            contextWindow: this.form.contextWindow,
-          }),
-        })
-        this.notify("Profile created")
-        window.location.href = "/"
+        const payload = this.buildProfilePayload()
+        if (this.isEditing) {
+          await this.api("/v1/profiles/" + this.profileId, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          })
+          this.notify("Profile updated")
+        } else {
+          const created = await this.api("/v1/profiles", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          })
+          this.profileId = created.id
+          this.profile = created
+          this.isEditing = true
+          this.notify("Profile created")
+          // Update URL to edit mode without reload
+          window.history.replaceState({}, "", "/add-profile?id=" + created.id)
+        }
+        // Refresh profile data after save
+        if (this.isEditing) {
+          await this.loadProfile()
+        }
       } catch (e) {
         this.notify(e.message, "err")
       }
       this.saving = false
+    },
+
+    async deleteProfile() {
+      if (!confirm('Delete profile "' + this.form.name + '"? This action cannot be undone.')) return
+      this.deleting = true
+      try {
+        await this.api("/v1/profiles/" + this.profileId, { method: "DELETE" })
+        this.notify("Profile deleted")
+        window.location.href = "/"
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+      this.deleting = false
+    },
+
+    async regenerateToken() {
+      if (!confirm("Regenerate the auth token for this profile? The old token will stop working.")) return
+      this.regenerating = true
+      try {
+        const data = await this.api("/v1/profiles/" + this.profileId + "/regenerate-token", { method: "POST" })
+        this.profile.authToken = data.authToken
+        this.notify("Token regenerated")
+      } catch (e) {
+        this.notify(e.message, "err")
+      }
+      this.regenerating = false
+    },
+
+    copyToken() {
+      if (!this.profile.authToken) return
+      navigator.clipboard.writeText(this.profile.authToken).then(() => {
+        this.notify("Token copied to clipboard")
+      }).catch(() => {
+        // Fallback
+        const ta = document.createElement("textarea")
+        ta.value = this.profile.authToken
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+        this.notify("Token copied to clipboard")
+      })
     },
   }))
 })
