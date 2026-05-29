@@ -437,6 +437,10 @@ app.get("/api/search", async (c) => {
 // ── Health ──
 app.get("/health", (c) => c.json({ ok: true }));
 
+// ── Impulse Lifecycle Engine ──
+import { startLifecycleEngine } from "./lifecycle";
+startLifecycleEngine(pg, redis as any);
+
 const port = Number(process.env.APP_PORT ?? 3000);
 serve({ fetch: app.fetch, port });
 console.log(`api running on :${port}`);

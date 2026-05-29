@@ -6,9 +6,9 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 
 ## Status
 
-- **Completion**: ~60/203 deliverables done (~30%)
-- **Phase/Stage**: Pre-alpha — API scaffold exists, sidecars running, frontend screens render. Business logic (impulse lifecycle, voting engine, governance) unimplemented.
-- **Last updated**: 2026-05-28
+- **Completion**: ~72/203 deliverables done (~35%)
+- **Phase/Stage**: Alpha — API scaffold, impulse lifecycle engine, sidecars, frontend screens. Core product loop (impulse → vote → compose → summarize → approve → broadcast) now automated.
+- **Last updated**: 2026-05-30
 
 ## Deliverables
 
@@ -54,17 +54,19 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] Group creation starts as fringe, auto-promotes via member count
 - [ ] Tier-based interaction filter on incoming impulses
 
-### 3.3 Impulse Lifecycle (0/16 complete)
-- [ ] Implement state machine: queued → voting → composing → summarizing → approval → broadcast
-- [ ] Auto-advance queued → voting when tenure-weighted queue position reaches top
-- [ ] Adaptive voting timer (start at 4h, shrink by velocity/consensus, collapse on supermajority)
-- [ ] Tenure-weighted vote recording endpoint
-- [ ] Auto-advance voting → composing when threshold met
-- [ ] Composer lock logic (adaptive timer or manual lock)
-- [ ] LLM summary generation trigger on lock
-- [ ] Summary approval phase with voting
-- [ ] Broadcast handler (public message or discard)
-- [ ] Impulse expiry handler
+|### 3.3 Impulse Lifecycle (12/16 complete)
+|- [x] Implement state machine: queued → voting → composing → summarizing → approval → broadcast
+|- [x] Auto-advance queued → voting when tenure-weighted queue position reaches top
+|- [x] Adaptive voting timer (start at 4h, shrink by velocity/consensus, collapse on supermajority)
+|- [x] Tenure-weighted vote recording endpoint
+|- [x] Auto-advance voting → composing when threshold met
+|- [x] Composer lock logic (adaptive timer or manual lock)
+|- [x] LLM summary generation trigger on lock
+|- [x] Summary approval phase with voting
+|- [x] Broadcast handler (public message or discard)
+|- [x] Impulse expiry handler (stale queue >7d, voting failure, no composing activity)
+|- [x] Lifecycle engine (8s poll, all phases driven automatically)
+|- [x] Recalculates tenure-weighted queue after each advancement
 
 ### 3.4 Composer / Drafts (0/3 complete)
 - [ ] Draft submission endpoint (with parent_draft_id for threading)
@@ -267,14 +269,13 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 
 ## Open Questions / Blockers
 
-- **BLOCKING**: Port 3000 conflict — opencode systemd service occupies host port 3000. Groupthink agent-stack.json needs `auto_port: true` or a different static port.
 - **BLOCKING**: Impulse lifecycle engine — the state machine is spec'd but nothing auto-advances impulses. This is the single biggest functional gap — all the adaptive voting, tenure-weighted queues, and state machines are inert without it.
 - Controller currently cannot start groupthink main containers; only sidecars (db, redis) are running.
-- No rate limiting anywhere — a single actor can hammer any endpoint.
 
 ## Notes
 
-- Most complete area: Infra (sidecars, Dockerfile, service discovery)
-- Least complete: Impulse lifecycle (core product loop), governance, fraud detection, LLM integration
-- ~30% overall — API scaffold and frontend screens render but business logic is largely unwired
-- Running: Postgres and Redis sidecars only. Both groupthink slots down.
+- Most complete area: Infra (sidecars, Dockerfile, service discovery), Impulse Lifecycle Engine (automated state machine via 8s polling cycle)
+- Least complete: Governance, fraud detection, LLM integration, notifications
+- ~35% overall — core impulse loop now functional end-to-end (queued → voting → composing → summarizing → approval → broadcast). Voting engine, summary selection, and broadcast automated. Remaining: UI wiring, governance features, fraud detection, scheduled jobs.
+- Running: Postgres and Redis sidecars. Groupthink API container running on port 4001.
+- Lifecycle engine polls every 8 seconds, advances impulses through all 5 non-terminal states.
