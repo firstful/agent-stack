@@ -36,7 +36,7 @@
       },
       {
         "name": "maddy",
-        "image": "docker.io/maddyproject/maddy:latest",
+        "image": "docker.io/foxcpp/maddy:latest",
         "volumes": [
           "/srv/agent-stack/repos/fuse/maddy.conf:/config/maddy.conf:ro",
           "fuse-maddy-data:/data"

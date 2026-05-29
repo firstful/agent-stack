@@ -78,7 +78,7 @@ export function baseServiceName(containerName: string): string | null {
 
 // ── Timeouts ──
 
-export const HEALTH_CHECK_TIMEOUT = 30_000;
+export const HEALTH_CHECK_TIMEOUT = 60_000;
 
 // ── Secrets ──
 

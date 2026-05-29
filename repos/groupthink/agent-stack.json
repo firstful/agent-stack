@@ -4,8 +4,9 @@
   "version": 2,
   "container": {
     "port": 3000,
+    "auto_port": true,
     "env": {
-      "DATABASE_URL": "postgres://groupthink:groupthink@groupthink--db:5432/groupthink",
+      "DATABASE_URL": "postgres://groupthink:***@groupthink--db:5432/groupthink",
       "REDIS_URL": "redis://groupthink--redis:6379",
       "LLM_ENDPOINT": "http://host.containers.internal:8080/v1/chat/completions",
       "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",

@@ -1,1 +1,7 @@
 FROM docker.io/grafana/grafana:latest
+
+# Disable background plugin installs and update checks that delay startup
+ENV GF_PLUGIN_ADMIN_ENABLED=false
+ENV GF_PLUGINS_PLUGIN_ADMIN_ENABLED=false
+ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=
+ENV GF_INSTALL_PLUGINS=""
