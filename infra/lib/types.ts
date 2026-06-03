@@ -62,6 +62,14 @@ export interface LogoConfig {
   url?: string;
 }
 
+/** Per-service rate limiting configuration applied at the slot-proxy. */
+export interface RateLimitConfig {
+  /** Max requests per minute from a single IP. */
+  requestsPerMinute: number;
+  /** How long (ms) to block after exceeding the limit. Default: 600000 (10 min). */
+  blockDurationMs?: number;
+}
+
 /** Container image build configuration. */
 export interface BuildConfig {
   network?: string;
@@ -83,6 +91,8 @@ export interface Service {
   secrets?: string[];
   build?: BuildConfig;
   privileged?: boolean;
+  /** Per-IP rate limiting, enforced by the slot-proxy. */
+  rateLimit?: RateLimitConfig;
   /** Logo configuration — file from repo or absolute URL. */
   logo?: LogoConfig;
   // Internal fields (set by services.ts loader)

@@ -12,6 +12,9 @@
       "COUCHDB_PASSWORD": "IFCSp+...OBYF"
     }
   },
+  "rateLimit": {
+    "requestsPerMinute": 300
+  },
   "expose": {
     "enabled": true,
     "hostname": "obsidian.ffilt.us"

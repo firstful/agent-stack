@@ -34,6 +34,67 @@ try {
   } catch {}
 }
 
+// ── Rate Limiter ───────────────────────────────────────────
+
+const rateLimitBuckets = new Map();
+
+function getClientIP(req) {
+  return req.headers["x-forwarded-for"]?.split(",")[0]?.trim()
+    || req.socket?.remoteAddress
+    || "unknown";
+}
+
+function checkRateLimit(name, svc, req) {
+  const cfg = svc.rateLimit;
+  if (!cfg || !cfg.requestsPerMinute) return null;
+
+  const ip = getClientIP(req);
+  const key = `${name}:${ip}`;
+  const now = Date.now();
+  const windowMs = 60_000;
+  const blockMs = cfg.blockDurationMs || 600_000;
+
+  let entry = rateLimitBuckets.get(key);
+  if (!entry) {
+    entry = { hits: [], blockedUntil: 0 };
+    rateLimitBuckets.set(key, entry);
+  }
+
+  // Check if currently blocked
+  if (entry.blockedUntil > now) {
+    const retryAfter = Math.ceil((entry.blockedUntil - now) / 1000);
+    return { status: 429, retryAfter, message: `Rate limited. Retry after ${retryAfter}s` };
+  }
+
+  // Prune expired hits
+  entry.hits = entry.hits.filter(t => now - t < windowMs);
+
+  // Check limit
+  if (entry.hits.length >= cfg.requestsPerMinute) {
+    entry.blockedUntil = now + blockMs;
+    const retryAfter = Math.ceil(blockMs / 1000);
+    return { status: 429, retryAfter, message: `Rate limited. Retry after ${retryAfter}s` };
+  }
+
+  // Record hit
+  entry.hits.push(now);
+  return null;
+}
+
+// Clean up stale bucket entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitBuckets) {
+    if (entry.blockedUntil > 0 && entry.blockedUntil < now) {
+      entry.blockedUntil = 0;
+      entry.hits = [];
+    }
+    if (entry.blockedUntil === 0 && entry.hits.length === 0) {
+      rateLimitBuckets.delete(key);
+    }
+  }
+}, 300_000);
+
 // ── Routing ────────────────────────────────────────────────
 
 function resolveTarget(url, hostname) {
@@ -644,6 +705,17 @@ function handleRequest(req, res) {
   // Route known services
   const target = resolveTarget(req.url || "/", hostname);
   if (target) {
+    const svc = state[target.name];
+    const rl = svc ? checkRateLimit(target.name, svc, req) : null;
+    if (rl) {
+      res.writeHead(429, {
+        "Content-Type": "application/json",
+        "Retry-After": String(rl.retryAfter),
+        "X-RateLimit-Reset": String(rl.retryAfter),
+      });
+      res.end(JSON.stringify({ error: rl.message }));
+      return;
+    }
     proxyTo(target.path, target.port, "host.containers.internal", req, res);
     return;
   }
