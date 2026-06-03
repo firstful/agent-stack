@@ -35,7 +35,14 @@
   "expose": {
     "enabled": true,
     "hostname": "engramic.ffilt.us",
-    "hostnames": ["*.engramic.ffilt.us"],
+    "hostnames": [
+      "*.engramic.ffilt.us"
+    ],
     "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  },
+  "logo": {
+    "_type": "file",
+    "isRelative": true,
+    "fileName": ".logo.svg"
   }
 }

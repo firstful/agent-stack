@@ -65,11 +65,17 @@ export function getBuildErrors(): {
   }));
 }
 
+/** Remove the build error tracking entry for a service (on successful build). */
 function clearBuildError(name: string): void {
   delete buildErrors[name];
 }
 
-// Allocate a fresh port for a slot, excluding the service's current host_port.
+/**
+ * Allocate a fresh port for a slot, excluding the service's current host_port
+ * and all other services' host_ports, plus any host ports already bound by
+ * running containers.  Scans AUTO_PORT_START..AUTO_PORT_END (default 4000-4999).
+ * @throws if no free port is found in the range
+ */
 function allocateFreshPort(
   service: Service,
   allServices: Service[],
@@ -127,6 +133,7 @@ function isSkipBuild(repoPath: string): boolean {
   }
 }
 
+/** Read the active slot marker (default "a" if absent). */
 function readSlot(name: string): string {
   try {
     return fs.readFileSync(slotMarker(name), "utf-8").trim();
@@ -135,12 +142,14 @@ function readSlot(name: string): string {
   }
 }
 
+/** Write the active slot marker to disk. */
 function writeSlot(name: string, slot: string): void {
   fs.writeFileSync(slotMarker(name), slot);
 }
 
 // ── Container Lifecycle ──
 
+/** Stop and remove a podman container. Errors are silently swallowed. */
 function stopAndRemove(containerName: string): void {
   try {
     if (containerRunning(containerName)) sh(`podman stop ${containerName}`);

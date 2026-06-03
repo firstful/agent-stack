@@ -230,6 +230,7 @@ startWorker();
 
 // ── Service CRUD ──
 
+/** List all services with basic status info (name, port, running, exposed). */
 function listServices(): any[] {
   const desired = loadDesired();
   const runtime = loadRuntimeState();
@@ -245,11 +246,13 @@ function listServices(): any[] {
   }));
 }
 
+/** Get the runtime state of a single service by name, or null if not found. */
 function getServiceStatus(name: string): any {
   const runtime = loadRuntimeState();
   return runtime[name] || null;
 }
 
+/** Find the filesystem path to a service's config file (repo or desired). */
 function serviceFilePath(name: string): string | null {
   const repoPath = path.join(REPOS_DIR, name, "agent-stack.json");
   if (fs.existsSync(repoPath)) return repoPath;
@@ -258,6 +261,10 @@ function serviceFilePath(name: string): string | null {
   return null;
 }
 
+/**
+ * Create a new service by writing an agent-stack.json into the repo directory.
+ * Required: name, repo. Optional: port, host_port, auto_port, env, volumes, expose.
+ */
 function createService(args: any): string {
   const {
     name,
@@ -292,6 +299,10 @@ function createService(args: any): string {
   return `Created service ${name}`;
 }
 
+/**
+ * Update an existing service's agent-stack.json fields.  Merges the new
+ * values into the existing config.  Fields not provided are preserved.
+ */
 function updateService(args: any): string {
   const filepath = serviceFilePath(args.name);
   if (!filepath) throw new Error(`Service ${args.name} not found`);
@@ -318,6 +329,7 @@ function updateService(args: any): string {
   return `Updated service ${args.name}`;
 }
 
+/** Delete a service by removing its config file.  The controller will GC the containers. */
 function deleteService(name: string): string {
   const filepath = serviceFilePath(name);
   if (!filepath) throw new Error(`Service ${name} not found`);
@@ -427,6 +439,7 @@ function getLogAnalytics(args: any): Record<string, string> {
 
 // ── Service Lifecycle ──
 
+/** Start a stopped container by name. */
 function startService(name: string): string {
   try {
     sh(`podman start ${name}`);
@@ -437,6 +450,7 @@ function startService(name: string): string {
   }
 }
 
+/** Stop a running container by name. */
 function stopService(name: string): string {
   try {
     sh(`podman stop ${name}`);
@@ -447,6 +461,7 @@ function stopService(name: string): string {
   }
 }
 
+/** Restart a container by name. */
 function restartService(name: string): string {
   try {
     sh(`podman restart ${name}`);
@@ -457,6 +472,10 @@ function restartService(name: string): string {
   }
 }
 
+/**
+ * Rebuild a service container by deleting its hash marker (forcing
+ * a rebuild on next reconcile) and removing the running container.
+ */
 function rebuildService(name: string): string {
   try {
     const marker = `/tmp/stack.${name}.hash`;
@@ -469,6 +488,10 @@ function rebuildService(name: string): string {
   }
 }
 
+/**
+ * Trigger a reconciliation cycle by posting a message to the worker thread.
+ * Returns immediately — the worker processes asynchronously.
+ */
 function reconcile(): string {
   (worker as Worker).postMessage("reconcile");
   return "Reconciliation triggered";
@@ -872,6 +895,42 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
         2
       )
     );
+    return;
+  }
+
+  // ── Logo endpoint ──
+  const logoMatch = req.url?.match(/^\/logo\/([a-z][a-z0-9_-]*)$/i);
+  if (logoMatch) {
+    const name = logoMatch[1];
+    const desired = loadDesired();
+    const svc = desired.find((s) => s.name === name);
+    let svg: string | null = null;
+
+    // Strategy 1: logo._type === "file" — read from service repo
+    if (svc?.logo?._type === "file" && svc.repo && svc.logo.fileName) {
+      const filePath = svc.logo.isRelative !== false
+        ? path.join(svc.repo, svc.logo.fileName)
+        : svc.logo.fileName;
+      try {
+        svg = fs.readFileSync(filePath, "utf-8");
+      } catch { /* fall through */ }
+    }
+
+    // Strategy 2: fall back to logos/<name>.svg on disk
+    if (!svg) {
+      const logoPath = path.join(__dirname, "..", "logos", `${name}.svg`);
+      try {
+        svg = fs.readFileSync(logoPath, "utf-8");
+      } catch { /* 404 */ }
+    }
+
+    if (svg) {
+      res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" });
+      res.end(svg);
+    } else {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Logo not found for "${name}"` }));
+    }
     return;
   }
 

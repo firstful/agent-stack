@@ -9,12 +9,17 @@ import {
 } from "./podman";
 import { CONTAINER_LABEL, NETWORK_NAME, sidecarContainerName } from "./config";
 
+/** Execute a shell command with inherited stdio.  Local copy used for sidecar-specific ops. */
 export function sh(cmd: string): Buffer {
   return execSync(cmd, { stdio: "inherit" }) as unknown as Buffer;
 }
 
 // ── Image Management ──
 
+/**
+ * Check whether a podman image exists locally.
+ * Returns true if the image is found, false otherwise (no error thrown).
+ */
 export function imageExists(image: string): boolean {
   try {
     execSync(`podman image exists ${image}`, { stdio: "ignore" });

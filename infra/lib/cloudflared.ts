@@ -17,6 +17,10 @@ function fmtHostname(h: string): string {
   return /[*?\[\]{}!|&]/.test(h) ? `"${h}"` : h;
 }
 
+/**
+ * Read the current runtime state from runtime/services.json.
+ * Returns an empty object on any read error (e.g. file missing during startup).
+ */
 function readRuntime(): Record<string, any> {
   try {
     return JSON.parse(fs.readFileSync(RUNTIME_FILE, "utf-8"));
@@ -115,6 +119,10 @@ ${[...ingressLines, { service: "http_status:404" }]
     : "";
   if (prev !== yaml) {
     fs.writeFileSync(CLOUDFLARED_CONFIG, yaml);
+    // Cooldown gate: prevent restart storms by requiring at least RESTART_COOLDOWN
+    // (30s) between tunnel restarts.  When many services reconcile at once, only
+    // the first config change triggers an immediate restart; subsequent changes
+    // within the window log a deferred message instead.
     const now = Date.now();
     if (now - lastRestart > RESTART_COOLDOWN) {
       lastRestart = now;

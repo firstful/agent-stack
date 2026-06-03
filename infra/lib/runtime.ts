@@ -10,16 +10,12 @@ import {
   sidecarContainerName,
 } from "./config";
 
-/**
- * Runtime state persistence for the agent-stack infrastructure.
- *
- * Writes the current service state (container slots, ports, sidecars,
- * systemd status) to runtime/services.json, which the controller's
- * /api/status and /api/services endpoints consume.
- */
+// ── Helpers ──
 
 /**
  * Read the slot marker file for a service, defaulting to "a" if absent.
+ * @param name - Service name
+ * @returns "a" or "b", depending on which slot marker says is active
  */
 function readSlot(name: string): string {
   try {
@@ -28,6 +24,8 @@ function readSlot(name: string): string {
     return "a";
   }
 }
+
+// ── State Persistence ──
 
 /**
  * Persist the current state of all services to runtime/services.json.
@@ -38,7 +36,7 @@ export function writeRuntimeState(services: Service[]): void {
   const state: Record<string, any> = {};
   for (const s of services) {
     const isContainer = !!s.container;
-    const base = { file: s._file, hash: s._hash, name: s.name, repo: s.repo || null };
+    const base = { file: s._file, hash: s._hash, name: s.name, repo: s.repo || null, logo: s.logo || null };
 
     if (isContainer) {
       const slotA = slotContainerName(s.name, "a");

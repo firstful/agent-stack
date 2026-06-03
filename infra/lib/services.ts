@@ -142,6 +142,10 @@ function isIgnored(relativePath: string, patterns: RegExp[], negations: RegExp[]
 /**
  * Load .stackignore from a repo directory and return parsed patterns,
  * or null if no .stackignore exists.
+ *
+ * The .stackignore file uses gitignore-style glob patterns to exclude
+ * files from the content hash, so trivial changes (docs, config metadata)
+ * don't trigger container rebuilds.
  */
 function loadStackignore(repoPath: string): { patterns: RegExp[]; negations: RegExp[] } | null {
   const ignorePath = path.join(repoPath, ".stackignore");
@@ -155,6 +159,11 @@ function loadStackignore(repoPath: string): { patterns: RegExp[]; negations: Reg
 
 // ── Secrets ──
 
+/**
+ * Discover the vault service URL from runtime state or fallback.
+ * Reads runtime/services.json to find the vault port, then checks the
+ * VAULT_URL env var.  Falls back to localhost:4000 if neither is available.
+ */
 function discoverVaultUrl(): string {
   try {
     const raw = fs.readFileSync(RUNTIME_FILE, "utf-8");

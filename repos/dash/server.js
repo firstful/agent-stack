@@ -56,41 +56,57 @@ function mcpParse(response) {
   catch { return text; }
 }
 
-const LOGO_COLORS = {
-  opencode: "#8b5cf6",
-  "kilocode-web": "#3b82f6",
-  dash: "#22c55e",
-  appflowy: "#14b8a6",
-  cockpit: "#f97316",
-  "free-llm-router": "#a855f7",
-  "marp-editor": "#ec4899",
-  "no-service": "#64748b",
-  openchamber: "#06b6d4",
-  "personal-blog": "#eab308",
-  techdeck: "#0ea5e9",
-};
+// Deterministic colour palette — maps any service name to a stable colour.
+const PALETTE = [
+  "#3b82f6", "#22c55e", "#f97316", "#a855f7", "#ec4899",
+  "#14b8a6", "#eab308", "#0ea5e9", "#f43f5e", "#8b5cf6",
+  "#06b6d4", "#84cc16", "#d946ef", "#f59e0b", "#6366f1",
+  "#10b981", "#ef4444", "#64748b",
+];
 
-const LOGO_ICONS = {
-  opencode: '<path d="M10 22l6-6-6-6" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22h4" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>',
-  "kilocode-web": '<path d="M12 10l4 2-4 2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 10l4 2-4 2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-  dash: '<rect x="5" y="5" width="9" height="9" rx="1.5" stroke="white" stroke-width="1.8" fill="none"/><rect x="18" y="5" width="9" height="9" rx="1.5" stroke="white" stroke-width="1.8" fill="none"/><rect x="5" y="18" width="9" height="9" rx="1.5" stroke="white" stroke-width="1.8" fill="none"/><rect x="18" y="18" width="9" height="9" rx="1.5" stroke="white" stroke-width="1.8" fill="none"/>',
-  appflowy: '<path d="M10 24V8l12 16V8" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-  cockpit: '<circle cx="16" cy="16" r="10" stroke="white" stroke-width="1.8" fill="none"/><path d="M8 16h16" stroke="white" stroke-width="1.8"/><path d="M16 8v16" stroke="white" stroke-width="1.8"/><circle cx="16" cy="16" r="3" fill="white"/>',
-  "free-llm-router": '<circle cx="16" cy="8" r="2.5" fill="white"/><circle cx="8" cy="22" r="2.5" fill="white"/><circle cx="24" cy="22" r="2.5" fill="white"/><path d="M16 10.5l-6 9" stroke="white" stroke-width="1.5"/><path d="M16 10.5l6 9" stroke="white" stroke-width="1.5"/>',
-  "marp-editor": '<rect x="5" y="6" width="22" height="18" rx="2" stroke="white" stroke-width="1.8" fill="none"/><path d="M5 14h22" stroke="white" stroke-width="1.8"/><circle cx="9" cy="10" r="1" fill="white"/><circle cx="13" cy="10" r="1" fill="white"/><circle cx="17" cy="10" r="1" fill="white"/>',
-  "no-service": '<circle cx="16" cy="16" r="9" stroke="white" stroke-width="1.8" fill="none"/><path d="M8 8l16 16" stroke="white" stroke-width="1.8"/>',
-  openchamber: '<path d="M6 10c0-2.2 1.8-4 4-4h12c2.2 0 4 1.8 4 4v6c0 2.2-1.8 4-4 4h-4l-5 4v-4h-3c-2.2 0-4-1.8-4-4z" stroke="white" stroke-width="1.8" fill="none"/>',
-  "personal-blog": '<path d="M8 22V6l8 5 8-5v16" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-  techdeck: '<path d="M6 10h20" stroke="white" stroke-width="2.2" stroke-linecap="round"/><path d="M6 16h14" stroke="white" stroke-width="2.2" stroke-linecap="round"/><path d="M6 22h8" stroke="white" stroke-width="2.2" stroke-linecap="round"/>',
-};
-
-function getLogoSvg(name) {
-  const color = LOGO_COLORS[name] || "#334155";
-  const icon = LOGO_ICONS[name];
-  if (icon) {
-    return `<svg class="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${color}"/>${icon}</svg>`;
+function colorForName(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash |= 0; // force 32-bit int
   }
-  return `<svg class="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${color}"/><text x="16" y="21" text-anchor="middle" fill="white" font-family="monospace" font-size="11" font-weight="bold">&lt;/&gt;</text></svg>`;
+  return PALETTE[Math.abs(hash) % PALETTE.length];
+}
+
+function iconForType(name) {
+  // Simple distinction: container-like names get a box, system services get a cog
+  if (/^(cockpit|systemd|journal|nginx|postgres|redis)/i.test(name)) return "cog";
+  if (/^(dash|appflowy|blog|wiki)/i.test(name)) return "app";
+  return "box";
+}
+
+function getLogoSvg(name, logoConfig) {
+  const color = colorForName(name);
+  const type = iconForType(name);
+  let icon;
+  if (type === "cog") {
+    icon = '<circle cx="16" cy="16" r="9" stroke="white" stroke-width="1.8" fill="none"/><path d="M11 16h10M16 11v10" stroke="white" stroke-width="1.8"/><circle cx="16" cy="16" r="3" fill="white"/>';
+  } else if (type === "app") {
+    icon = '<rect x="7" y="5" width="18" height="22" rx="3" stroke="white" stroke-width="1.6" fill="none"/><path d="M7 11h18" stroke="white" stroke-width="1.6"/><circle cx="12" cy="7.5" r="1" fill="white"/><circle cx="15.5" cy="7.5" r="1" fill="white"/>';
+  } else {
+    icon = '<rect x="6" y="6" width="20" height="20" rx="3" stroke="white" stroke-width="1.6" fill="none"/><path d="M10 16l4 3 8-7" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  }
+  const fallbackSvg = `<svg class="logo" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${color}"/>${icon}</svg>`;
+
+  // Resolve logo URL from structured config
+  let imgUrl = null;
+  if (logoConfig) {
+    if (logoConfig._type === "url" && logoConfig.url) {
+      imgUrl = logoConfig.url;
+    } else if (logoConfig._type === "file") {
+      imgUrl = `http://${CTRL_HOST}:${CTRL_PORT}/logo/${name}`;
+    }
+  }
+
+  if (imgUrl) {
+    return `<img class="logo" src="${imgUrl}" alt="${name}" onerror="this.style.display='none';this.insertAdjacentHTML('afterend',\`${fallbackSvg.replace(/`/g, "\\`")}\`)" />`;
+  }
+  return fallbackSvg;
 }
 
 async function fetchAll() {
@@ -185,7 +201,7 @@ function renderCard(svc, status) {
   const url = hostname ? `https://${hostname}` : null;
   const color = STATUS_COLORS[status] || "#94a3b8";
   const hostLabel = hostname && hostname !== "*" ? hostname : null;
-  const logo = getLogoSvg(name);
+  const logo = getLogoSvg(name, svc.logo);
   let sidecarsHtml = "";
   if (svc.sidecars) {
     const entries = Object.entries(svc.sidecars);
@@ -345,7 +361,7 @@ const server = http.createServer(async (req, res) => {
     const enriched = services.map((svc) => ({
       ...svc,
       _status: statusMap[svc.name] || "unknown",
-      _logo: getLogoSvg(svc.name),
+      _logo: getLogoSvg(svc.name, svc.logo),
     }));
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(enriched));

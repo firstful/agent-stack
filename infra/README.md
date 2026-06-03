@@ -3,6 +3,48 @@
 The controller (`controller.ts`) runs the reconciliation loop, HTTP API,
 and Cloudflare Tunnel config generation.
 
+## Architecture Overview
+
+The agent-stack controller manages two types of services:
+
+- **Container services**: Defined by `agent-stack.json` files inside each
+  `repos/<name>/` directory. The controller builds podman images from
+  Dockerfiles, deploys them with blue-green slot swaps, and exposes them
+  via Cloudflare Tunnel.
+- **Systemd services**: Defined by `desired/<name>.json` files. The controller
+  generates systemd unit files and manages their lifecycle via `systemctl`.
+
+On a reconciliation tick (every 5s), the worker thread:
+1. Loads the desired service set from config files
+2. Garbage-collects containers and systemd units no longer in the set
+3. Builds and deploys any changed services using slot-swap for zero downtime
+4. Writes the cloudflared tunnel config for exposed services
+5. Persists runtime state for the HTTP API
+
+## Directory Structure
+
+```
+infra/                   ← Controller source code
+├── controller.ts        ← HTTP server + route dispatch + worker spawner
+├── reconcile-worker.ts  ← Background worker thread (5s tick)
+├── lib/                 ← Modular helper libraries
+│   ├── config.ts        ← Paths, constants, naming helpers
+│   ├── services.ts      ← Desired state loading, hashing, git clone management
+│   ├── reconcile.ts     ← Container build/deploy/slot-swap orchestration
+│   ├── podman.ts        ← Podman CLI wrappers (build, run, inspect, network)
+│   ├── cloudflared.ts   ← Cloudflare Tunnel config generation & restart
+│   ├── runtime.ts       ← Runtime state persistence (services.json)
+│   ├── sidecar.ts       ← Sidecar container lifecycle management
+│   ├── systemd.ts       ← Systemd unit creation/removal/status
+│   ├── routes.ts        ← Declarative REST API route table + OpenAPI spec
+│   ├── perf.ts          ← Performance metrics collection & history
+│   └── types.ts         ← TypeScript interfaces & type definitions
+├── controller.log       ← Log file (auto-rotated on restart)
+├── .sudo-password.txt   ← Sudo password for systemd operations
+├── .password.txt        ← Admin password for /sudo endpoint
+├── package.json
+└── README.md            ← This file
+
 ## Change Detection (Commit-Based)
 
 The controller rebuilds a container when a new git commit touches the service's
@@ -94,3 +136,17 @@ Services can define sidecar containers for infrastructure dependencies
 Sidecar lifecycle is managed via `lib/sidecar.ts`. They are created before
 the primary container, stopped after, and tracked in the runtime state under
 the `sidecars` key.
+
+## Adding a Lib Module
+
+1. Create `lib/<name>.ts` with a clearly named export. Follow the conventions:
+   - `// ── Section Name ──` dividers between logical groups
+   - `/** JSDoc */` above every exported function
+   - Use `import type` for type-only imports
+2. Create `lib/<name>.test.ts` using `node:test` and `node:assert`
+3. Add its path to both `"test"` scripts in `package.json`
+4. Import and wire it into `controller.ts` or `reconcile-worker.ts` as needed
+5. If the module needs path/constant configuration, add defaults to `config.ts`
+
+See `lib/runtime.ts` (82 lines) for a minimal module example, or `lib/sidecar.ts`
+(127 lines) for a medium-complexity module with lifecycle, cleanup, and tests.

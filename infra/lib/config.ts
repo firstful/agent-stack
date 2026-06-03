@@ -38,26 +38,45 @@ export const SYSTEMD_UNIT_PREFIX = "agent-stack-";
 
 // ── Slot Management ──
 
+/**
+ * Path to the hash marker file for a service.  The hash marker stores
+ * the content hash of the last *built* image so the controller can
+ * skip rebuilds when source hasn't changed.
+ */
 export function hashMarker(name: string): string {
   return `/tmp/stack.${name}.hash`;
 }
 
+/**
+ * Path to the commit hash marker file for a service.  Stores the most
+ * recent git commit hash processed, enabling the fast O(1) change
+ * detection check in the reconciliation loop.
+ */
 export function commitHashMarker(name: string): string {
   return `/tmp/stack.${name}.chash`;
 }
 
+/**
+ * Path to the slot marker file, which records which slot ("a" or "b")
+ * is currently active for a service.
+ */
 export function slotMarker(name: string): string {
   return `/tmp/stack.${name}.slot`;
 }
 export const SLOTS = ["a", "b"] as const;
 export type Slot = (typeof SLOTS)[number];
+
+/** Build a slot-specific container name: <base>--a or <base>--b. */
 export function slotContainerName(base: string, slot: string): string {
   return `${base}--${slot}`;
 }
+
+/** Return the opposite slot ("a" ↔ "b"). */
 export function oppositeSlot(slot: string): string {
   return slot === "a" ? "b" : "a";
 }
 
+/** Extract the slot suffix ("a" or "b") from a slot container name, or null. */
 export function slotOf(containerName: string): string | null {
   const m = containerName.match(/--([ab])$/);
   return m ? m[1] : null;
@@ -65,14 +84,17 @@ export function slotOf(containerName: string): string | null {
 
 // ── Container Naming ──
 
+/** Build a sidecar container name: <service>--<sidecar>. */
 export function sidecarContainerName(serviceName: string, sidecarName: string): string {
   return `${serviceName}--${sidecarName}`;
 }
 
+/** Check if a container name belongs to a sidecar (has -- but not --a/--b). */
 export function isSidecar(containerName: string): boolean {
   return containerName.includes("--") && !/--[ab]$/.test(containerName);
 }
 
+/** Derive the base service name from a slot or sidecar container name. */
 export function baseServiceName(containerName: string): string | null {
   const idx = containerName.lastIndexOf("--");
   if (idx === -1) return null;

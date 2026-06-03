@@ -18,5 +18,10 @@
     "hostname": "*.ffilt.us",
     "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf",
     "no_proxy": true
+  },
+  "logo": {
+    "_type": "file",
+    "isRelative": true,
+    "fileName": ".logo.svg"
   }
 }

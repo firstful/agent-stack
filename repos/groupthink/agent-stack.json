@@ -16,7 +16,9 @@
       "OTEL_SERVICE_NAME": "groupthink",
       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production"
     },
-    "volumes": ["/srv/agent-stack/config/groupthink:/config"],
+    "volumes": [
+      "/srv/agent-stack/config/groupthink:/config"
+    ],
     "sidecars": [
       {
         "name": "db",
@@ -27,7 +29,9 @@
           "POSTGRES_PASSWORD": "groupthink",
           "POSTGRES_DB": "groupthink"
         },
-        "volumes": ["groupthink-pgdata:/var/lib/postgresql/data"]
+        "volumes": [
+          "groupthink-pgdata:/var/lib/postgresql/data"
+        ]
       },
       {
         "name": "redis",
@@ -37,7 +41,10 @@
           "groupthink-redis-data:/data",
           "/srv/agent-stack/config/groupthink/redis.conf:/usr/local/etc/redis/redis.conf:ro"
         ],
-        "command": ["redis-server", "/usr/local/etc/redis/redis.conf"]
+        "command": [
+          "redis-server",
+          "/usr/local/etc/redis/redis.conf"
+        ]
       }
     ]
   },
@@ -45,5 +52,10 @@
     "hostname": "groupthink.ffilt.us",
     "tunnel": "ffilt-us",
     "enabled": true
+  },
+  "logo": {
+    "_type": "file",
+    "isRelative": true,
+    "fileName": ".logo.svg"
   }
 }

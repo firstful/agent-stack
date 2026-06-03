@@ -15,7 +15,10 @@ export function sh(cmd: string, _ignore?: boolean): Buffer {
 }
 
 /**
- * Execute a command and capture both stdout and stderr.
+ * Execute a command and capture both stdout and stderr separately.
+ * When the command fails (non-zero exit), stdout is empty and stderr
+ * carries the error output.  Used where we need to inspect error details
+ * rather than letting execSync throw.
  */
 export function shWithStderr(cmd: string): { stdout: string; stderr: string } {
   try {
@@ -42,6 +45,11 @@ export function imageTag(name: string): string {
   return `stack/${name}:latest`;
 }
 
+/**
+ * Return the podman label used to identify stack-managed containers.
+ * All containers created by agent-stack get this label so we can
+ * filter and manage them collectively.
+ */
 export function containerLabel(): string {
   return CONTAINER_LABEL;
 }
@@ -100,6 +108,9 @@ export function getManagedContainers(): string[] {
 
 /**
  * Build a podman image for a service from its repo directory.
+ * Applies build config (network, cache, extra podman args) and labels
+ * the image with stack.commit=<hash> for traceability when available.
+ * Throws on build failure — caller (reconcile.ts) handles backoff.
  */
 export function buildImage(service: Service): void {
   console.log(`[build] ${imageTag(service.name)} from ${service.repo}`);

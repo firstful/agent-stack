@@ -147,8 +147,6 @@ tunnel: ca308a1b-557a-4a18-9350-6eec27465bdf
 ingress:
   - hostname: opencode.ffilt.us
     service: http://127.0.0.1:<proxy-port>/proxy/opencode
-  - hostname: chamber.ffilt.us
-    service: http://127.0.0.1:<proxy-port>/proxy/openchamber
   - hostname: *.ffilt.us
     service: http://127.0.0.1:<proxy-port>/proxy/no-service
   - service: http_status:404

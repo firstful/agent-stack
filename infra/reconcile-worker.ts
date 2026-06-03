@@ -31,6 +31,72 @@ import { writeRuntimeState } from "./lib/runtime";
 import { getManagedContainers, sh } from "./lib/podman";
 import { sidecarContainerName, baseServiceName } from "./lib/config";
 import { parentPort } from "worker_threads";
+import fs from "fs";
+import path from "path";
+
+// ── Git ref watcher ──
+// On Linux, fs.watch() does NOT support recursive=true, so we watch
+// individual files: .git/HEAD (branch switch) + the current branch ref
+// (commit detection).  When HEAD changes we re-resolve and re-watch.
+
+const REPO_DIR = "/srv/agent-stack";
+const GIT_DIR = path.join(REPO_DIR, ".git");
+const HEAD_FILE = path.join(GIT_DIR, "HEAD");
+const HEARTBEAT_MS = 300_000; // 5-minute safety-net interval
+
+let branchRefWatcher: fs.StatWatcher | null = null;
+
+/** Resolve the current branch's ref file path from .git/HEAD */
+function currentBranchRef(): string | null {
+  try {
+    const head = fs.readFileSync(HEAD_FILE, "utf-8").trim();
+    const m = head.match(/^ref:\s*(.+)$/);
+    return m ? path.join(GIT_DIR, m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Set up or update the current branch ref watcher */
+function watchCurrentBranch(): void {
+  if (branchRefWatcher) {
+    branchRefWatcher.stop();
+    branchRefWatcher = null;
+  }
+  const refFile = currentBranchRef();
+  if (!refFile) return;
+  try {
+    // Use watchFile (stat polling) instead of watch (inotify) because
+    // ref files may be owned by a different user (root writing the ref,
+    // controller running as reeds).  Polling interval matches the
+    // heartbeat to avoid unnecessary stat calls.
+    branchRefWatcher = fs.watchFile(refFile, { interval: 5000 }, (curr, prev) => {
+      if (curr.mtimeMs !== prev.mtimeMs) {
+        console.log(`[git-watch] ref changed — reconciling`);
+        reconcile();
+      }
+    });
+    console.log(`[git-watch] watching (poll) ${refFile}`);
+  } catch (e: any) {
+    console.error(`[git-watch] failed to watch ${refFile}: ${e.message}`);
+  }
+}
+
+/** Watch .git/HEAD for branch switches */
+function watchHead(): void {
+  try {
+    fs.watchFile(HEAD_FILE, { interval: 5000 }, (curr, prev) => {
+      if (curr.mtimeMs !== prev.mtimeMs) {
+        console.log(`[git-watch] HEAD changed — re-resolving branch`);
+        watchCurrentBranch(); // re-watch the new branch's ref
+        reconcile();
+      }
+    });
+    console.log(`[git-watch] watching (poll) ${HEAD_FILE}`);
+  } catch (e: any) {
+    console.error(`[git-watch] failed to watch HEAD: ${e.message}`);
+  }
+}
 
 // ── Fatal error handling ──
 
@@ -47,6 +113,11 @@ let reconciling = false;
 
 // ── Message bridge ──
 
+/**
+ * Post a message back to the parent controller thread.
+ * Errors are silently swallowed when the parent has exited
+ * (e.g. during shutdown race conditions).
+ */
 function send(msg: any): void {
   // Post a message back to the parent controller thread.
   // Errors are silently swallowed when the parent has exited.
@@ -191,5 +262,15 @@ parentPort!.on("message", (msg) => {
 
 // ── Schedule ──
 
+// First reconcile: run immediately on startup
 setTimeout(reconcile, 100);
-setInterval(reconcile, 5000);
+
+// Git ref watcher: detect commits (branch ref change) and branch switches
+// (HEAD change).  On Linux we watch individual files since fs.watch does
+// not support recursive mode.
+watchCurrentBranch();
+watchHead();
+
+// Safety-net heartbeat: catch runtime failures (crashed containers,
+// sidecar exits) that aren't triggered by git changes
+setInterval(reconcile, HEARTBEAT_MS);

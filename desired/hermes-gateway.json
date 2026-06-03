@@ -8,5 +8,10 @@
   },
   "expose": {
     "enabled": false
+  },
+  "logo": {
+    "_type": "file",
+    "isRelative": true,
+    "fileName": ".logo.svg"
   }
 }

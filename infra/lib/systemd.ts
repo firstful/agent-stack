@@ -8,10 +8,16 @@ const SUDO_PASSWORD = fs.readFileSync(SUDO_PASSWORD_FILE, "utf-8").trim() + "\n"
 
 // ── Helpers ──
 
+/** Execute a shell command, returning stdout as a string. */
 function sh(cmd: string): string {
   return execSync(cmd, { stdio: "pipe" }).toString();
 }
 
+/**
+ * Run a command via sudo -S (reads password from stdin).  Used for
+ * systemctl operations that require root privileges.  The sudo password
+ * is read from .sudo-password.txt at startup and piped as stdin.
+ */
 function sudoExec(cmd: string, stdin?: string): string {
   // Run a command via sudo -S (reads password from stdin), piping the
   // password stored in .sudo-password.txt.  Used for systemctl operations
@@ -22,10 +28,12 @@ function sudoExec(cmd: string, stdin?: string): string {
   }).toString();
 }
 
+/** Return the full systemd unit name for a service: agent-stack-<name>.service. */
 function unitName(name: string): string {
   return `agent-stack-${name}.service`;
 }
 
+/** Return the full filesystem path for a service's systemd unit file. */
 function unitPath(name: string): string {
   return `/etc/systemd/system/${unitName(name)}`;
 }

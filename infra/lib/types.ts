@@ -51,6 +51,17 @@ export interface ExposeConfig {
   no_proxy?: boolean;
 }
 
+/** Logo configuration — either a file relative to the service repo or an absolute URL. */
+export interface LogoConfig {
+  _type: "file" | "url";
+  /** For _type="file": path relative to the service's repo root. */
+  fileName?: string;
+  /** For _type="file": join fileName with the repo path to resolve. Default true. */
+  isRelative?: boolean;
+  /** For _type="url": absolute URL to the logo image. */
+  url?: string;
+}
+
 /** Container image build configuration. */
 export interface BuildConfig {
   network?: string;
@@ -72,6 +83,8 @@ export interface Service {
   secrets?: string[];
   build?: BuildConfig;
   privileged?: boolean;
+  /** Logo configuration — file from repo or absolute URL. */
+  logo?: LogoConfig;
   // Internal fields (set by services.ts loader)
   _file: string;
   _fromRepo: boolean;

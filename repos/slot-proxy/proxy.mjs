@@ -114,7 +114,6 @@ const LOGO_COLORS = {
   "free-llm-router": "#a855f7",
   "marp-editor": "#ec4899",
   "no-service": "#64748b",
-  openchamber: "#06b6d4",
   "personal-blog": "#eab308",
   techdeck: "#0ea5e9",
 };
@@ -128,7 +127,6 @@ const LOGO_ICONS = {
   "free-llm-router": '<circle cx="16" cy="8" r="2.5" fill="white"/><circle cx="8" cy="22" r="2.5" fill="white"/><circle cx="24" cy="22" r="2.5" fill="white"/><path d="M16 10.5l-6 9" stroke="white" stroke-width="1.5"/><path d="M16 10.5l6 9" stroke="white" stroke-width="1.5"/>',
   "marp-editor": '<rect x="5" y="6" width="22" height="18" rx="2" stroke="white" stroke-width="1.8" fill="none"/><path d="M5 14h22" stroke="white" stroke-width="1.8"/><circle cx="9" cy="10" r="1" fill="white"/><circle cx="13" cy="10" r="1" fill="white"/><circle cx="17" cy="10" r="1" fill="white"/>',
   "no-service": '<circle cx="16" cy="16" r="9" stroke="white" stroke-width="1.8" fill="none"/><path d="M8 8l16 16" stroke="white" stroke-width="1.8"/>',
-  openchamber: '<path d="M6 10c0-2.2 1.8-4 4-4h12c2.2 0 4 1.8 4 4v6c0 2.2-1.8 4-4 4h-4l-5 4v-4h-3c-2.2 0-4-1.8-4-4z" stroke="white" stroke-width="1.8" fill="none"/>',
   "personal-blog": '<path d="M8 22V6l8 5 8-5v16" stroke="white" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
   techdeck: '<path d="M6 10h20" stroke="white" stroke-width="2.2" stroke-linecap="round"/><path d="M6 16h14" stroke="white" stroke-width="2.2" stroke-linecap="round"/><path d="M6 22h8" stroke="white" stroke-width="2.2" stroke-linecap="round"/>',
 };
