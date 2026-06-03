@@ -6,9 +6,12 @@ import { ChatSidebar } from './ChatSidebar'
 import { SlideNavigator } from './SlideNavigator'
 import { EditorControls } from './EditorControls'
 import { ThemePanel } from './ThemePanel'
-import { LoginForm } from './LoginForm'
 import { FileManager } from './FileManager'
+import { TemplateSelector } from './TemplateSelector'
+import { LoginForm } from './LoginForm'
 import { ChangelogModal } from './ChangelogModal'
+import { NotesEditor } from './NotesEditor'
+import { PresenterMode } from './PresenterMode'
 import { authClient } from '../lib/auth-client'
 import { listThemes } from '../lib/api'
 import { getNewEntries } from '../lib/changelog'
@@ -58,6 +61,9 @@ export function Editor() {
       }
       if (e.key === 't' && !e.ctrlKey && !e.metaKey) {
         useStore.getState().toggleThemePanel()
+      }
+      if (e.key === 'p' && !e.ctrlKey && !e.metaKey) {
+        useStore.getState().setPresenterMode(true)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -133,6 +139,7 @@ export function Editor() {
               </div>
               <SlideNavigator />
               <EditorControls />
+              <NotesEditor />
             </div>
             <ChatSidebar />
           </>
@@ -143,12 +150,14 @@ export function Editor() {
             </div>
             <SlideNavigator />
             <EditorControls />
+            <NotesEditor />
           </div>
         )}
       </div>
       <ThemePanel />
       <FileManager />
       {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
+      <PresenterMode />
     </div>
   )
 }

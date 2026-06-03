@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { ChatMessage, LayoutMode, ThemePalette, User } from '../types'
 import { generateId, saveToCookies, loadFromCookies } from './cookies'
 import { renderSlides } from './marp'
+import { parseSpeakerNotes } from './notes'
 
 const DEFAULT_MARKDOWN = `---
 marp: true
@@ -67,10 +68,13 @@ interface AppState {
   isGenerating: boolean
   showThemePanel: boolean
   showFileManager: boolean
+  showTemplateSelector: boolean
   palettes: ThemePalette[]
   showOutline: boolean
   model: 'flash' | 'pro'
   balance: number
+  speakerNotes: string[]
+  presenterMode: boolean
 
   setMarkdown: (md: string) => void
   setCss: (css: string) => void
@@ -81,6 +85,7 @@ interface AppState {
   setIsGenerating: (v: boolean) => void
   toggleThemePanel: () => void
   toggleFileManager: () => void
+  toggleTemplateSelector: () => void
   setPalettes: (p: ThemePalette[]) => void
   setShowOutline: (v: boolean) => void
   setModel: (m: 'flash' | 'pro') => void
@@ -89,6 +94,8 @@ interface AppState {
   initFromCookies: () => void
   saveState: () => void
   loadPresentation: (markdown: string, css: string, theme?: string) => void
+  setPresenterMode: (v: boolean) => void
+  updateSpeakerNote: (slideIndex: number, text: string) => void
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -112,10 +119,13 @@ export const useStore = create<AppState>((set, get) => ({
   isGenerating: false,
   showThemePanel: false,
   showFileManager: false,
+  showTemplateSelector: false,
   palettes: [],
   showOutline: true,
   model: 'flash',
   balance: 0,
+  speakerNotes: [],
+  presenterMode: false,
 
   setMarkdown: (markdown) => {
     set({ markdown })
@@ -146,6 +156,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   toggleFileManager: () => set((s) => ({ showFileManager: !s.showFileManager })),
 
+  toggleTemplateSelector: () => set((s) => ({ showTemplateSelector: !s.showTemplateSelector })),
+
   setPalettes: (palettes) => set({ palettes }),
   setShowOutline: (showOutline) => set({ showOutline }),
   setModel: (model) => set({ model }),
@@ -155,9 +167,11 @@ export const useStore = create<AppState>((set, get) => ({
     const { markdown, css } = get()
     try {
       const result = renderSlides(markdown, css)
+      const notes = parseSpeakerNotes(markdown)
       set({
         slides: result.slides,
         renderedCss: result.css,
+        speakerNotes: notes,
       })
     } catch {
       // render failed, keep previous state
@@ -186,5 +200,25 @@ export const useStore = create<AppState>((set, get) => ({
     set({ markdown, css, theme: theme || 'default', currentSlide: 0 })
     get().reRender()
     get().saveState()
+  },
+
+  setPresenterMode: (presenterMode) => set({ presenterMode }),
+
+  updateSpeakerNote: (slideIndex, text) => {
+    const { markdown } = get()
+    const sections = markdown.split(/\n---+\n/)
+    if (slideIndex < 0 || slideIndex >= sections.length) return
+
+    // Remove any existing notes comment from this section
+    const cleanSection = sections[slideIndex].replace(/<!--\s*notes:\s*[\s\S]*?\s*-->/gi, '').trim()
+
+    // Build new section: notes go at the end before the separator
+    const newSection = text.trim()
+      ? `${cleanSection}\n\n<!-- notes: ${text} -->`
+      : cleanSection
+
+    sections[slideIndex] = newSection
+    const newMarkdown = sections.join('\n---\n')
+    get().setMarkdown(newMarkdown)
   },
 }))

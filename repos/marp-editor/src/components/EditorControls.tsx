@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { ExportButton } from './ExportButton'
 
 export function EditorControls() {
-  const { markdown, setMarkdown, css, setCss, layout, setLayout, toggleThemePanel, toggleFileManager } = useStore()
+  const { markdown, setMarkdown, css, setCss, layout, setLayout, toggleThemePanel, toggleFileManager, toggleTemplateSelector } = useStore()
   const [showRaw, setShowRaw] = useState(false)
   const [editMode, setEditMode] = useState<'markdown' | 'css'>('markdown')
+  const navigate = useNavigate()
 
   if (layout === 'fullscreen') return null
 
@@ -35,11 +37,20 @@ export function EditorControls() {
           </>
         )}
         <div className="flex-1" />
+        <button className="btn-ghost btn text-xs text-green-500 hover:text-green-400" onClick={() => useStore.getState().setPresenterMode(true)} title="Presenter Mode (P)">
+          Present
+        </button>
         <button className="btn-ghost btn text-xs" onClick={toggleFileManager} title="File Manager (V2)">
           Files
         </button>
+        <button className="btn-ghost btn text-xs" onClick={toggleTemplateSelector} title="Template Library">
+          Templates
+        </button>
         <button className="btn-ghost btn text-xs" onClick={toggleThemePanel} title="Theme Panel (V4)">
           Theme
+        </button>
+        <button className="btn-ghost btn text-xs text-purple-400 hover:text-purple-300" onClick={() => navigate('/analytics')} title="Analytics Dashboard">
+          Analytics
         </button>
         <ExportButton />
       </div>

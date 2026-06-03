@@ -1,4 +1,5 @@
 import Marp from '@marp-team/marp-core'
+import { stripNotesFromMarkdown } from './notes'
 
 let marpInstance: Marp | null = null
 
@@ -13,9 +14,13 @@ export function renderSlides(markdown: string, css?: string): {
   html: string
   slides: string[]
   css: string
-} {
+|} {
   const marp = getMarp()
-  const rendered = marp.render(markdown)
+  // Strip speaker-notes HTML comments from the markdown so they don't
+  // appear as visual artifacts in the rendered slide HTML. Notes are
+  // parsed separately by parseSpeakerNotes() in the store's reRender.
+  const cleanMd = stripNotesFromMarkdown(markdown)
+  const rendered = marp.render(cleanMd)
 
   const slideRegex = /<section[^>]*>[\s\S]*?<\/section>/g
   const slides: string[] = []
