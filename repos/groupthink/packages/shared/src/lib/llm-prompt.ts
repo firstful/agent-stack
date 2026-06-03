@@ -11,10 +11,9 @@ const ENERGY_SYSTEM_PROMPTS: Record<GroupEnergy, string> = {
     "Frame the response naturally. Let the tone emerge from the content. Be direct, clear, and human. Do not force a particular energy.",
 };
 
-const DEFAULT_BANNED_WORDS = [
-  "slur_placeholder_1",
-  "slur_placeholder_2",
-];
+// Fallback: used only when no banned words are provided (should not happen
+// in production since the LLM service always fetches the real list from DB).
+const DEFAULT_BANNED_WORDS: string[] = [];
 
 const MODERATION_RULES = [
   "Do not use hate speech, slurs, or personal attacks.",

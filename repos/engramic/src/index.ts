@@ -18,6 +18,8 @@ import { PricingEngine } from "./usage/pricing.js"
 import { MetricsCollector } from "./usage/metrics.js"
 import { registerRoutes } from "./gateway/index.js"
 import { runMigrations } from "./db/migrate.js"
+import { CrossSessionStore, PgCrossSessionStore } from "./memory/cross-session.js"
+import type { ICrossSessionStore } from "./memory/cross-session.js"
 
 const PORT = parseInt(process.env.ENGRA_PORT || "3000", 10)
 const HOST = process.env.ENGRA_HOST || "0.0.0.0"
@@ -67,6 +69,17 @@ async function main() {
   }
 
   const metricsCollector = new MetricsCollector()
+
+  let crossSessionStore: ICrossSessionStore | undefined
+  if (DATABASE_URL) {
+    const pgStore = new PgCrossSessionStore()
+    await pgStore.init()
+    crossSessionStore = pgStore
+  } else {
+    const fileStore = new CrossSessionStore()
+    await fileStore.load()
+    crossSessionStore = fileStore
+  }
 
   const retentionDays = parseInt(process.env.ENGRA_USAGE_RETENTION_DAYS || "90", 10)
   const retentionMs = retentionDays * 24 * 60 * 60 * 1000

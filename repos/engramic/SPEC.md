@@ -8,7 +8,7 @@ Semantic Context Virtualization Middleware — a stateful middleware server that
 
 - **Completion**: ~22/35 deliverables done (core engine complete, UI/polish items pending)
 - **Phase/Stage**: Phase 2 (rich features) complete; Phase 3 (hierarchical memory) partial; Phase 4 (Profile System) in progress
-- **Last updated**: 2026-05-28
+- **Last updated**: 2026-05-29
 
 ## Specification Index
 
@@ -53,15 +53,15 @@ Semantic Context Virtualization Middleware — a stateful middleware server that
 - [ ] Adaptive compression policies
 - [x] Attention budgeting — (`budget_context.ts` exists)
 - [ ] Cross-session persistent memory
-- [ ] Predictive prefetch expansion
+- [x] Predictive prefetch expansion — (`predictive_prefetch.ts`, `prefetch_engine.ts`, 35 unit tests pass)
 - [ ] KV-cache-aware provider routing
 
-### Phase 4 — Profile System (4/6 complete)
+### Phase 4 — Profile System (5/6 complete)
 - [x] Profile types added to types.ts, Account updated
 - [x] Profile CRUD in IUserStore (JSON + Postgres)
 - [x] Profile management endpoints (CRUD routes)
 - [x] Profile-scoped inference (chat completions + models list)
-- [ ] Web UI for profile management — **pending**
+- [x] Web UI for profile management — **done**
 - [ ] Cloudflared tunnel config for profile-scoped URLs — **pending**
 
 ### Active Tools (12/12 implemented)

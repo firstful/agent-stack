@@ -13,12 +13,13 @@ import {
   sh,
 } from "./podman";
 import { ensureSidecars, removeSidecars } from "./sidecar";
-import { ensureServiceClone } from "./services";
+import { ensureServiceClone, repoContentHashForPath } from "./services";
 import type { Service } from "./types";
 import {
   AUTO_PORT_START,
   AUTO_PORT_END,
   hashMarker,
+  commitHashMarker,
   slotMarker,
   slotContainerName,
   oppositeSlot,
@@ -159,30 +160,57 @@ export function ensureContainer(
 ): void {
   const name = service.name;
   const marker = hashMarker(name);
+  const commitMarker = commitHashMarker(name);
 
   // Ensure sidecars are running before the primary container
   ensureSidecars(service, allServices);
 
-  const hashChanged =
-    !fs.existsSync(marker) ||
-    fs.readFileSync(marker, "utf-8") !== service._hash;
+  // ── Stage 1: Commit hash trigger ──
+  // Fast O(1) check: did the git commit for this repo change?
+  const commitHash = service._hash;
+  const commitChanged =
+    !fs.existsSync(commitMarker) ||
+    fs.readFileSync(commitMarker, "utf-8") !== commitHash;
 
-  // Commit-level skip-build flag: defer rebuild when commit message
-  // contains [stack skip-build]. Update marker so next commit without
-  // the flag triggers a rebuild.
-  if (hashChanged && service.repo && isSkipBuild(service.repo)) {
+  // ── Stage 2: Skip-build deferral ──
+  // When the commit message contains [stack skip-build] the agent is
+  // making multiple commits and doesn't want each one to trigger a
+  // rebuild.  We update the commit marker so the next commit (without
+  // the flag) detects the change and evaluates properly.
+  if (commitChanged && service.repo && isSkipBuild(service.repo)) {
     console.log(
       `[skip-build] ${name}: commit flagged with [stack skip-build], deferring rebuild`
     );
-    fs.writeFileSync(marker, service._hash);
+    fs.writeFileSync(commitMarker, commitHash);
     return;
   }
 
-  const backoff = buildBackoffs[name];
-  const needsBuild = !imageExists(name) || hashChanged;
-  let built = false;
+  // ── Stage 3: Content eval (only when commit changed) ──
+  // Compute the .stackignore-filtered content hash and compare against
+  // the last *built* hash.  If only ignored files changed (README, docs,
+  // config metadata) the content hash won't differ and no rebuild occurs.
+  let contentHash: string | null = null;
+  let contentChanged = false;
+  let needsBuild = !imageExists(name);
+
+  if (commitChanged) {
+    contentHash = repoContentHashForPath(service.repo!);
+    contentChanged =
+      !fs.existsSync(marker) ||
+      fs.readFileSync(marker, "utf-8") !== contentHash;
+    fs.writeFileSync(commitMarker, commitHash);
+    if (!contentChanged) {
+      console.log(
+        `[noop] ${name}: commit changed but content unchanged (ignored files)`
+      );
+    }
+    needsBuild = needsBuild || contentChanged;
+  }
 
   // ── Build ─────────────────────────────────────────────────
+  const backoff = buildBackoffs[name];
+  let built = false;
+
   if (needsBuild) {
     if (backoff && cycle < backoff.retryCycle) {
       console.log(
@@ -242,11 +270,13 @@ export function ensureContainer(
     service.container!.host_port = port;
     runContainer(service, allServices, { containerName: slotA, hostPort: port });
     writeSlot(name, "a");
-    fs.writeFileSync(marker, service._hash);
+    // Compute content hash for marker if we didn't need it earlier
+    if (!contentHash) contentHash = repoContentHashForPath(service.repo!);
+    fs.writeFileSync(marker, contentHash);
     return;
   }
 
-  // ── Slot swap (hash changed) ──────────────────────────────
+  // ── Slot swap (content hash changed or image rebuilt) ─────
   if (built && (hasSlotA || hasSlotB || hasOldContainer)) {
     const idleSlot = oppositeSlot(activeSlot);
     const idleName = slotContainerName(name, idleSlot);
@@ -268,7 +298,7 @@ export function ensureContainer(
       // Update service port to point at the new active slot
       service.container!.host_port = idlePort;
       writeSlot(name, idleSlot);
-      fs.writeFileSync(marker, service._hash);
+      fs.writeFileSync(marker, contentHash!);
 
       // Remove old active container
       if (hasOldContainer) {
@@ -339,6 +369,8 @@ export function removeContainer(name: string, sidecarNames?: string[]): void {
   }
   const m = hashMarker(name);
   if (fs.existsSync(m)) fs.unlinkSync(m);
+  const cm = commitHashMarker(name);
+  if (fs.existsSync(cm)) fs.unlinkSync(cm);
   const sm = slotMarker(name);
   if (fs.existsSync(sm)) fs.unlinkSync(sm);
   delete buildBackoffs[name];

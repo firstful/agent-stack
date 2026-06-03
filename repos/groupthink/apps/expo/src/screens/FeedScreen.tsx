@@ -1,6 +1,8 @@
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
+import type { FeedStackParamList } from "../navigation/types";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
@@ -14,7 +16,7 @@ type Post = {
 };
 
 export function FeedScreen() {
-  const nav = useNavigation();
+  const nav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +38,7 @@ export function FeedScreen() {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <TouchableOpacity onPress={() => nav.navigate("GroupDetail" as never, { id: item.group.id })}>
+            <TouchableOpacity onPress={() => nav.navigate("GroupDetail", { id: item.group.id })}>
               <Text style={styles.groupName}>{item.group.name}</Text>
             </TouchableOpacity>
             <Text style={styles.content}>{item.content}</Text>

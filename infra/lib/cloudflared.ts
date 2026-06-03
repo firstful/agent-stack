@@ -8,6 +8,11 @@ import { CLOUDFLARED_CONFIG, RESTART_COOLDOWN, RUNTIME_FILE } from "./config";
 
 let lastRestart = 0;
 
+/**
+ * Format a hostname for YAML output.  Hostnames containing glob characters
+ * (e.g. *.ffilt.us) must be quoted so cloudflared doesn't interpret them
+ * as glob patterns.
+ */
 function fmtHostname(h: string): string {
   return /[*?\[\]{}!|&]/.test(h) ? `"${h}"` : h;
 }
@@ -20,10 +25,19 @@ function readRuntime(): Record<string, any> {
   }
 }
 
+/**
+ * Read runtime/services.json and find the slot-proxy's port, if any.
+ * When the slot-proxy is active, all tunnel traffic routes through it
+ * rather than generating per-service ingress rules.
+ */
 function getProxyPort(runtime: Record<string, any>): number | null {
   return runtime["slot-proxy"]?.port || null;
 }
 
+/**
+ * Resolve the actual port a service is listening on at runtime,
+ * preferring the active slot port over the configured port.
+ */
 function getActualPort(svc: Record<string, any>): number | null {
   if (svc.slots && svc.activeSlot && svc.slots[svc.activeSlot]?.port) {
     return svc.slots[svc.activeSlot].port;
@@ -46,6 +60,11 @@ export function writeCloudflaredConfig(services: Service[]): void {
 
   const tunnel = enabled[0].expose!.tunnel || "agent";
 
+  // Two config modes:
+  //   - Proxy mode: all services ingress through a single wildcard hostname
+  //     pointing at the slot-proxy, which routes by Host header.
+  //   - Direct mode: generate one ingress rule per exposed service with
+  //     its specific hostname and resolved port.
   let yaml: string;
   if (proxyPort) {
     // All services route through slot-proxy by Host header

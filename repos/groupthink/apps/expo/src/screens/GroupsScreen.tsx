@@ -1,13 +1,15 @@
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
+import type { GroupsStackParamList } from "../navigation/types";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
 type Group = { id: string; name: string; bio: string; energy: string };
 
 export function GroupsScreen() {
-  const nav = useNavigation();
+  const nav = useNavigation<NativeStackNavigationProp<GroupsStackParamList>>();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,7 +32,7 @@ export function GroupsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
-            onPress={() => nav.navigate("GroupDetail" as never, { id: item.id })}
+            onPress={() => nav.navigate("GroupDetail", { id: item.id })}
           >
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.bio}>{item.bio}</Text>

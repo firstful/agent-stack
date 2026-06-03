@@ -25,6 +25,8 @@ import {
   hashMarker,
 } from "./lib/config";
 
+// ── Logger ──
+
 function log(level: string, msg: string): void {
   const line = `[${new Date().toISOString()}] [${level}] ${msg}`;
   process.stdout.write(line + "\n");
@@ -59,6 +61,8 @@ console.warn = (...args: any[]) => {
 try { fs.writeFileSync(LOG_FILE, ""); } catch {}
 
 log("INFO", "startup attempted");
+
+// ── State ──
 
 interface Status {
   startTime: string;
@@ -101,6 +105,8 @@ function runTests(): boolean {
   }
 }
 
+// ── Test & Watch ──
+
 function watchInfraDir(): void {
   const infraDir = path.join(__dirname);
   fs.watch(infraDir, { recursive: true }, (eventType, filename) => {
@@ -139,6 +145,8 @@ function shutdown(): void {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
+// ── Auth ──
+
 // Lazy-load passwords so rotation doesn't require restart
 function getAdminPassword(): string {
   return fs.readFileSync(ADMIN_PASSWORD_FILE, "utf-8").trim();
@@ -148,6 +156,8 @@ function getSudoPassword(): string {
 }
 
 watchInfraDir();
+
+// ── Runtime State ──
 
 function loadRuntimeState(): Record<string, any> {
   try {
@@ -169,6 +179,8 @@ function getCachedRuntimeState(): Record<string, any> {
 
 let workerRestartAttempts = 0;
 let worker: Worker | null = null;
+
+// ── Worker Thread ──
 
 function startWorker(): void {
   worker = new Worker(path.join(__dirname, "reconcile-worker.ts"), {
@@ -215,6 +227,8 @@ function startWorker(): void {
 }
 
 startWorker();
+
+// ── Service CRUD ──
 
 function listServices(): any[] {
   const desired = loadDesired();
@@ -311,6 +325,8 @@ function deleteService(name: string): string {
   return `Deleted service ${name}`;
 }
 
+// ── Tool Error Tracking ──
+
 function trackToolError(name: string, args: any, error: Error): void {
   const entry = {
     tool: name,
@@ -322,6 +338,8 @@ function trackToolError(name: string, args: any, error: Error): void {
   if (STATUS.toolErrors.length > 50) STATUS.toolErrors.shift();
   log("ERROR", `[tool] ${name} failed: ${error.message}`);
 }
+
+// ── Logs ──
 
 function getServiceLogs(name: string, lines = 100): string {
   try {
@@ -406,6 +424,8 @@ function getLogAnalytics(args: any): Record<string, string> {
 
   return results;
 }
+
+// ── Service Lifecycle ──
 
 function startService(name: string): string {
   try {
@@ -721,6 +741,8 @@ function handleApiPerfCollect(
   }
 }
 
+// ── Handler Registry ──
+
 const restHandlers: Record<string, RestHandler> = {
   handleApiStatus: handleApiStatus as RestHandler,
   handleApiServicesList: handleApiServicesList as RestHandler,
@@ -739,6 +761,8 @@ const restHandlers: Record<string, RestHandler> = {
   handleApiPerfCollect: handleApiPerfCollect as RestHandler,
   handleApiOpenApi: handleApiOpenApi as RestHandler,
 };
+
+// ── Request Helpers ──
 
 // Validate that all routes have registered handlers
 for (const route of routes) {
@@ -764,7 +788,11 @@ function readBody(req: IncomingMessage, cb: (body: string) => void, onError: (e:
   req.on("error", onError);
 }
 
-// Use readBody helper in request handlers
+// ── Request Dispatcher ──
+
+/**
+ * Parse and validate request body with size limits, then pass to a callback.
+ */
 function withBody(req: IncomingMessage, res: ServerResponse, fn: (body: string) => void): void {
   readBody(req, (body) => {
     try {
@@ -779,6 +807,9 @@ function withBody(req: IncomingMessage, res: ServerResponse, fn: (body: string) 
   });
 }
 
+/**
+ * Main HTTP request handler. Dispatches to ping, sudo, /status, proxy, or REST routes.
+ */
 function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   if (req.url === "/ping") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -901,6 +932,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   res.end();
 }
 
+// ── Server ──
+
 const httpServer = http.createServer(handleRequest);
 
 
@@ -917,6 +950,8 @@ try {
 unixServer.listen(SOCKET_PATH, () => {
   log("INFO", `[mcp] Unix socket listening on ${SOCKET_PATH}`);
 });
+
+// ── Performance Collection ──
 
 // Collect performance snapshot every 5 minutes
 function schedulePerfCollection(): void {

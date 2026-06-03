@@ -1,11 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Nav } from "@/components/nav";
+import { AuthProvider } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Groupthink",
   description:
     "A deliberative social platform where groups interact through structured, democratic communication.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0d1117",
 };
 
 export default function RootLayout({
@@ -16,11 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="app-shell">
-          <Nav />
-          <main className="main-content">{children}</main>
-          <aside className="detail-panel" id="detail-panel" />
-        </div>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

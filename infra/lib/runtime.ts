@@ -11,6 +11,14 @@ import {
 } from "./config";
 
 /**
+ * Runtime state persistence for the agent-stack infrastructure.
+ *
+ * Writes the current service state (container slots, ports, sidecars,
+ * systemd status) to runtime/services.json, which the controller's
+ * /api/status and /api/services endpoints consume.
+ */
+
+/**
  * Read the slot marker file for a service, defaulting to "a" if absent.
  */
 function readSlot(name: string): string {
@@ -64,6 +72,7 @@ export function writeRuntimeState(services: Service[]): void {
         container: s.container || null,
         service: null,
         expose: s.expose || null,
+        hostnames: s.expose?.enabled ? s.expose.hostnames : undefined,
         activeSlot,
         slots,
         sidecars: Object.keys(sidecars).length > 0 ? sidecars : undefined,

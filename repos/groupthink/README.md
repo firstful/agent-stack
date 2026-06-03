@@ -97,6 +97,9 @@ Cloudflare Turnstile is required on sign-up: `TURNSTILE_SITE_KEY`, `TURNSTILE_SE
 | GET | `/api/impulses/:id/summaries` | List summary candidates |
 | GET | `/api/messages/:id` | Message detail |
 | POST | `/api/messages/:id/revoke` | Revoke message |
+| POST | `/api/dms` | Send direct message |
+| GET | `/api/dms` | List DM inbox (conversations) |
+| GET | `/api/dms/:id` | DM conversation thread view |
 | GET | `/api/search` | Search groups and messages |
 
 All API requests (except auth/register) require `x-user-id` header with the user's UUID.

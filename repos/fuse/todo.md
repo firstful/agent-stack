@@ -6,25 +6,21 @@ All-in-one AI-native communication platform unifying email, instant messaging, v
 
 ## Status
 
-- **Completion**: 0/42 deliverables done (spec phase; all items actionable)
+- **Completion**: 5/44 deliverables done (infrastructure only; all application items actionable)
 - **Phase/Stage**: Pre-implementation — specs complete for v1 (SMTP), v1b (Shared Mailboxes), v2 (Federation), architecture docs for v3-v6
-- **Last updated**: 2026-05-28
+- **Last updated**: 2026-05-29
 
 ## Deliverables
 
-### Infrastructure (5/6 complete)
+### Infrastructure (5/8 complete)
 - [x] Controller `agent-stack.json` definition exists
 - [x] Postgres sidecar (db) running
 - [x] Maddy sidecar defined in config
 - [x] MinIO sidecar defined in config
 - [ ] **Controller image pull error** — `maddyproject/maddy:latest` wrong image ref. Fix to `foxcpp/maddy:latest`
 - [x] Agent-stack.json secrets structure defined
-
-### Infrastructure — Pending Items
 - [ ] **Secrets management** — Move `SESSION_SECRET`, `JWT_SECRET` from agent-stack.json env vars into vault, reference via `secrets: [...]`
 - [ ] **OAuth credentials** — Set `GOOGLE_CLIENT_ID`, `GITHUB_CLIENT_ID` etc. in vault or env
-- [ ] **Runtime resource limits** — Controller lacks runtime `podman run` flags (`--memory`, `--cpus`)
-- [ ] **Sidecar health checks** — No mechanism for testing postgres/minio/maddy readiness before fuse starts
 
 ### v1 — SMTP Gateway (0/8 complete)
 - [ ] SMTP server implementation (based on Maddy `foxcpp/maddy`)
@@ -78,7 +74,7 @@ All-in-one AI-native communication platform unifying email, instant messaging, v
 - [ ] Real-time coauthoring (Yjs)
 - [ ] Templates
 
-### DNS & Email Infrastructure (4/4 pending)
+### DNS & Email Infrastructure (0/4 complete)
 - [ ] **MX record** — Point MX for `fuse.ffilt.us` at mail server
 - [ ] **SPF record** — Publish SPF TXT record
 - [ ] **DKIM record** — Publish DKIM public key TXT record
@@ -89,9 +85,13 @@ All-in-one AI-native communication platform unifying email, instant messaging, v
 - [ ] **Monitoring** — Health checks and uptime monitoring for fuse + sidecars
 - [ ] **Log shipping** — Structured log aggregation from container logs
 
-### Open Spec Questions (from UNDERSPECIFIED.md)
-- [ ] **BLOCKING: Cross-org E2EE scope** — Decide whether E2EE across Fuse instances is in v2 scope
-- [ ] **BLOCKING: Device lifecycle RECOVER scope** — Broadcast leave to all groups or per-group?
+## Open Questions / Blockers
+
+- [ ] **BLOCKING**: `maddyproject/maddy:latest` image does not exist; must change to `foxcpp/maddy:latest` in `agent-stack.json` before fuse can deploy
+- [ ] **BLOCKING**: Cross-org E2EE scope — decide whether E2EE across Fuse instances is in v2 scope
+- [ ] **BLOCKING**: Device lifecycle RECOVER scope — broadcast leave to all groups or per-group?
+- [ ] **Runtime resource limits** — Controller lacks runtime `podman run` flags (`--memory`, `--cpus`)
+- [ ] **Sidecar health checks** — No mechanism for testing postgres/minio/maddy readiness before fuse starts
 - [ ] **Mobile strategy** — PWA vs React Native vs Flutter decision
 - [ ] **Data residency** — GDPR compliance for cross-org data
 - [ ] **File storage architecture** — Max attachment size, S3 vs local FS
@@ -104,16 +104,10 @@ All-in-one AI-native communication platform unifying email, instant messaging, v
 - [ ] **Bridges** — Slack, Discord, Teams
 - [ ] **Offline support** — PWA service worker, full offline sync
 
-## Open Questions / Blockers
-
-- **BLOCKING**: `maddyproject/maddy:latest` image does not exist; must change to `foxcpp/maddy:latest` in `agent-stack.json` before fuse can deploy
-- **BLOCKING**: Cross-org E2EE scope decision needed before v2 can be fully spec'd
-- **BLOCKING**: Device lifecycle RECOVER scope (per-group vs broadcast)
-- **Names** — Codename is "Fuse" pending a real product name
-
 ## Notes
 
 - All sidecar containers defined in agent-stack.json format
 - Fuse is currently 100% spec-phase except for sidecar infrastructure
 - Running: Postgres DB sidecar only. Maddy, MinIO, and main fuse containers all down
 - Controller blocks on maddy image pull every reconcile cycle
+- The `maddy--maddy` sidecar crashes on start (code 1) due to maddy.conf configuration issue

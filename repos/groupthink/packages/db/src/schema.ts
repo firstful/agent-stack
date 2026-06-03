@@ -6,7 +6,17 @@ import {
   timestamp,
   boolean,
   jsonb,
+  doublePrecision,
+  customType,
+  index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 // ── Group Blocks ──
 export const groupBlocks = pgTable("group_blocks", {
@@ -29,6 +39,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastLoginAt: timestamp("last_login_at").defaultNow().notNull(),
+  lastActiveAt: timestamp("last_active_at").defaultNow().notNull(),
+  reputation: doublePrecision("reputation").default(1.0).notNull(),
 });
 
 // ── Groups ──
@@ -165,7 +177,13 @@ export const messages = pgTable("messages", {
     .notNull(),
   revokedAt: timestamp("revoked_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  searchVector: tsvector("search_vector").generatedAlwaysAs(
+    sql`to_tsvector('english', "content")`
+  ),
 });
+
+export const messagesSearchIndex = index("idx_messages_search")
+  .using("gin", messages.searchVector);
 
 // ── Retweets (Endorsements) ──
 export const retweets = pgTable("retweets", {
@@ -209,4 +227,246 @@ export const directMessages = pgTable("direct_messages", {
     .notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Banned Words ──
+export const bannedWords = pgTable("banned_words", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  word: text("word").notNull().unique(),
+  addedBy: uuid("added_by")
+    .references(() => users.id)
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Fraud Audit Log ──
+export const fraudAuditLog = pgTable("fraud_audit_log", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  action: text("action").notNull(),
+  userId: uuid("user_id").references(() => users.id),
+  groupId: uuid("group_id").references(() => groups.id),
+  details: jsonb("details"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Message Reports ──
+export const messageReports = pgTable("message_reports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id")
+    .references(() => messages.id)
+    .notNull(),
+  reportedBy: uuid("reported_by")
+    .references(() => users.id)
+    .notNull(),
+  reason: text("reason"),
+  reviewedBy: uuid("reviewed_by").references(() => users.id),
+  reviewAction: text("review_action", {
+    enum: ["dismissed", "actioned"],
+  }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at"),
+});
+
+// ── Shadow Bans ──
+export const shadowBans = pgTable("shadow_bans", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  groupId: uuid("group_id").references(() => groups.id),
+  reason: text("reason"),
+  shadowBannedBy: uuid("shadow_banned_by")
+    .references(() => users.id),
+  liftedBy: uuid("lifted_by").references(() => users.id),
+  liftedAt: timestamp("lifted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
+});
+
+// ── Audit Logs ──
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  action: text("action").notNull(),
+  userId: uuid("user_id").references(() => users.id),
+  groupId: uuid("group_id").references(() => groups.id),
+  targetId: text("target_id"),
+  details: jsonb("details"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Push Tokens ──
+export const pushTokens = pgTable("push_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  token: text("token").notNull(),
+  platform: text("platform", { enum: ["ios", "android", "web"] }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Notifications ──
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  body: text("body"),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Governance: Vote-Kick ──
+export const kickVotes = pgTable("kick_votes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupId: uuid("group_id")
+    .references(() => groups.id)
+    .notNull(),
+  targetUserId: uuid("target_user_id")
+    .references(() => users.id)
+    .notNull(),
+  initiatedBy: uuid("initiated_by")
+    .references(() => users.id)
+    .notNull(),
+  reason: text("reason").default(""),
+  status: text("status", {
+    enum: ["active", "executed", "expired"],
+  })
+    .notNull()
+    .default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const kickVoteRecords = pgTable("kick_vote_records", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  kickVoteId: uuid("kick_vote_id")
+    .references(() => kickVotes.id)
+    .notNull(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  vote: text("vote", { enum: ["yes", "no", "abstain"] }).notNull(),
+  weight: integer("weight").default(1).notNull(),
+  castAt: timestamp("cast_at").defaultNow().notNull(),
+});
+
+// ── Activity Events (for Activity Gate engagement tracking) ──
+export const activityEvents = pgTable("activity_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  groupId: uuid("group_id")
+    .references(() => groups.id)
+    .notNull(),
+  eventType: text("event_type", {
+    enum: ["impulse_created", "draft_submitted", "dm_sent", "invite_used"],
+  }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ── Governance: Group Split ──
+export const splitVotes = pgTable("split_votes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupId: uuid("group_id")
+    .references(() => groups.id)
+    .notNull(),
+  initiatedBy: uuid("initiated_by")
+    .references(() => users.id)
+    .notNull(),
+  newGroupName: text("new_group_name").notNull(),
+  status: text("status", {
+    enum: ["active", "executed", "expired"],
+  })
+    .notNull()
+    .default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const splitSelections = pgTable("split_selections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  splitVoteId: uuid("split_vote_id")
+    .references(() => splitVotes.id)
+    .notNull(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  chooseOriginal: boolean("choose_original").notNull(),
+  castAt: timestamp("cast_at").defaultNow().notNull(),
+});
+
+// ── Governance: Group Merge ──
+export const mergeVotes = pgTable("merge_votes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  initiatedByGroupId: uuid("initiated_by_group_id")
+    .references(() => groups.id)
+    .notNull(),
+  targetGroupId: uuid("target_group_id")
+    .references(() => groups.id)
+    .notNull(),
+  initiatedBy: uuid("initiated_by")
+    .references(() => users.id)
+    .notNull(),
+  status: text("status", {
+    enum: ["active", "approved", "rejected", "expired"],
+  })
+    .notNull()
+    .default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const mergeApprovals = pgTable("merge_approvals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  mergeVoteId: uuid("merge_vote_id")
+    .references(() => mergeVotes.id)
+    .notNull(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  groupId: uuid("group_id")
+    .references(() => groups.id)
+    .notNull(),
+  approved: boolean("approved").notNull(),
+  castAt: timestamp("cast_at").defaultNow().notNull(),
+});
+
+// ── Governance: Sabbatical ──
+export const sabbaticalVotes = pgTable("sabbatical_votes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupId: uuid("group_id")
+    .references(() => groups.id)
+    .notNull(),
+  initiatedBy: uuid("initiated_by")
+    .references(() => users.id)
+    .notNull(),
+  direction: text("direction", { enum: ["enter", "exit"] }).notNull(),
+  durationHours: integer("duration_hours").default(48),
+  status: text("status", {
+    enum: ["active", "executed", "expired"],
+  })
+    .notNull()
+    .default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const sabbaticalVoteRecords = pgTable("sabbatical_vote_records", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sabbaticalVoteId: uuid("sabbatical_vote_id")
+    .references(() => sabbaticalVotes.id)
+    .notNull(),
+  userId: uuid("user_id")
+    .references(() => users.id)
+    .notNull(),
+  vote: text("vote", { enum: ["yes", "no", "abstain"] }).notNull(),
+  weight: integer("weight").default(1).notNull(),
+  castAt: timestamp("cast_at").defaultNow().notNull(),
 });

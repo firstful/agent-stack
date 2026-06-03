@@ -238,22 +238,13 @@ const MONOREPO_ROOT = path.resolve(REPOS_DIR, "..");
 const MONOREPO_GIT = path.join(MONOREPO_ROOT, ".git");
 
 /**
- * Compute a content hash for a service repo, respecting .stackignore.
+ * Compute the git commit hash for a service repo path (fast trigger).
  *
- * When .stackignore exists, uses content-based hashing (respecting ignore
- * patterns) so changes to ignored files don't trigger container rebuilds.
- *
- * When no .stackignore exists, falls back to git commit hash (fast path)
- * when inside a monorepo, or content hash otherwise.
+ * Returns the most recent commit hash affecting this repo path, so the
+ * controller can quickly detect if *anything* changed.  Falls back to
+ * a full content hash when no git history is available.
  */
 export function repoHashForPath(repoPath: string): string {
-  // Check for .stackignore first — content hash with exclusions
-  const ignore = loadStackignore(repoPath);
-  if (ignore) {
-    return hashDir(repoPath, ignore);
-  }
-
-  // No .stackignore: use git commit hash for speed (monorepo only)
   if (fs.existsSync(MONOREPO_GIT)) {
     try {
       const relPath = path.relative(MONOREPO_ROOT, repoPath);
@@ -268,6 +259,20 @@ export function repoHashForPath(repoPath: string): string {
     }
   }
   return hashDir(repoPath);
+}
+
+/**
+ * Compute a .stackignore-aware content hash for a service repo.
+ *
+ * When .stackignore exists, files matching its patterns are excluded
+ * from the hash so trivial changes (docs, config, metadata) don't
+ * trigger container rebuilds.
+ *
+ * When no .stackignore exists, the full directory tree is hashed.
+ */
+export function repoContentHashForPath(repoPath: string): string {
+  const ignore = loadStackignore(repoPath);
+  return hashDir(repoPath, ignore);
 }
 
 // ── Git Cloning ──

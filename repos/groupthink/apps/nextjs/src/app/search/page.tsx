@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { AppShell } from "@/components/AppShell";
+import { SkeletonFeed } from "@/components/SkeletonFeed";
 
 function SearchResults() {
   const searchParams = useSearchParams();
@@ -47,10 +49,12 @@ function SearchResults() {
 
 export default function SearchPage() {
   return (
-    <div className="search-view">
-      <Suspense fallback={<div className="feed-view">Loading...</div>}>
-        <SearchResults />
-      </Suspense>
-    </div>
+    <AppShell>
+      <div className="search-view">
+        <Suspense fallback={<SkeletonFeed />}>
+          <SearchResults />
+        </Suspense>
+      </div>
+    </AppShell>
   );
 }

@@ -19,7 +19,11 @@ interface OpenAIRequest {
   stream_options?: { include_usage: boolean }
   max_tokens?: number
   temperature?: number
+  response_format?: unknown
+  parallel_tool_calls?: boolean
+  tool_choice?: string | { type: "function"; function: { name: string } }
   tools?: unknown[]
+  user?: string
 }
 
 interface OpenAIResponse {
@@ -209,7 +213,11 @@ export class OpenAIProvider implements Provider {
       stream_options: stream ? { include_usage: true } : undefined,
       max_tokens: request.max_tokens,
       temperature: request.temperature,
+      response_format: request.response_format,
+      parallel_tool_calls: request.parallel_tool_calls,
+      tool_choice: request.tool_choice,
       tools: request.tools as Record<string, unknown>[] | undefined,
+      user: request.user as string | undefined,
     }
   }
 }

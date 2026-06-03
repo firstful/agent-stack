@@ -42,6 +42,10 @@ export function hashMarker(name: string): string {
   return `/tmp/stack.${name}.hash`;
 }
 
+export function commitHashMarker(name: string): string {
+  return `/tmp/stack.${name}.chash`;
+}
+
 export function slotMarker(name: string): string {
   return `/tmp/stack.${name}.slot`;
 }

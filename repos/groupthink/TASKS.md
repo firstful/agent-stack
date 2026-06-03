@@ -6,9 +6,9 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 
 ## Status
 
-- **Completion**: ~84/203 deliverables done (~41%)
+- **Completion**: ~88/203 deliverables done (~43%)
 - **Phase/Stage**: Alpha — core impulse loop automated, group management (create, join, leave, settings, nicknames), voting (cast + tenure-weighted tally), endorsements with rate limiting, search, auth scaffold.
-- **Last updated**: 2026-05-30
+- **Last updated**: 2026-05-29
 
 ## Deliverables
 
@@ -91,30 +91,30 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] Group name/bio search
 - [x] Intra-group search endpoint (requires membership)
 
-### 3.8 Direct Messages (0/3 complete)
-- [ ] Send DM endpoint
-- [ ] List DMs for a user (inbox)
-- [ ] Thread view for DM conversation
+### 3.8 Direct Messages (3/3 complete)
+- [x] Send DM endpoint (`POST /api/dms` — validates group membership, sender ≠ recipient)
+- [x] List DMs for a user (inbox) (`GET /api/dms` — deduplicated conversations, latest first)
+- [x] Thread view for DM conversation (`GET /api/dms/:id` — all messages between same user pair in same group)
 
-### 3.9 Governance (0/4 complete)
-- [ ] Vote-kick endpoint (initiate, vote, execute)
-- [ ] Group split endpoint (vote, member-side selection)
-- [ ] Group merge endpoint (initiate, mutual vote)
-- [ ] Sabbatical vote endpoint
+### 3.9 Governance (4/4 complete)
+- [x] Vote-kick endpoint (initiate: `POST /api/groups/:id/kick`, vote: `POST /api/kick-votes/:id/vote`, execute: automatic on >50% majority, view: `GET /api/kick-votes/:id`)
+- [x] Group split endpoint (initiate: `POST /api/groups/:id/split`, member-side selection: `POST /api/split-votes/:id/select`, execute: automatic when all members have chosen, view: `GET /api/split-votes/:id`)
+- [x] Group merge endpoint (initiate: `POST /api/groups/:id/merge`, mutual vote: `POST /api/merge-votes/:id/approve`, execute: automatic when both groups approve, view: `GET /api/merge-votes/:id`)
+- [x] Sabbatical vote endpoint (initiate enter/exit: `POST /api/groups/:id/sabbatical`, vote: `POST /api/sabbatical-votes/:id/vote`, execute: automatic on >50% majority, view: `GET /api/sabbatical-votes/:id`)
 
-### 3.10 Fraud Detection (0/7 complete)
-- [ ] Cohort analysis — flag accounts from same creation window
-- [ ] Cross-group observation — identical join/vote patterns
+### 3.10 Fraud Detection (2/7 complete)
+- [x] Cohort analysis — flag accounts from same creation window
+- [x] Cross-group observation — identical join/vote patterns
 - [ ] Activity gate — voting weight modifier based on non-voting engagement
 - [ ] Vouch system — accelerate weight for vouched accounts
 - [ ] Behavioral heuristics — same-vote blocs, timing
 - [ ] Shadow-ban endpoint
 - [ ] Audit log for fraud flags
 
-### 3.11 Content Moderation (0/3 complete)
-- [ ] Banned words check on broadcast
-- [ ] LLM system prompt injection with content rules
-- [ ] Report endpoint for public messages
+### 3.11 Content Moderation (3/3 complete)
+- [x] Banned words check on broadcast
+- [x] LLM system prompt injection with content rules
+- [x] Report endpoint for public messages
 
 ### 3.12 Scheduled Jobs (0/4 complete)
 - [ ] Reputation decay job (daily)
@@ -229,9 +229,9 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Timeout handling
 - [ ] Logging & monitoring
 
-### 7. Security & Anti-abuse (0/8 complete)
-- [ ] Turnstile on sign-up
-- [ ] Rate limiting middleware (per-user, per-IP, per-group)
+### 7. Security & Anti-abuse (2/8 complete)
+- [x] Turnstile on sign-up
+- [x] Rate limiting middleware (per-user, per-IP, per-group)
 - [ ] Cohort analysis (batch + real-time)
 - [ ] Activity gate calculation
 - [ ] Vouch system UI + backend

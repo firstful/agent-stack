@@ -22,6 +22,9 @@ WORKDIR /app
 
 RUN npm install -g pnpm@9
 
+# Install netcat for database reachability checks in entrypoint.sh
+RUN apk add --no-cache netcat-openbsd
+
 COPY --from=builder /app /app
 
 WORKDIR /app/apps/api
@@ -29,4 +32,5 @@ ENV NODE_ENV=production
 ENV APP_PORT=3000
 EXPOSE 3000
 
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["pnpm", "exec", "tsx", "src/index.ts"]

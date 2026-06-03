@@ -27,7 +27,7 @@ export function shWithStderr(cmd: string): { stdout: string; stderr: string } {
 }
 
 /**
- * Execute a command and capture stdout only.
+ * Capture stdout of a command, trimmed.
  */
 export function shCapture(cmd: string): string {
   return execSync(cmd).toString().trim();

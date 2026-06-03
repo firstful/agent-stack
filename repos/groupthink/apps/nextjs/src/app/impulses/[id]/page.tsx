@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { AppShell } from "@/components/AppShell";
+import { SkeletonDetail } from "@/components/SkeletonDetail";
 
 type Vote = {
   id: string;
@@ -109,7 +111,13 @@ export default function ImpulseDetailPage() {
     await api.vote({ impulseId: id, vote: "yes" });
   };
 
-  if (!impulse) return <div className="feed-view">Loading...</div>;
+  if (!impulse) {
+    return (
+      <AppShell>
+        <SkeletonDetail />
+      </AppShell>
+    );
+  }
 
   const isVoting = impulse.status === "voting";
   const isComposing = impulse.status === "composing";
@@ -120,6 +128,7 @@ export default function ImpulseDetailPage() {
   const noWeight = votes.filter((v) => v.vote === "no").reduce((s, v) => s + v.weight, 0);
 
   return (
+    <AppShell>
     <div className="feed-view">
       <Link href={`/groups/${impulse.groupId}`} className="back-link">
         ← Back to group
@@ -266,5 +275,6 @@ export default function ImpulseDetailPage() {
         </div>
       )}
     </div>
+    </AppShell>
   );
 }

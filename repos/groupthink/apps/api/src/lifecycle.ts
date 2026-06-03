@@ -1,8 +1,10 @@
-import { eq, and, desc, asc, sql, lt, inArray, or, not } from "drizzle-orm";
+import { eq, and, desc, asc, sql, lt, inArray, or, not, ilike } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import type postgres from "postgres";
 import type { RedisClientType } from "redis";
 import * as schema from "@groupthink/db";
+import { logger } from "./logger";
+import { runLLMSummarization } from "./llm-service";
 import {
   canTransition,
   adaptiveRemaining,
@@ -12,14 +14,159 @@ import {
 
 const POLL_INTERVAL = 8_000; // 8 seconds
 const MAX_ACTIVE_PER_GROUP = 1;
-const VOTE_ADVANCE_RATIO = 0.5;
-const VOTE_QUORUM_RATIO = 0.3;
+export const VOTE_ADVANCE_RATIO = 0.5;
+export const VOTE_QUORUM_RATIO = 0.3;
 
+const lifecyclog = logger.child({ component: "lifecycle" });
 function log(msg: string) {
-  console.log(`[lifecycle] ${msg}`);
+  lifecyclog.info(msg);
 }
 function error(msg: string, err?: unknown) {
-  console.error(`[lifecycle] ${msg}`, err ?? "");
+  lifecyclog.error(msg, { err: err instanceof Error ? err.message : String(err ?? "") });
+}
+
+// ── Content Moderation ──
+
+/**
+ * Fetch all banned words from the database and check if the given content
+ * contains any of them (case-insensitive word-boundary match).
+ * Returns the list of banned words that were matched, or empty array if clean.
+ */
+async function checkBannedWords(
+  content: string,
+  db: ReturnType<typeof drizzle<typeof schema>>
+): Promise<string[]> {
+  const allBanned = await db
+    .select({ word: schema.bannedWords.word })
+    .from(schema.bannedWords);
+
+  const matched: string[] = [];
+  const lower = content.toLowerCase();
+  for (const { word } of allBanned) {
+    // Word-boundary match: check as a whole word
+    const pattern = new RegExp(`\\b${escapeRegex(word.toLowerCase())}\\b`);
+    if (pattern.test(lower)) {
+      matched.push(word);
+    }
+  }
+  return matched;
+}
+
+/**
+ * Escape special regex characters in a string.
+ */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Fetch the list of all banned word strings from the database.
+ * Used for LLM system prompt injection so the model knows which words to avoid.
+ */
+export async function fetchBannedWordList(
+  db: ReturnType<typeof drizzle<typeof schema>>
+): Promise<string[]> {
+  const rows = await db
+    .select({ word: schema.bannedWords.word })
+    .from(schema.bannedWords);
+  return rows.map((r) => r.word);
+}
+
+// ── Phase 3b: trigger LLM summarization ──
+
+/**
+ * Find all impulses in "summarizing" phase and trigger LLM summarization
+ * for those that do not yet have any candidate responses stored.
+ * Calls runLLMSummarization for each qualifying impulse.
+ */
+async function triggerSummarization(
+  client: postgres.Sql,
+  redis: RedisClientType
+) {
+  const db = drizzle(client, { schema });
+
+  const summarizing = await db
+    .select()
+    .from(schema.impulses)
+    .where(eq(schema.impulses.status, "summarizing"));
+
+  for (const impulse of summarizing) {
+    try {
+      // Skip if candidates already exist (avoids re-running on retries)
+      const existingCount = await db.$count(
+        schema.summaryCandidates,
+        eq(schema.summaryCandidates.impulseId, impulse.id)
+      );
+      if (existingCount > 0) continue;
+
+      log(
+        `triggerSummarization: impulse ${impulse.id.slice(0, 8)} ` +
+        `(group ${impulse.groupId.slice(0, 8)})`
+      );
+
+      const result = await runLLMSummarization(client, redis, impulse.id);
+
+      if (result.success) {
+        log(
+          `summarization complete: ${impulse.id.slice(0, 8)} ` +
+          `(${result.candidates.length} candidates)`
+        );
+      } else {
+        error(
+          `summarization failed: ${impulse.id.slice(0, 8)} — ${result.error}`
+        );
+      }
+    } catch (err) {
+      error(
+        `triggerSummarization ${impulse.id.slice(0, 8)}`,
+        err
+      );
+    }
+  }
+}
+
+// ── Phase 3b: summarizing — trigger LLM ──
+
+/**
+ * Find impulses in "summarizing" status and trigger LLM summary generation
+ * for any that don't yet have candidates. One impulse at a time; errors on
+ * one impulse do not block the rest.
+ */
+async function triggerSummarization(client: postgres.Sql, redis: RedisClientType) {
+  const db = drizzle(client, { schema });
+  const summarizing = await db
+    .select()
+    .from(schema.impulses)
+    .where(eq(schema.impulses.status, "summarizing"));
+
+  if (summarizing.length === 0) return;
+
+  for (const impulse of summarizing) {
+    try {
+      // Skip if already has candidates (advanceSummarizingToApproval will pick them up)
+      const existing = await db.$count(
+        schema.summaryCandidates,
+        eq(schema.summaryCandidates.impulseId, impulse.id)
+      );
+      if (existing > 0) continue;
+
+      const result = await runLLMSummarization(client, redis, impulse.id);
+
+      if (result.success) {
+        log(
+          `summarizing LLM OK: ${impulse.id.slice(0, 8)} ` +
+          `(${result.candidates.length} candidates)`
+        );
+      } else {
+        log(
+          `summarizing LLM FAIL: ${impulse.id.slice(0, 8)} — ` +
+          `${result.error ?? "unknown error"}`
+        );
+      }
+    } catch (err) {
+      error(`triggerSummarization ${impulse.id.slice(0, 8)}`, err);
+    }
+  }
 }
 
 export function startLifecycleEngine(client: postgres.Sql, redis: RedisClientType) {
@@ -31,6 +178,7 @@ export function startLifecycleEngine(client: postgres.Sql, redis: RedisClientTyp
       await advanceQueuedToVoting(db);
       await advanceVotingToNext(db, redis);
       await expireStaleComposing(db);
+      await triggerSummarization(client, redis);
       await advanceSummarizingToApproval(db);
       await resolveApprovalPhase(db, redis);
       await expireOrphanedImpulses(db);
@@ -385,6 +533,20 @@ async function resolveApprovalPhase(db: ReturnType<typeof drizzle<typeof schema>
 
         const winner = candidates[0];
         if (!winner) {
+          await db
+            .update(schema.impulses)
+            .set({ status: "discarded" })
+            .where(eq(schema.impulses.id, impulse.id));
+          continue;
+        }
+
+        // ── Banned words check ──
+        const matchedBanned = await checkBannedWords(winner.content, db);
+        if (matchedBanned.length > 0) {
+          log(
+            `approval→discarded: ${impulse.id.slice(0, 8)} ` +
+            `(banned words: ${matchedBanned.join(", ")})`
+          );
           await db
             .update(schema.impulses)
             .set({ status: "discarded" })

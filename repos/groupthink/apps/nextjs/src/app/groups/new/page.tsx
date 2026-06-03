@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { AppShell } from "@/components/AppShell";
 
 export default function CreateGroupPage() {
   const router = useRouter();
@@ -27,7 +28,8 @@ export default function CreateGroupPage() {
   };
 
   return (
-    <div className="form-view">
+    <AppShell>
+      <div className="form-view">
       <h1>Create Group</h1>
       <p className="form-note">Groups start as fringe (invite-only) until 5 members join.</p>
       <form onSubmit={handleSubmit} className="standard-form">
@@ -53,6 +55,7 @@ export default function CreateGroupPage() {
           {loading ? "Creating..." : "Create Group"}
         </button>
       </form>
-    </div>
+      </div>
+    </AppShell>
   );
 }

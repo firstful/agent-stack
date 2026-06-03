@@ -43,6 +43,10 @@ export interface SystemdServiceConfig {
 export interface ExposeConfig {
   enabled: boolean;
   hostname?: string;
+  /** Additional hostnames (including wildcards like *.engramic.ffilt.us)
+   *  for profile-scoped or multi-domain routing.  The slot-proxy checks
+   *  these alongside the primary hostname. */
+  hostnames?: string[];
   tunnel?: string;
   no_proxy?: boolean;
 }

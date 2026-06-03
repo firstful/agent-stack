@@ -59,6 +59,20 @@ function resolveTarget(url, hostname) {
         }
       }
     }
+
+    // Check additional hostnames (profile-scoped URLs, multi-domain)
+    for (const [name, svc] of Object.entries(state)) {
+      if (svc.port && svc.hostnames && Array.isArray(svc.hostnames) && !svc.expose?.no_proxy) {
+        for (const hn of svc.hostnames) {
+          if (hn === hostname) {
+            return { name, port: svc.port, path: url };
+          }
+          if (hn.startsWith("*.") && hostname.endsWith(hn.slice(1))) {
+            return { name, port: svc.port, path: url };
+          }
+        }
+      }
+    }
   }
 
   return null;

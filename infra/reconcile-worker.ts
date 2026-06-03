@@ -48,6 +48,8 @@ let reconciling = false;
 // ── Message bridge ──
 
 function send(msg: any): void {
+  // Post a message back to the parent controller thread.
+  // Errors are silently swallowed when the parent has exited.
   try {
     parentPort!.postMessage(msg);
   } catch {
@@ -61,7 +63,7 @@ function reconcile(): void {
   if (reconciling) return;
   reconciling = true;
   try {
-    tick();
+    tick(); // advance cycle counter for build backoff tracking
     const desired = loadDesired();
     const desiredNames = new Set(desired.map((s) => s.name));
 
@@ -103,6 +105,9 @@ function reconcile(): void {
     for (const service of desired) {
       try {
         if (service.service) {
+          // This is a systemd service.  If a container with the same name
+          // exists (from a previous config), remove it first to avoid
+          // conflicts between the container and systemd-managed instance.
           if (managedContainerSet.has(service.name)) {
             const sidecarNames = (service.container?.sidecars || []).map((sc) =>
               sidecarContainerName(service.name, sc.name)
@@ -111,6 +116,8 @@ function reconcile(): void {
           }
           ensureSystemdService(service);
         } else {
+          // Container-based service.  If a systemd service with the same
+          // name exists (from a previous config), remove it first.
           if (getManagedSystemdServices().includes(service.name)) {
             removeSystemdService(service.name);
           }

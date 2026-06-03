@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 type Group = { id: string; name: string; bio: string };
 
 export function Nav() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [search, setSearch] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
+  const { state, logout } = useAuth();
+
+  const isAuthenticated = state.status === "authenticated";
 
   useEffect(() => {
-    setUserId(localStorage.getItem("gt-user-id"));
     api.groups().then(setGroups).catch(() => {});
   }, []);
 
@@ -21,6 +23,11 @@ export function Nav() {
     if (search.trim()) {
       window.location.href = `/search?q=${encodeURIComponent(search)}`;
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    window.location.href = "/login";
   };
 
   return (
@@ -38,10 +45,20 @@ export function Nav() {
         />
       </form>
 
-      {userId && (
+      {isAuthenticated && (
         <div className="nav-actions">
           <Link href="/groups/new" className="nav-btn">+ New Group</Link>
           <Link href="/join" className="nav-btn">Join Group</Link>
+        </div>
+      )}
+
+      {isAuthenticated && (
+        <div className="nav-footer-links">
+          <Link href="/settings" className="nav-footer-link">⚙ Settings</Link>
+          <Link href="/admin" className="nav-footer-link">🛡 Admin</Link>
+          <button onClick={handleLogout} className="nav-footer-link nav-footer-btn">
+            Sign out
+          </button>
         </div>
       )}
 
@@ -52,7 +69,7 @@ export function Nav() {
             {g.name}
           </Link>
         ))}
-        {!userId && (
+        {!isAuthenticated && (
           <p className="login-hint">
             <Link href="/login">Sign in</Link> to see your groups
           </p>

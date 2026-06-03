@@ -1,13 +1,15 @@
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
+import type { FeedStackParamList } from "../navigation/types";
 
 const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
 
 type Impulse = { id: string; title: string; status: string; queuePosition: number; description: string };
 
 export function GroupDetailScreen() {
-  const nav = useNavigation();
+  const nav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const route = useRoute();
   const { id } = route.params as { id: string };
   const [impulses, setImpulses] = useState<Impulse[]>([]);
@@ -38,7 +40,7 @@ export function GroupDetailScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
-            onPress={() => nav.navigate("Impulse" as never, { id: item.id })}
+            onPress={() => nav.navigate("Impulse", { id: item.id })}
           >
             <Text style={styles.cardTitle}>{item.title}</Text>
             <Text style={styles.cardStatus}>{item.status} · position {item.queuePosition}</Text>

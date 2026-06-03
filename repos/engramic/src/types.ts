@@ -56,6 +56,7 @@ export interface MemoryHandle {
   pinned?: boolean
   pinReason?: string
   embeddingId?: string
+  crossSession?: boolean
 }
 
 export interface MemoryEvent {
@@ -74,7 +75,7 @@ export interface ToolCallRecord {
 }
 
 export interface SystemEvent {
-  type: "compression" | "expansion" | "search" | "info"
+  type: "compression" | "expansion" | "search" | "info" | "prefetch"
   description: string
   details?: Record<string, unknown>
   timestamp: number
@@ -84,10 +85,81 @@ export type BudgetStrategy = "expand_recent" | "preserve_old" | "balanced" | "ta
 
 export type CompressionRate = "low" | "medium" | "high"
 
+/**
+ * Strategy for selecting which conversation spans to compress.
+ * - "token_count": target spans with the highest token count first.
+ * - "age": target the oldest spans first.
+ * - "semantic_distance": target spans whose embedding is furthest from the
+ *   recent conversation context.
+ * - "auto": automatically select the best strategy based on conversation
+ *   patterns (message frequency, topic drift, idle periods).
+ */
+export type CompressionStrategy = "token_count" | "age" | "semantic_distance" | "auto"
+
+export type PrefetchStrategy = "trajectory" | "recency" | "hybrid"
+
+export interface PrefetchConfig {
+  enabled: boolean
+  depth: number
+  maxTokens: number
+  strategy: PrefetchStrategy
+  minConfidence: number
+}
+
 export interface MemoryPolicy {
+  /** Active compression strategy for span selection */
+  compressionStrategy: CompressionStrategy
   compressionRate: CompressionRate
   recencyBias: number
   retentionPriority: string[]
+  /**
+   * Override threshold for token_count strategy (default: 80_000).
+   * The total conversation token count at which compression fires.
+   */
+  tokenThreshold?: number
+  /**
+   * Override threshold for age / message_count strategy (default: 20).
+   * The number of user+assistant messages at which compression fires.
+   */
+  messageThreshold?: number
+  /**
+   * Override idle threshold in ms (default: 30_000).
+   * How long the conversation can be idle before compression triggers.
+   */
+  idleThresholdMs?: number
+  /**
+   * For semantic_distance strategy: cosine distance threshold (default: 0.3).
+   * Spans whose embedding is further than this from the recent topic centroid
+   * are considered compressible.
+   */
+  semanticDistanceThreshold?: number
+}
+
+export interface MemoryDagNode {
+  id: string
+  spanId: string
+  parentIds: string[]
+  childIds: string[]
+  expiredAt: number | null
+  depth: number
+  createdAt: number
+}
+
+export interface DagSubtreeQuery {
+  /** Root node id to start traversal from */
+  rootNodeId: string
+  /** Max depth from root (0 = root only, 1 = children, etc). Default: unlimited */
+  maxDepth?: number
+  /** Whether to include expired nodes. Default: false */
+  includeExpired?: boolean
+  /** If set, filter nodes whose span topic/content matches */
+  query?: string
+}
+
+export interface DagExpiryResult {
+  expiredNodeIds: string[]
+  expiredSpanIds: string[]
+  totalNodesAffected: number
 }
 
 export interface Conversation {
@@ -98,10 +170,12 @@ export interface Conversation {
   events: MemoryEvent[]
   toolCalls: ToolCallRecord[]
   systemEvents: SystemEvent[]
+  dag: Map<string, MemoryDagNode>
   policy: MemoryPolicy
   createdAt: number
   updatedAt: number
   metadata: Record<string, unknown>
+  prefetchConfig?: PrefetchConfig
 }
 
 export interface ProviderConfig {
@@ -123,6 +197,27 @@ export interface ProfileCompression {
   rate: "low" | "medium" | "high"
 }
 
+export type RetentionTrigger = "memory_count" | "age_days" | "token_count"
+export type RetentionAction = "evict_oldest" | "evict_lowest_importance" | "compress_to_summary"
+
+export interface RetentionPolicy {
+  maxMemories: number
+  retentionDays: number
+  maxTokens: number
+  trigger: RetentionTrigger
+  action: RetentionAction
+  autoPinPriorities: string[]
+}
+
+export const DEFAULT_RETENTION_POLICY: RetentionPolicy = {
+  maxMemories: 500,
+  retentionDays: 90,
+  maxTokens: 1_000_000,
+  trigger: "memory_count",
+  action: "evict_lowest_importance",
+  autoPinPriorities: [],
+}
+
 export interface Profile {
   id: string
   name: string
@@ -130,11 +225,36 @@ export interface Profile {
   summarization: ModelAssignment
   embedding: ModelAssignment
   compression: ProfileCompression
+  retention: RetentionPolicy
   contextWindow: number
   tools: string[]
   authToken: string
   modelPreferences: string[]
   createdAt: number
+}
+
+export interface CrossSessionMemory {
+  id: string
+  userId: string
+  profileId?: string
+  topic: string
+  summaryText: string
+  sourceConversationId: string
+  sourceSpanIds: string[]
+  importanceScore: number
+  pinned: boolean
+  pinReason?: string
+  embeddingId?: string
+  createdAt: number
+  updatedAt: number
+  expiresAt: number | null
+  metadata: Record<string, unknown>
+}
+
+export interface SessionStitchInfo {
+  userId: string
+  profileId?: string
+  conversationIds: string[]
 }
 
 export interface Account {
@@ -192,6 +312,9 @@ export interface ProviderRequest {
   stream?: boolean
   max_tokens?: number
   temperature?: number
+  response_format?: ResponseFormat
+  parallel_tool_calls?: boolean
+  tool_choice?: string | { type: "function"; function: { name: string } }
   [key: string]: unknown
 }
 
@@ -270,6 +393,78 @@ export interface UsageMetrics {
   rehydrationFrequency: number
 }
 
+// ── Responses API Types ──
+
+export type ResponseFormat =
+  | { type: "text" }
+  | { type: "json_object" }
+  | { type: "json_schema"; json_schema: { name: string; strict: boolean; schema: Record<string, unknown> } }
+
+export interface ResponsesApiRequest {
+  input: string | Array<{
+    role: string
+    content: string | Array<Record<string, unknown>>
+    [key: string]: unknown
+  }>
+  model: string
+  instructions?: string
+  tools?: unknown[]
+  stream?: boolean
+  max_output_tokens?: number
+  temperature?: number
+  top_p?: number
+  metadata?: Record<string, unknown>
+  response_format?: ResponseFormat
+  previous_response_id?: string
+  tool_choice?: string | { type: "function"; function: { name: string } }
+  parallel_tool_calls?: boolean
+  store?: boolean
+  user?: string
+}
+
+export interface ResponsesApiResponse {
+  id: string
+  object: "response"
+  created: number
+  model: string
+  output: ResponseOutputItem[]
+  usage?: {
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+  }
+}
+
+export type ResponseOutputItem = ResponseMessage | ResponseFunctionCall
+
+export interface ResponseMessage {
+  type: "message"
+  id: string
+  role: "assistant"
+  content: ResponseContentPart[]
+}
+
+export interface ResponseContentPart {
+  type: "output_text"
+  text: string
+  annotations?: unknown[]
+}
+
+export interface ResponseFunctionCall {
+  type: "function_call"
+  id: string
+  name: string
+  arguments: string
+  status: "completed"
+}
+
+export function inputToMessages(input: ResponsesApiRequest["input"]): Array<{ role: string; content: string | Array<Record<string, unknown>>; [key: string]: unknown }> {
+  if (typeof input === "string") {
+    return [{ role: "user", content: input }]
+  }
+  return input as Array<{ role: string; content: string | Array<Record<string, unknown>> }>
+}
+
 export const HIDDEN_TOOLS = [
   "remember",
   "search_memory",
@@ -285,5 +480,6 @@ export const HIDDEN_TOOLS = [
   "simulate_expansion_cost",
   "mark_event",
   "rebuild_context_window",
+  "predictive_prefetch",
 ] as const
 export type HiddenToolName = (typeof HIDDEN_TOOLS)[number]

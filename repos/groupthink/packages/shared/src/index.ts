@@ -1,4 +1,24 @@
 import { z } from "zod";
+import {
+  sanitizeText,
+  sanitizeAndTruncate,
+  sanitizeRichAndTruncate,
+  MAX_LENGTHS,
+} from "./lib/sanitize";
+
+/**
+ * Helper: Zod transform that sanitizes a plain-text string field.
+ * Strips all HTML, normalises whitespace, then truncates to the given max.
+ */
+export const sText = (max: number) =>
+  z.string().transform((v) => sanitizeAndTruncate(v, max));
+
+/**
+ * Helper: Zod transform that sanitizes a rich-text string field.
+ * Strips script tags/event handlers, trims, then truncates to the given max.
+ */
+export const sRich = (max: number) =>
+  z.string().transform((v) => sanitizeRichAndTruncate(v, max));
 
 // ── Group tiers ──
 export const GroupTier = z.enum([
@@ -57,8 +77,8 @@ export type VoteType = z.infer<typeof VoteType>;
 
 // ── Groups ──
 export const CreateGroupInput = z.object({
-  name: z.string().min(1).max(100),
-  bio: z.string().max(500).default(""),
+  name: sText(100).pipe(z.string().min(1)),
+  bio: sRich(500).default(""),
   energy: GroupEnergy.default("thoughtful"),
   timezone: z.string().optional(),
 });
@@ -87,8 +107,8 @@ export type MessageStatus = z.infer<typeof MessageStatus>;
 
 // ── API types ──
 export const CreateImpulseInput = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).default(""),
+  title: sText(200).pipe(z.string().min(1)),
+  description: sRich(2000).default(""),
   targetGroupId: z.string().uuid().optional(),
   targetPostId: z.string().uuid().optional(),
 });
@@ -102,7 +122,7 @@ export type CastVoteInput = z.infer<typeof CastVoteInput>;
 
 export const SendDraftInput = z.object({
   impulseId: z.string().uuid(),
-  content: z.string().max(5000),
+  content: sRich(5000).pipe(z.string().min(1)),
 });
 export type SendDraftInput = z.infer<typeof SendDraftInput>;
 
@@ -112,6 +132,44 @@ export const AuthRegisterInput = z.object({
   username: z.string().min(2).max(30),
 });
 export type AuthRegisterInput = z.infer<typeof AuthRegisterInput>;
+
+// ── Direct Messages ──
+export const SendDMInput = z.object({
+  groupId: z.string().uuid(),
+  recipientId: z.string().uuid(),
+  content: z.string().min(1).max(5000),
+});
+export type SendDMInput = z.infer<typeof SendDMInput>;
+
+export {
+  engagementPoints,
+  activityGateMultiplier,
+  activityGateBreakdown,
+  ACTIVITY_WINDOW_DAYS,
+  ENGAGEMENT_POINTS_FOR_MAX,
+  MAX_BOOST,
+} from "./lib/activity-gate";
+export type { EngagementEvent } from "./lib/activity-gate";
+
+export {
+  vouchMultiplier,
+  combinedVoteWeight,
+  VOUCH_BOOST,
+} from "./lib/activity-gate";
+
+export {
+  sanitizeText,
+  sanitizeRichText,
+  sanitizeAndTruncate,
+  sanitizeRichAndTruncate,
+  sanitizeObject,
+  stripScriptTags,
+  stripAllHtml,
+  normalizeWhitespace,
+  truncate,
+  MAX_LENGTHS,
+} from "./lib/sanitize";
+export type { StringFields } from "./lib/sanitize";
 
 export { canTransition, assertTransition } from "./lib/state-machine";
 export type { Transition } from "./lib/state-machine";
@@ -134,3 +192,9 @@ export { sortQueue, assignQueuePositions } from "./lib/queue";
 export type { QueuedImpulse } from "./lib/queue";
 export { buildLLMPrompts, parseLLMResponse } from "./lib/llm-prompt";
 export type { LLMInput, LLMPrompts } from "./lib/llm-prompt";
+
+export {
+  suppressionFactor,
+  applyVoteSuppression,
+  SUPPRESSED_VOTE_RATIO,
+} from "./lib/vote-suppression";
