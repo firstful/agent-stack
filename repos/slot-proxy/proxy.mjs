@@ -101,7 +101,8 @@ function resolveTarget(url, hostname) {
   const pathMatch = url.match(/^\/proxy\/([^/]+)(\/.*)?$/);
   if (pathMatch) {
     const svc = state[pathMatch[1]];
-    if (svc && svc.port) {
+    // Respect no_proxy — service opted out of being routable
+    if (svc && svc.port && !svc.expose?.no_proxy) {
       return { name: pathMatch[1], port: svc.port, path: pathMatch[2] || "/" };
     }
   }
@@ -141,6 +142,8 @@ function resolveTarget(url, hostname) {
 
 // ── Reverse proxy ──────────────────────────────────────────
 
+const UPSTREAM_TIMEOUT = 30_000; // 30s timeout for upstream requests
+
 function proxyTo(url, port, host, req, res) {
   const opts = {
     hostname: host,
@@ -148,11 +151,18 @@ function proxyTo(url, port, host, req, res) {
     path: url,
     method: req.method,
     headers: { ...req.headers },
+    timeout: UPSTREAM_TIMEOUT,
   };
 
   const proxyReq = http.request(opts, (proxyRes) => {
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
+  });
+
+  proxyReq.on("timeout", () => {
+    proxyReq.destroy();
+    res.writeHead(504, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Upstream timeout" }));
   });
 
   proxyReq.on("error", (e) => {
