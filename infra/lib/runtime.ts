@@ -86,6 +86,7 @@ export function writeRuntimeState(services: Service[]): void {
         container: null,
         service: s.service || null,
         expose: s.expose || null,
+        hostnames: s.expose?.enabled ? s.expose.hostnames : undefined,
         running: isSystemdRunning(s.name),
         port: s.service?.port,
         exposed: s.expose?.enabled ? s.expose.hostname : false,

@@ -29,6 +29,15 @@ const CROSS_GROUP_MIN_SHARED_IMPULSES = 2;       // Must have voted on this many
 const CROSS_GROUP_AGREEMENT_THRESHOLD = 0.80;    // 80% vote agreement required
 const SCAN_INTERVAL = 5 * 60 * 1000;             // 5 minutes
 
+// ── Behavioral Heuristics Configuration ──
+
+const SAME_VOTE_BLOC_MIN_USERS = 2;              // Minimum users in a voting bloc
+const SAME_VOTE_BLOC_MIN_COMMON_IMPULSES = 3;    // Must have voted together this many times
+const SAME_VOTE_BLOC_AGREEMENT_THRESHOLD = 0.90; // 90% identical vote required
+const COORDINATED_TIMING_WINDOW_MS = 3000;       // 3-second window for coordinated votes
+const COORDINATED_TIMING_MIN_INSTANCES = 2;       // Must happen on at least this many impulses
+const COORDINATED_TIMING_MIN_COHORT_SIZE = 2;     // At least 2 users voting in the same window
+
 // ── Logging ──
 
 function log(msg: string) {
@@ -51,6 +60,8 @@ export async function runFraudDetection(db: ReturnType<typeof drizzle<typeof sch
   log("running full fraud detection scan...");
   await detectCohortAnomalies(db);
   await detectCrossGroupAnomalies(db);
+  await detectSameVoteBlocs(db);
+  await detectCoordinatedTiming(db);
   log("fraud detection scan complete");
 }
 
@@ -426,5 +437,314 @@ async function detectCrossGroupAnomalies(db: ReturnType<typeof drizzle<typeof sc
         `(${(agreementRatio * 100).toFixed(0)}% agreement)`
       );
     }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 3. Behavioral Heuristics — Same-Vote Blocs
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Detect blocs of users who vote identically across a significant
+ * number of common impulses. A "bloc" is a set of users where every
+ * pair agrees ≥ SAME_VOTE_BLOC_AGREEMENT_THRESHOLD of the time.
+ *
+ * Algorithm:
+ *   - Fetch all votes grouped by impulse.
+ *   - For each impulse, create a vote-signature per user.
+ *   - For each pair of users that voted on the same impulse,
+ *     track whether their votes matched.
+ *   - Flag any pair whose agreement ratio exceeds the threshold
+ *     across ≥ SAME_VOTE_BLOC_MIN_COMMON_IMPULSES.
+ */
+async function detectSameVoteBlocs(db: ReturnType<typeof drizzle<typeof schema>>) {
+  // Fetch all non-abstain votes with timestamps
+  const allVotes = await db
+    .select({
+      impulseId: schema.votes.impulseId,
+      userId: schema.votes.userId,
+      vote: schema.votes.vote,
+    })
+    .from(schema.votes);
+
+  if (allVotes.length < 4) {
+    log("same-vote bloc scan: not enough votes");
+    return;
+  }
+
+  // Group votes by impulse
+  const votesByImpulse = new Map<string, typeof allVotes>();
+  for (const v of allVotes) {
+    if (!votesByImpulse.has(v.impulseId)) {
+      votesByImpulse.set(v.impulseId, []);
+    }
+    votesByImpulse.get(v.impulseId)!.push(v);
+  }
+
+  // For each pair of users, track agreement
+  const pairAgreement = new Map<string, { total: number; matches: number; firstUserId: string; secondUserId: string }>();
+
+  for (const [, impulseVotes] of votesByImpulse) {
+    const uniqueVoters = [...new Set(impulseVotes.map((v) => v.userId))];
+    if (uniqueVoters.length < SAME_VOTE_BLOC_MIN_USERS) continue;
+
+    // Build per-user vote map for this impulse
+    const userVoteMap = new Map<string, string>();
+    for (const v of impulseVotes) {
+      userVoteMap.set(v.userId, v.vote);
+    }
+
+    // Compare every pair
+    for (let i = 0; i < uniqueVoters.length; i++) {
+      for (let j = i + 1; j < uniqueVoters.length; j++) {
+        const uA = uniqueVoters[i];
+        const uB = uniqueVoters[j];
+        const vA = userVoteMap.get(uA);
+        const vB = userVoteMap.get(uB);
+        if (!vA || !vB || vA === "abstain" || vB === "abstain") continue;
+
+        const pairKey = uA < uB ? `${uA}:${uB}` : `${uB}:${uA}`;
+        if (!pairAgreement.has(pairKey)) {
+          pairAgreement.set(pairKey, { total: 0, matches: 0, firstUserId: uA < uB ? uA : uB, secondUserId: uA < uB ? uB : uA });
+        }
+        const entry = pairAgreement.get(pairKey)!;
+        entry.total++;
+        if (vA === vB) entry.matches++;
+      }
+    }
+  }
+
+  if (pairAgreement.size === 0) {
+    log("same-vote bloc scan: no voter pairs found");
+    return;
+  }
+
+  // Filter pairs that meet the threshold
+  const flaggedPairs = [...pairAgreement.values()]
+    .filter((p) => p.total >= SAME_VOTE_BLOC_MIN_COMMON_IMPULSES && p.matches / p.total >= SAME_VOTE_BLOC_AGREEMENT_THRESHOLD);
+
+  if (flaggedPairs.length === 0) {
+    log("same-vote bloc scan: no suspicious pairs found");
+    return;
+  }
+
+  log(`same-vote bloc scan: ${flaggedPairs.length} suspicious pairs found`);
+
+  for (const pair of flaggedPairs) {
+    // Check for existing flag between this pair
+    const existingFlags = await db
+      .select({ count: count() })
+      .from(schema.fraudAuditLog)
+      .where(
+        and(
+          eq(schema.fraudAuditLog.action, "same_vote_bloc_flag"),
+          or(
+            and(
+              eq(schema.fraudAuditLog.userId, pair.firstUserId),
+              sql`${schema.fraudAuditLog.details}->>'pairedWith' = ${pair.secondUserId}`
+            ),
+            and(
+              eq(schema.fraudAuditLog.userId, pair.secondUserId),
+              sql`${schema.fraudAuditLog.details}->>'pairedWith' = ${pair.firstUserId}`
+            )
+          )
+        )
+      );
+
+    if (Number(existingFlags[0]?.count) > 0) continue;
+
+    const agreementRatio = pair.matches / pair.total;
+
+    // Fetch usernames
+    const [userARecord, userBRecord] = await Promise.all([
+      db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, pair.firstUserId) }),
+      db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, pair.secondUserId) }),
+    ]);
+
+    await db.insert(schema.fraudAuditLog).values({
+      action: "same_vote_bloc_flag",
+      userId: pair.firstUserId,
+      groupId: null,
+      details: {
+        userA: { id: pair.firstUserId, username: userARecord?.username },
+        userB: { id: pair.secondUserId, username: userBRecord?.username },
+        identicalVotes: pair.matches,
+        totalCommonVotes: pair.total,
+        agreementRatio,
+      },
+    });
+
+    log(
+      `SAME-VOTE BLOC FLAG: ${userARecord?.username ?? pair.firstUserId.slice(0, 8)}` +
+      ` & ${userBRecord?.username ?? pair.secondUserId.slice(0, 8)}` +
+      ` — ${pair.matches}/${pair.total} identical votes ` +
+      `(${(agreementRatio * 100).toFixed(0)}% agreement)`
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 4. Behavioral Heuristics — Coordinated Timing
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Detect coordinated voting patterns — multiple users casting
+ * votes on the same impulse within a very short time window,
+ * suggesting scripted or orchestrated voting.
+ *
+ * Algorithm:
+ *   - Fetch all votes with their cast_at timestamps.
+ *   - Group votes by impulse.
+ *   - Within each impulse, find clusters of votes cast within
+ *     COORDINATED_TIMING_WINDOW_MS of each other.
+ *   - Flag any impulse where a cluster of ≥ COORDINATED_TIMING_MIN_COHORT_SIZE
+ *     distinct users appears, and this pattern repeats across
+ *     ≥ COORDINATED_TIMING_MIN_INSTANCES impulses.
+ */
+async function detectCoordinatedTiming(db: ReturnType<typeof drizzle<typeof schema>>) {
+  // Fetch all votes with timestamps — include the user table for username
+  const allVotes = await db
+    .select({
+      impulseId: schema.votes.impulseId,
+      userId: schema.votes.userId,
+      castAt: schema.votes.castAt,
+    })
+    .from(schema.votes);
+
+  if (allVotes.length < 4) {
+    log("coordinated timing scan: not enough votes");
+    return;
+  }
+
+  // Group votes by impulse, sorted by time
+  const votesByImpulse = new Map<string, typeof allVotes>();
+  for (const v of allVotes) {
+    if (!votesByImpulse.has(v.impulseId)) {
+      votesByImpulse.set(v.impulseId, []);
+    }
+    votesByImpulse.get(v.impulseId)!.push(v);
+  }
+
+  // Track clusters per user pair across impulses
+  const pairCoordinationCount = new Map<string, {
+    count: number;
+    firstUserId: string;
+    secondUserId: string;
+    impulses: string[];
+  }>();
+
+  for (const [impulseId, impulseVotes] of votesByImpulse) {
+    if (impulseVotes.length < COORDINATED_TIMING_MIN_COHORT_SIZE) continue;
+
+    // Sort by cast time
+    impulseVotes.sort((a, b) => new Date(a.castAt).getTime() - new Date(b.castAt).getTime());
+
+    // Sliding window: find clusters of votes within the timing window
+    for (let i = 0; i < impulseVotes.length; i++) {
+      const windowStart = new Date(impulseVotes[i].castAt).getTime();
+      const cluster: typeof allVotes = [];
+
+      for (let k = i; k < impulseVotes.length; k++) {
+        const diff = new Date(impulseVotes[k].castAt).getTime() - windowStart;
+        if (diff <= COORDINATED_TIMING_WINDOW_MS) {
+          cluster.push(impulseVotes[k]);
+        } else {
+          break; // votes are sorted, no need to continue
+        }
+      }
+
+      // Need at least MIN_COHORT_SIZE distinct users in the window
+      const uniqueInCluster = [...new Set(cluster.map((v) => v.userId))];
+      if (uniqueInCluster.length < COORDINATED_TIMING_MIN_COHORT_SIZE) continue;
+
+      // Record coordination for each pair in this cluster
+      for (let a = 0; a < uniqueInCluster.length; a++) {
+        for (let b = a + 1; b < uniqueInCluster.length; b++) {
+          const uA = uniqueInCluster[a];
+          const uB = uniqueInCluster[b];
+          const pairKey = uA < uB ? `${uA}:${uB}` : `${uB}:${uA}`;
+
+          if (!pairCoordinationCount.has(pairKey)) {
+            pairCoordinationCount.set(pairKey, {
+              count: 0,
+              firstUserId: uA < uB ? uA : uB,
+              secondUserId: uA < uB ? uB : uA,
+              impulses: [],
+            });
+          }
+          const entry = pairCoordinationCount.get(pairKey)!;
+          // Avoid double-counting the same impulse
+          if (!entry.impulses.includes(impulseId)) {
+            entry.count++;
+            entry.impulses.push(impulseId);
+          }
+        }
+      }
+    }
+  }
+
+  if (pairCoordinationCount.size === 0) {
+    log("coordinated timing scan: no coordinated pairs found");
+    return;
+  }
+
+  // Filter pairs that show coordination across enough impulses
+  const flaggedPairs = [...pairCoordinationCount.values()]
+    .filter((p) => p.count >= COORDINATED_TIMING_MIN_INSTANCES);
+
+  if (flaggedPairs.length === 0) {
+    log("coordinated timing scan: no suspicious timing patterns found");
+    return;
+  }
+
+  log(`coordinated timing scan: ${flaggedPairs.length} suspicious pairs found`);
+
+  for (const pair of flaggedPairs) {
+    // Check for existing flag
+    const existingFlags = await db
+      .select({ count: count() })
+      .from(schema.fraudAuditLog)
+      .where(
+        and(
+          eq(schema.fraudAuditLog.action, "timing_flag"),
+          or(
+            and(
+              eq(schema.fraudAuditLog.userId, pair.firstUserId),
+              sql`${schema.fraudAuditLog.details}->>'pairedWith' = ${pair.secondUserId}`
+            ),
+            and(
+              eq(schema.fraudAuditLog.userId, pair.secondUserId),
+              sql`${schema.fraudAuditLog.details}->>'pairedWith' = ${pair.firstUserId}`
+            )
+          )
+        )
+      );
+
+    if (Number(existingFlags[0]?.count) > 0) continue;
+
+    const [userARecord, userBRecord] = await Promise.all([
+      db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, pair.firstUserId) }),
+      db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, pair.secondUserId) }),
+    ]);
+
+    await db.insert(schema.fraudAuditLog).values({
+      action: "timing_flag",
+      userId: pair.firstUserId,
+      groupId: null,
+      details: {
+        userA: { id: pair.firstUserId, username: userARecord?.username },
+        userB: { id: pair.secondUserId, username: userBRecord?.username },
+        coordinatedImpulses: pair.count,
+        timingWindowMs: COORDINATED_TIMING_WINDOW_MS,
+        impulseIds: pair.impulses,
+      },
+    });
+
+    log(
+      `TIMING FLAG: ${userARecord?.username ?? pair.firstUserId.slice(0, 8)}` +
+      ` & ${userBRecord?.username ?? pair.secondUserId.slice(0, 8)}` +
+      ` — ${pair.count} impulses with coordinated timing ` +
+      `(within ${COORDINATED_TIMING_WINDOW_MS / 1000}s window)`
+    );
   }
 }

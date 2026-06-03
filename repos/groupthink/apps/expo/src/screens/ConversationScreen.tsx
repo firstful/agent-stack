@@ -7,8 +7,8 @@
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import { useEffect, useState } from "react";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+import { useAuth } from "../context/AuthContext";
+import { apiGet, apiPost } from "../api/client";
 
 type Message = {
   id: string;
@@ -20,27 +20,23 @@ type Message = {
 export function ConversationScreen() {
   const route = useRoute();
   const { userId, username } = route.params as { userId: string; username: string };
+  const { userId: currentUserId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/api/messages/${userId}`)
-      .then((r) => r.json())
+    apiGet<Message[]>(`/api/dms/${userId}`, currentUserId ?? undefined)
       .then(setMessages)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, currentUserId]);
 
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
-    await fetch(`${API}/api/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipientId: userId, content: inputText }),
-    });
+    if (!inputText.trim() || !currentUserId) return;
+    await apiPost("/api/dms", { recipientId: userId, content: inputText }, currentUserId);
     setInputText("");
-    const updated = await fetch(`${API}/api/messages/${userId}`).then((r) => r.json());
+    const updated = await apiGet<Message[]>(`/api/dms/${userId}`, currentUserId);
     setMessages(updated);
   };
 

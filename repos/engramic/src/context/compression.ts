@@ -228,6 +228,7 @@ function analyzePattern(conv: Conversation): ConversationPattern {
  */
 export function autoSelectStrategy(conv: Conversation): CompressionStrategy {
   const pattern = analyzePattern(conv)
+  const isAggressive = conv.policy.compressionRate === "high"
 
   // If very few spans, token_count is sufficient
   if (conv.spans.length < 3) {
@@ -245,7 +246,10 @@ export function autoSelectStrategy(conv: Conversation): CompressionStrategy {
   }
 
   // Many distinct topics with high message count → topic drift likely → semantic
-  if (pattern.distinctTopics > 3 && pattern.totalMessages > 30) {
+  // Lower threshold when compression rate is high
+  const topicThreshold = isAggressive ? 2 : 3
+  const messageThreshold = isAggressive ? 20 : 30
+  if (pattern.distinctTopics > topicThreshold && pattern.totalMessages > messageThreshold) {
     return "semantic_distance"
   }
 
@@ -260,6 +264,11 @@ export function autoSelectStrategy(conv: Conversation): CompressionStrategy {
     if (avgTokensPerMessage > 500) {
       return "token_count"
     }
+  }
+
+  // With high compression rate, prefer age-based (clears the most history)
+  if (isAggressive) {
+    return "age"
   }
 
   // Default
@@ -291,7 +300,21 @@ export async function selectSpansForCompression(
     strategy = autoSelectStrategy(conv)
   }
 
-  const targetCount = Math.max(1, Math.floor(conv.spans.length / 2))
+  // Respect compressionRate: low → 25%, medium → 50%, high → 75%
+  let targetRatio: number
+  switch (policy.compressionRate) {
+    case "low":
+      targetRatio = 0.25
+      break
+    case "high":
+      targetRatio = 0.75
+      break
+    case "medium":
+    default:
+      targetRatio = 0.5
+      break
+  }
+  const targetCount = Math.max(1, Math.floor(conv.spans.length * targetRatio))
   let selected: TranscriptSpan[]
   let reason: string
 
@@ -357,18 +380,29 @@ export async function selectSpansForCompression(
 export function shouldCompress(conv: Conversation): boolean {
   const policy = conv.policy
 
+  // Compression rate adjusts sensitivity: low → need higher thresholds, high → lower thresholds
+  const rateMultiplier = policy.compressionRate === "high"
+    ? 1.0
+    : policy.compressionRate === "low"
+      ? 1.5
+      : 1.25
+
   // If strategy is "auto", use heuristics to determine threshold
   const totalTokens = conv.spans.reduce((sum, s) => sum + s.tokenCount, 0)
   const totalMessages = conv.spans.reduce((sum, s) => sum + s.messages.length, 0)
 
-  if (totalTokens > getTokenThreshold(policy)) return true
-  if (totalMessages > getMessageThreshold(policy)) return true
+  if (totalTokens > getTokenThreshold(policy) * rateMultiplier) return true
+  if (totalMessages > getMessageThreshold(policy) * rateMultiplier) return true
 
-  // Idle check
-  if (Date.now() - conv.updatedAt > getIdleThreshold(policy) && totalTokens > 10_000) return true
+  // Idle check — more aggressive with higher rate
+  const idleThreshold = Math.max(
+    getIdleThreshold(policy),
+    policy.compressionRate === "high" ? 15_000 : 30_000,
+  )
+  if (Date.now() - conv.updatedAt > idleThreshold && totalTokens > 10_000) return true
 
   // For semantic_distance strategy, also check if there are enough spans
-  // with distinct topics to make the strategy worthwhile
+  // to make the strategy worthwhile
   if (policy.compressionStrategy === "semantic_distance" && conv.spans.length > 5) {
     return true
   }

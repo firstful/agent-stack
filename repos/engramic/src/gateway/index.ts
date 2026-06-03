@@ -1,39 +1,155 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
-import type { Conversation, Message, ChatCompletionRequest, TokenBudget, SummaryNode, RegisterRequest, RegisterResponse, AddProviderResponse, ProviderConfig, UsageRecord, ToolCallRecord, SystemEvent, ModelAssignment, ProfileCompression, Profile } from "../types.js"
+import type { FastifyReply, FastifyRequest } from "fastify"
+import type {
+  ChatCompletionRequest,
+  Conversation,
+  Message,
+  TranscriptSpan,
+  TokenBudget,
+  UsageRecord,
+  ProfileCompression,
+  CompressionRate,
+  CompressionStrategy,
+  MemoryPolicy,
+} from "../types.js"
+import { HIDDEN_TOOLS, DEFAULT_RETENTION_POLICY } from "../types.js"
 import type { IMemoryStore } from "../memory/store.js"
 import type { IVectorStore } from "../memory/vector.js"
 import type { IUserStore } from "../auth/user-store.js"
 import type { IUsageStore } from "../usage/store.js"
+import type { EmbeddingsProvider } from "../provider/embeddings.js"
 import { PricingEngine } from "../usage/pricing.js"
 import { MetricsCollector } from "../usage/metrics.js"
 import { randomUUID } from "node:crypto"
 import { Provider } from "../provider/index.js"
-import { OpenAIProvider } from "../provider/openai.js"
 import { ContextEngine, createBudget } from "../context/engine.js"
 import { compressConversation } from "../context/compression.js"
 import { createUserProviders, createFallbackProviders, createProfileProviders } from "../auth/provider-factory.js"
-import type { UserProviders, ProfileProviders } from "../auth/provider-factory.js"
-import { executeRemember } from "../tools/remember.js"
-import { executeSearch } from "../tools/search.js"
-import { executeCompressMemory } from "../tools/compress_memory.js"
-import { executeExpandMemoryRange } from "../tools/expand_memory_range.js"
-import { executePinMemory } from "../tools/pin_memory.js"
-import { executeUnpinMemory } from "../tools/unpin_memory.js"
-import { executeQueryMemoryGraph } from "../tools/query_memory_graph.js"
-import { executeMergeMemories } from "../tools/merge_memories.js"
-import { executeBudgetContext } from "../tools/budget_context.js"
-import { executeSetMemoryPolicy } from "../tools/set_memory_policy.js"
-import { executeExplainMemoryState } from "../tools/explain_memory_state.js"
-import { executeSimulateExpansionCost } from "../tools/simulate_expansion_cost.js"
-import { executeMarkEvent } from "../tools/mark_event.js"
-import { executeRebuildContextWindow } from "../tools/rebuild_context_window.js"
-import { serializeNonStreamResponse, serializeStreamChunk, serializeStreamDone } from "./stream.js"
+import {
+  executeRemember,
+  executeSearch,
+  executeCompressMemory,
+  executeExpandMemoryRange,
+  executePinMemory,
+  executeUnpinMemory,
+  executeQueryMemoryGraph,
+  executeMergeMemories,
+  executeBudgetContext,
+  executeSetMemoryPolicy,
+  executeExplainMemoryState,
+  executeSimulateExpansionCost,
+  executeMarkEvent,
+  executeRebuildContextWindow,
+  executePredictivePrefetch,
+} from "./hidden-tools.js"
 import type { CompressionLevel } from "../tools/compress_memory.js"
 import type { EventType } from "../tools/mark_event.js"
 import type { FocusType } from "../tools/rebuild_context_window.js"
 import type { BudgetStrategy } from "../types.js"
-import type { CompressionRate } from "../types.js"
-import type { EmbeddingsProvider } from "../provider/embeddings.js"
+import { serializeNonStreamResponse, serializeStreamChunk, serializeStreamDone } from "./stream.js"
+
+// ── Helpers ──
+
+function extractAuthToken(request: FastifyRequest): string | null {
+  const header = request.headers.authorization
+  if (header) {
+    const match = header.match(/^Bearer\s+(.+)$/i)
+    if (match) return match[1]
+  }
+  return (process.env.TEST_USER_ID as string) || null
+}
+
+function extractText(msg: Message): string {
+  return msg.content
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("")
+}
+
+function toInternalMessages(
+  msgs: Array<{ role: string; content: string | Array<Record<string, unknown>>; [key: string]: unknown }>,
+): Message[] {
+  return msgs.map((m, i) => {
+    const parts: Message["content"] = []
+    if (typeof m.content === "string") {
+      parts.push({ type: "text", text: m.content })
+    } else if (Array.isArray(m.content)) {
+      for (const part of m.content) {
+        if (part.type === "text") parts.push({ type: "text", text: String(part.text) })
+        else if (part.type === "image_url")
+          parts.push({ type: "image_url", image_url: part.image_url as { url: string; detail?: string } })
+      }
+    }
+    return {
+      id: `msg_${Date.now()}_${i}`,
+      role: m.role as Message["role"],
+      content: parts,
+      metadata: m.tool_call_id ? { tool_call_id: m.tool_call_id as string } : undefined,
+    }
+  })
+}
+
+function recordToolCall(
+  conv: Conversation,
+  name: string,
+  args: Record<string, unknown>,
+  result: string,
+): void {
+  conv.toolCalls.push({ name, arguments: args, result, timestamp: Date.now() })
+}
+
+function createSpanMessages(
+  body: { messages: Array<Record<string, unknown>>; instructions?: string },
+  assistantContent: string,
+): Message[] {
+  const raw = body.messages || []
+  const msgs = toInternalMessages(raw as Array<{ role: string; content: string | Array<Record<string, unknown>> }>)
+  if (assistantContent) {
+    msgs.push({
+      id: `msg_${Date.now()}_assistant`,
+      role: "assistant",
+      content: [{ type: "text", text: assistantContent }],
+    })
+  }
+  return msgs
+}
+
+// ── Profile compression → conversation policy bridge ──
+
+/**
+ * Maps ProfileCompression (trigger+threshold+rate) to the conversation's MemoryPolicy.
+ * Called when a profile-scoped chat request starts, so the adaptive compression
+ * system uses the profile's configured preferences.
+ */
+function applyProfileCompressionToConversation(
+  conv: Conversation,
+  profileCompression: ProfileCompression,
+): void {
+  const update: Partial<MemoryPolicy> = {}
+
+  // Map the profile compression trigger to the appropriate strategy
+  switch (profileCompression.trigger) {
+    case "token_count":
+      update.compressionStrategy = "token_count"
+      update.tokenThreshold = profileCompression.threshold
+      break
+    case "message_count":
+      update.compressionStrategy = "age"
+      update.messageThreshold = profileCompression.threshold
+      break
+    case "idle_time":
+      update.compressionStrategy = "age"
+      update.idleThresholdMs = profileCompression.threshold
+      break
+  }
+
+  // Map rate
+  update.compressionRate = profileCompression.rate
+
+  conv.policy = { ...conv.policy, ...update }
+  conv.updatedAt = Date.now()
+}
+
+// ── Hidden tool schemas ──
 
 const ALL_HIDDEN_TOOL_SCHEMAS: Array<Record<string, unknown>> = [
   {
@@ -164,13 +280,18 @@ const ALL_HIDDEN_TOOL_SCHEMAS: Array<Record<string, unknown>> = [
     type: "function",
     function: {
       name: "set_memory_policy",
-      description: "Adjusts global memory behavior dynamically",
+      description: "Adjusts global memory behavior dynamically — compression strategy, rate, thresholds",
       parameters: {
         type: "object",
         properties: {
+          compression_strategy: { type: "string", enum: ["token_count", "age", "semantic_distance", "auto"] },
           compression_rate: { type: "string", enum: ["low", "medium", "high"] },
           recency_bias: { type: "number" },
           retention_priority: { type: "array", items: { type: "string" } },
+          token_threshold: { type: "number" },
+          message_threshold: { type: "number" },
+          idle_threshold_ms: { type: "number" },
+          semantic_distance_threshold: { type: "number" },
         },
       },
     },
@@ -230,59 +351,34 @@ const ALL_HIDDEN_TOOL_SCHEMAS: Array<Record<string, unknown>> = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "predictive_prefetch",
+      description: "Pre-expand memory spans predicted to be needed based on conversation trajectory",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Optional query to bias predictions toward matching topics" },
+          depth: { type: "number", description: "How many spans to try prefetching (1-10, default from config)" },
+        },
+      },
+    },
+  },
 ]
 
-function toInternalMessages(msgs: ChatCompletionRequest["messages"]): Message[] {
-  return msgs.map((m, i) => {
-    const parts: Message["content"] = []
-    if (typeof m.content === "string") {
-      parts.push({ type: "text", text: m.content })
-    } else if (Array.isArray(m.content)) {
-      for (const part of m.content) {
-        if (part.type === "text") parts.push({ type: "text", text: String(part.text) })
-        else if (part.type === "image_url") parts.push({ type: "image_url", image_url: part.image_url as { url: string } })
-      }
-    }
-    return {
-      id: `msg_${Date.now()}_${i}`,
-      role: m.role as Message["role"],
-      content: parts,
-      metadata: m.tool_call_id ? { tool_call_id: m.tool_call_id as string } : undefined,
-    }
-  })
-}
-
-function extractAuthToken(request: FastifyRequest): string | null {
-  const header = request.headers.authorization
-  if (header) {
-    const match = header.match(/^Bearer\s+(.+)$/i)
-    if (match) return match[1]
-  }
-  return process.env.TEST_USER_ID || null
-}
-
-function extractText(msg: Message): string {
-  return msg.content.filter((p): p is { type: "text"; text: string } => p.type === "text").map((p) => p.text).join("")
-}
-
-function recordToolCall(conv: Conversation, name: string, args: Record<string, unknown>, result: string): void {
-  conv.toolCalls.push({ name, arguments: args, result, timestamp: Date.now() })
-}
-
-function recordSystemEvent(conv: Conversation, type: SystemEvent["type"], description: string, details?: Record<string, unknown>): void {
-  conv.systemEvents.push({ type, description, details, timestamp: Date.now() })
-}
+// ── Route registration ──
 
 export function registerRoutes(
-  app: FastifyInstance,
+  app: any,
   store: IMemoryStore,
   globalProvider: Provider,
   engine: ContextEngine,
-  vectorStore?: IVectorStore,
-  embeddingsProvider?: EmbeddingsProvider,
-  userStore?: IUserStore,
-  usageStore?: IUsageStore,
-  metricsCollector?: MetricsCollector,
+  vectorStore: IVectorStore,
+  embeddingsProvider: EmbeddingsProvider,
+  userStore: IUserStore,
+  usageStore: IUsageStore,
+  metricsCollector: MetricsCollector,
 ): void {
   app.get("/health", async () => ({ status: "ok" }))
 
@@ -307,7 +403,7 @@ export function registerRoutes(
     }
   })
 
-  app.get("/api/conversations", async (_request, reply) => {
+  app.get("/api/conversations", async (_request: FastifyRequest, reply: FastifyReply) => {
     const ids = await store.listConversationIds()
     const conversations = []
     for (const id of ids) {
@@ -328,7 +424,7 @@ export function registerRoutes(
     return reply.send({ conversations })
   })
 
-  app.get("/api/conversations/:id", async (request, reply) => {
+  app.get("/api/conversations/:id", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string }
     const conv = await store.getOrCreateConversation(id)
     const timeline: Array<Record<string, unknown>> = []
@@ -336,16 +432,17 @@ export function registerRoutes(
     for (let si = 0; si < conv.spans.length; si++) {
       const span = conv.spans[si]
       for (const msg of span.messages) {
-        if (msg.role === "user") {
-          timeline.push({ type: "user", role: "user", content: extractText(msg), spanIndex: si, timestamp: span.createdAt })
-        } else if (msg.role === "assistant") {
-          timeline.push({ type: "assistant", role: "assistant", content: extractText(msg), spanIndex: si, timestamp: span.createdAt })
-        } else if (msg.role === "system") {
-          timeline.push({ type: "system", role: "system", content: extractText(msg), spanIndex: si, timestamp: span.createdAt })
+        if (msg.role === "user" || msg.role === "assistant" || msg.role === "system") {
+          timeline.push({
+            type: msg.role,
+            role: msg.role,
+            content: extractText(msg),
+            spanIndex: si,
+            timestamp: span.createdAt,
+          })
         }
       }
     }
-
     for (const tc of conv.toolCalls) {
       timeline.push({
         type: "hidden",
@@ -355,7 +452,6 @@ export function registerRoutes(
         timestamp: tc.timestamp,
       })
     }
-
     for (const se of conv.systemEvents) {
       timeline.push({
         type: se.type,
@@ -364,7 +460,6 @@ export function registerRoutes(
         timestamp: se.timestamp,
       })
     }
-
     timeline.sort((a, b) => (a.timestamp as number) - (b.timestamp as number))
 
     return reply.send({
@@ -376,13 +471,13 @@ export function registerRoutes(
     })
   })
 
-  app.get("/chats", async (_request, reply) => {
+  app.get("/chats", async (_request: FastifyRequest, reply: FastifyReply) => {
     reply.header("Content-Type", "text/html; charset=utf-8")
     return reply.send(CHATS_UI_HTML)
   })
 
   if (usageStore) {
-    app.get("/v1/usage", async (request, reply) => {
+    app.get("/v1/usage", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const sinceQuery = (request.query as Record<string, string>).since
@@ -398,7 +493,7 @@ export function registerRoutes(
       })
     })
 
-    app.get("/v1/usage/records", async (request, reply) => {
+    app.get("/v1/usage/records", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const sinceQuery = (request.query as Record<string, string>).since
@@ -409,26 +504,18 @@ export function registerRoutes(
   }
 
   if (userStore) {
-    app.post<{ Body: RegisterRequest }>("/register", async (request, reply) => {
-      const reqBody = request.body
-      const apiKey = reqBody.api_key
+    app.post("/register", async (request: FastifyRequest, reply: FastifyReply) => {
+      const reqBody = request.body as Record<string, unknown>
+      const apiKey = reqBody.api_key as string
       if (!apiKey) {
         return reply.status(400).send({ error: "api_key is required" })
       }
-
       const existingToken = extractAuthToken(request)
-      const label = reqBody.label || reqBody.provider || "default"
-      const providerType = reqBody.provider || "openai"
-      const baseUrl = reqBody.base_url || "https://api.openai.com/v1"
-      const defaultModel = reqBody.default_model || "gpt-4o"
-
-      const config: ProviderConfig = {
-        label,
-        providerType,
-        apiKey,
-        baseUrl,
-        defaultModel,
-      }
+      const label = (reqBody.label as string) || (reqBody.provider as string) || "default"
+      const providerType = (reqBody.provider as string) || "openai"
+      const baseUrl = (reqBody.base_url as string) || "https://api.openai.com/v1"
+      const defaultModel = (reqBody.default_model as string) || "gpt-4o"
+      const config = { label, providerType, apiKey, baseUrl, defaultModel }
 
       if (existingToken) {
         const account = await userStore.addProvider(existingToken, config)
@@ -436,33 +523,30 @@ export function registerRoutes(
           return reply.status(404).send({ error: "Token not found" })
         }
         const models = await userStore.listModels(existingToken)
-        const resp: AddProviderResponse = {
+        return reply.status(201).send({
           label,
           provider: providerType,
           default_model: defaultModel,
           models: models.map((m) => m.id),
-        }
-        return reply.status(201).send(resp)
+        })
       }
 
       const account = await userStore.createAccount(config)
       const models = await userStore.listModels(account.token)
-      const resp: RegisterResponse = {
+      return reply.status(201).send({
         token: account.token,
         label,
         provider: providerType,
         default_model: defaultModel,
         models: models.map((m) => m.id),
-      }
-      reply.status(201).send(resp)
+      })
     })
 
-    app.get("/v1/models", async (request, reply) => {
+    app.get("/v1/models", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const account = await userStore.getAccount(token)
       if (!account) return reply.status(401).send({ error: "Authorization header required" })
-
       const models = await userStore.listModels(token)
       return reply.send({
         object: "list",
@@ -475,7 +559,7 @@ export function registerRoutes(
       })
     })
 
-    app.get("/providers", async (request, reply) => {
+    app.get("/providers", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const account = await userStore.getAccount(token)
@@ -483,12 +567,11 @@ export function registerRoutes(
       return reply.send({ providers: account.providers })
     })
 
-    app.post<{ Body: { base_url: string; api_key: string } }>("/test-provider", async (request, reply) => {
-      const { base_url, api_key } = request.body
+    app.post("/test-provider", async (request: FastifyRequest, reply: FastifyReply) => {
+      const { base_url, api_key } = request.body as { base_url?: string; api_key?: string }
       if (!api_key || !base_url) {
         return reply.status(400).send({ ok: false, error: "base_url and api_key are required" })
       }
-
       let modelsUrl = base_url.endsWith("/v1") ? `${base_url}/models` : `${base_url.replace(/\/+$/, "")}/v1/models`
       try {
         const res = await fetch(modelsUrl, { headers: { Authorization: `Bearer ${api_key}` } })
@@ -496,16 +579,16 @@ export function registerRoutes(
           const text = await res.text().catch(() => "")
           return reply.send({ ok: false, error: `Provider returned ${res.status}: ${text.slice(0, 200)}` })
         }
-        const data = await res.json() as { data?: Array<{ id: string; owned_by?: string }> }
-        const models = (data.data || []).map((m: { id: string; owned_by?: string }) => ({ id: m.id, owned_by: m.owned_by || "unknown" }))
+        const data = (await res.json()) as { data?: Array<{ id: string; owned_by?: string }> }
+        const models = (data.data || []).map((m) => ({ id: m.id, owned_by: m.owned_by || "unknown" }))
         return reply.send({ ok: true, models })
       } catch (e: any) {
         return reply.send({ ok: false, error: e.message })
       }
     })
 
-    app.post<{ Body: { base_url: string; api_key: string; provider: string; model: string } }>("/test-chat", async (request, reply) => {
-      const { base_url, api_key, provider: providerType, model } = request.body
+    app.post("/test-chat", async (request: FastifyRequest, reply: FastifyReply) => {
+      const { base_url, api_key, model } = request.body as { base_url?: string; api_key?: string; model?: string }
       if (!api_key || !base_url || !model) {
         return reply.status(400).send({ ok: false, error: "base_url, api_key, and model are required" })
       }
@@ -514,17 +597,20 @@ export function registerRoutes(
         const response = await testProvider.chat({
           model,
           messages: [
-            { id: "test_1", role: "user", content: [{ type: "text", text: "Say 'pong' and nothing else." }] },
+            { id: "test_1", role: "user" as const, content: [{ type: "text" as const, text: "Say 'pong' and nothing else." }] },
           ],
         })
-        const text = response.message.content.filter((p) => p.type === "text").map((p) => (p as { type: "text"; text: string }).text).join("")
+        const text = response.message.content
+          .filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map((p) => p.text)
+          .join("")
         return reply.send({ ok: true, response: text.trim() })
       } catch (e: any) {
         return reply.send({ ok: false, error: e.message })
       }
     })
 
-    app.delete("/providers/:label", async (request, reply) => {
+    app.delete("/providers/:label", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
       const { label } = request.params as { label: string }
@@ -533,21 +619,26 @@ export function registerRoutes(
       return reply.send({ removed: true, label })
     })
 
-    app.get<{ Params: { label: string } }>("/providers/:label/test", async (request, reply) => {
+    app.get("/providers/:label/test", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
       const account = await userStore.getAccount(token)
       if (!account) return reply.status(401).send({ error: "Invalid token" })
-      const provider = account.providers.find((p) => p.label === (request.params as any).label)
+      const provider = account.providers.find((p) => p.label === (request.params as { label: string }).label)
       if (!provider) return reply.status(404).send({ error: "Provider not found" })
-      let modelsUrl = provider.baseUrl.endsWith("/v1") ? `${provider.baseUrl}/models` : `${provider.baseUrl.replace(/\/+$/, "")}/v1/models`
+      const modelsUrl = provider.baseUrl.endsWith("/v1")
+        ? `${provider.baseUrl}/models`
+        : `${provider.baseUrl.replace(/\/+$/, "")}/v1/models`
       try {
-        const res = await fetch(modelsUrl, { headers: { Authorization: `Bearer ${provider.apiKey}` }, signal: AbortSignal.timeout(10000) })
+        const res = await fetch(modelsUrl, {
+          headers: { Authorization: `Bearer ${provider.apiKey}` },
+          signal: AbortSignal.timeout(10000),
+        })
         if (!res.ok) {
           const text = await res.text().catch(() => "")
           return reply.send({ ok: false, error: `Provider returned ${res.status}: ${text.slice(0, 200)}` })
         }
-        const data = await res.json() as { data?: Array<{ id: string; owned_by?: string }> }
+        const data = (await res.json()) as { data?: Array<{ id: string; owned_by?: string }> }
         const models = (data.data || []).map((m) => ({ id: m.id, owned_by: m.owned_by || "unknown" }))
         return reply.send({ ok: true, models })
       } catch (e: any) {
@@ -555,30 +646,37 @@ export function registerRoutes(
       }
     })
 
-    app.post<{ Body: { name: string; execution: ModelAssignment; summarization: ModelAssignment; embedding: ModelAssignment; compression: ProfileCompression; contextWindow: number; tools: string[]; modelPreferences: string[] } }>("/v1/profiles", async (request, reply) => {
+    // ── Profile CRUD ──
+
+    app.post("/v1/profiles", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
       const account = await userStore.getAccount(token)
       if (!account) return reply.status(401).send({ error: "Invalid token" })
-
-      const body = request.body
+      const body = request.body as Record<string, unknown>
       if (!body.name) return reply.status(400).send({ error: "name is required" })
-      if (!body.execution?.provider) return reply.status(400).send({ error: "execution.provider is required" })
+      if (!(body.execution as Record<string, unknown>)?.provider)
+        return reply.status(400).send({ error: "execution.provider is required" })
 
       const profile = await userStore.createProfile(token, {
-        name: body.name,
-        execution: body.execution,
-        summarization: body.summarization || body.execution,
-        embedding: body.embedding || body.execution,
-        compression: body.compression || { trigger: "token_count", threshold: 80000, rate: "medium" },
-        contextWindow: body.contextWindow || 128000,
-        tools: body.tools || [],
-        modelPreferences: body.modelPreferences || [],
+        name: body.name as string,
+        execution: body.execution as any,
+        summarization: (body.summarization as any) || body.execution,
+        embedding: (body.embedding as any) || body.execution,
+        compression: (body.compression as ProfileCompression) || {
+          trigger: "token_count",
+          threshold: 80000,
+          rate: "medium" as const,
+        },
+        retention: (body.retention as any) || DEFAULT_RETENTION_POLICY,
+        contextWindow: (body.contextWindow as number) || 128000,
+        tools: (body.tools as string[]) || [],
+        modelPreferences: (body.modelPreferences as string[]) || [],
       })
       return reply.status(201).send(profile)
     })
 
-    app.get("/v1/profiles", async (request, reply) => {
+    app.get("/v1/profiles", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
       const account = await userStore.getAccount(token)
@@ -586,57 +684,58 @@ export function registerRoutes(
       return reply.send({ profiles: account.profiles || [] })
     })
 
-    app.get<{ Params: { profileId: string } }>("/v1/profiles/:profileId", async (request, reply) => {
+    app.get("/v1/profiles/:profileId", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const profile = await userStore.getProfile(token, (request.params as any).profileId)
+      const profile = await userStore.getProfile(token, (request.params as { profileId: string }).profileId)
       if (!profile) return reply.status(404).send({ error: "Profile not found" })
       return reply.send(profile)
     })
 
-    app.put<{ Params: { profileId: string }; Body: Partial<Profile> }>("/v1/profiles/:profileId", async (request, reply) => {
+    app.put("/v1/profiles/:profileId", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const profile = await userStore.updateProfile(token, (request.params as any).profileId, request.body)
+      const profile = await userStore.updateProfile(token, (request.params as { profileId: string }).profileId, request.body)
       if (!profile) return reply.status(404).send({ error: "Profile not found" })
       return reply.send(profile)
     })
 
-    app.delete<{ Params: { profileId: string } }>("/v1/profiles/:profileId", async (request, reply) => {
+    app.delete("/v1/profiles/:profileId", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const removed = await userStore.deleteProfile(token, (request.params as any).profileId)
+      const removed = await userStore.deleteProfile(token, (request.params as { profileId: string }).profileId)
       if (!removed) return reply.status(404).send({ error: "Profile not found" })
       return reply.send({ removed: true })
     })
 
-    app.post<{ Params: { profileId: string } }>("/v1/profiles/:profileId/regenerate-token", async (request, reply) => {
+    app.post("/v1/profiles/:profileId/regenerate-token", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const newToken = await userStore.regenerateProfileToken(token, (request.params as any).profileId)
+      const newToken = await userStore.regenerateProfileToken(token, (request.params as { profileId: string }).profileId)
       if (!newToken) return reply.status(404).send({ error: "Profile not found" })
       return reply.send({ authToken: newToken })
     })
 
-    const resolveAccountAndProfile = async (token: string, profileId: string):
-      Promise<{ account: NonNullable<Awaited<ReturnType<IUserStore["getAccount"]>>>, profile: Profile } | { error: { status: number; body: any } }> => {
-      const us = userStore!
+    // ── Profile-scoped endpoints ──
+
+    const resolveAccountAndProfile = async (token: string, profileId: string) => {
+      const us = userStore
       let account = await us.getAccountByProfileToken(token)
       if (!account) account = await us.getAccount(token)
-      if (!account) return { error: { status: 401, body: { error: "Invalid token" } } }
+      if (!account) return { error: { status: 401, body: { error: "Invalid token" } } as const }
       const profile = (account.profiles || []).find((p) => p.id === profileId)
-      if (!profile) return { error: { status: 404, body: { error: "Profile not found" } } }
+      if (!profile) return { error: { status: 404, body: { error: "Profile not found" } } as const }
       return { account, profile }
     }
 
-    app.post<{ Params: { profileId: string }; Body: ChatCompletionRequest }>("/v1/:profileId/chat/completions", async (request, reply) => {
+    app.post("/v1/:profileId/chat/completions", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const resolved = await resolveAccountAndProfile(token, (request.params as any).profileId)
+      const resolved = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
       if ("error" in resolved) return reply.status(resolved.error.status).send(resolved.error.body)
       const { account, profile } = resolved
 
-      let providers: ProfileProviders
+      let providers
       try {
         providers = createProfileProviders(profile, account)
       } catch (e: any) {
@@ -644,56 +743,61 @@ export function registerRoutes(
       }
 
       const chatBody = { ...request.body, model: providers.chatModel }
+
+      // Apply profile compression settings to the conversation
+      // This bridges ProfileCompression → MemoryPolicy before the chat handler runs
       return handleChatRequest(
-        chatBody, reply, store, providers.chat, engine, vectorStore, providers.embeddings,
-        request, token, profile.execution.provider, usageStore, metricsCollector,
-        providers.summarization, providers.summarizationModel, userStore,
+        chatBody, reply, store, providers.chat, engine, vectorStore,
+        providers.embeddings, request, token, profile.execution.provider,
+        usageStore, metricsCollector,
+        providers.summarization, providers.summarizationModel,
+        userStore, profile.compression,
       )
     })
 
-    app.get<{ Params: { profileId: string } }>("/v1/:profileId/models", async (request, reply) => {
+    app.get("/v1/:profileId/models", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const resolved = await resolveAccountAndProfile(token, (request.params as any).profileId)
+      const resolved = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
       if ("error" in resolved) return reply.status(resolved.error.status).send(resolved.error.body)
       const { account, profile } = resolved
-
       const seen = new Set<string>()
       const models: Array<{ id: string; owned_by: string }> = []
       for (const role of [profile.execution, profile.summarization, profile.embedding]) {
         const p = account.providers.find((prov) => prov.label === role.provider)
         if (!p) continue
         const key = `${p.label}/${role.model}`
-        if (!seen.has(key)) { seen.add(key); models.push({ id: key, owned_by: p.providerType }) }
+        if (!seen.has(key)) {
+          seen.add(key)
+          models.push({ id: key, owned_by: p.providerType })
+        }
       }
       return reply.send({ object: "list", data: models })
     })
 
-    app.get("/ui", async (_request, reply) => {
+    // ── UI ──
+    app.get("/ui", async (_request: FastifyRequest, reply: FastifyReply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
       return reply.send(DASHBOARD_HTML)
     })
-
-    app.get("/", async (_request, reply) => {
+    app.get("/", async (_request: FastifyRequest, reply: FastifyReply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
       return reply.send(DASHBOARD_HTML)
     })
-
-    app.get("/add-provider", async (_request, reply) => {
+    app.get("/add-provider", async (_request: FastifyRequest, reply: FastifyReply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
       return reply.send(WEB_UI_HTML)
     })
-
-    app.get("/add-profile", async (_request, reply) => {
+    app.get("/add-profile", async (_request: FastifyRequest, reply: FastifyReply) => {
       reply.header("Content-Type", "text/html; charset=utf-8")
-      return reply.send(PROFILE_MANAGER_HTML)
+      return reply.send(ADD_PROFILE_HTML)
     })
 
-    app.post<{ Body: ChatCompletionRequest }>("/v1/chat/completions", async (request, reply) => {
+    // ── Account-scoped chat ──
+    app.post("/v1/chat/completions", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization header required" })
-
-      const modelName = request.body.model
+      const modelName = (request.body as Record<string, unknown>).model as string
       const resolved = await userStore.resolveProvider(token, modelName)
       if (!resolved) {
         const account = await userStore.getAccount(token)
@@ -702,17 +806,20 @@ export function registerRoutes(
           error: `Unknown model '${modelName}'. Available models: ${account.providers.map((p) => `${p.label}/${p.defaultModel}`).join(", ")}`,
         })
       }
-
       const { provider: providerConfig, model } = resolved
       const chatBody = { ...request.body, model }
       const providers = createUserProviders(providerConfig)
-      return handleChatRequest(chatBody, reply, store, providers.chat, engine, vectorStore, providers.embeddings, request, token, providerConfig.label, usageStore, metricsCollector, undefined, undefined, userStore)
+      return handleChatRequest(
+        chatBody, reply, store, providers.chat, engine, vectorStore,
+        providers.embeddings, request, token, providerConfig.label,
+        usageStore, metricsCollector, undefined, undefined, userStore, undefined,
+      )
     })
-
     return
   }
 
-  app.get("/v1/models", async (_req, reply) => {
+  // Fallback routes (no user store)
+  app.get("/v1/models", async (_req: FastifyRequest, reply: FastifyReply) => {
     return reply.send({
       object: "list",
       data: [
@@ -721,47 +828,56 @@ export function registerRoutes(
       ],
     })
   })
-
-  app.post<{ Body: ChatCompletionRequest }>("/v1/chat/completions", async (request, reply) => {
+  app.post("/v1/chat/completions", async (request: FastifyRequest, reply: FastifyReply) => {
     const defaults = createFallbackProviders()
     const token = extractAuthToken(request)
-    return handleChatRequest(request.body, reply, store, defaults.chat, engine, vectorStore, defaults.embeddings, request, token || undefined, "default", usageStore, metricsCollector, undefined, undefined, userStore)
+    return handleChatRequest(
+      request.body, reply, store, defaults.chat, engine, vectorStore,
+      defaults.embeddings, request, token || undefined, "default",
+      usageStore, metricsCollector, undefined, undefined, userStore, undefined,
+    )
   })
 }
 
+// ── Chat request handler ──
+
 async function handleChatRequest(
-  body: ChatCompletionRequest,
+  body: any,
   reply: FastifyReply,
   store: IMemoryStore,
   provider: Provider,
   engine: ContextEngine,
-  vectorStore?: IVectorStore,
-  embeddingsProvider?: EmbeddingsProvider,
-  request?: FastifyRequest,
-  userId?: string,
-  providerLabel?: string,
-  usageStore?: IUsageStore,
-  metricsCollector?: MetricsCollector,
-  summarizationProvider?: Provider,
-  summarizationModel?: string,
-  userStore?: IUserStore,
+  vectorStore: IVectorStore,
+  embeddingsProvider: EmbeddingsProvider | undefined,
+  request: FastifyRequest,
+  userId: string | undefined,
+  providerLabel: string | undefined,
+  usageStore: IUsageStore | undefined,
+  metricsCollector: MetricsCollector | undefined,
+  summarizationProvider: Provider | undefined,
+  summarizationModel: string | undefined,
+  userStore: IUserStore | undefined,
+  profileCompression?: ProfileCompression,
 ): Promise<void> {
-  const req = request!
-  const convId = (body.messages[0] as Record<string, unknown>)?.conversation_id as string || `conv_${Date.now()}`
+  const req = request
+  const convId = body.messages?.[0]?.conversation_id || `conv_${Date.now()}`
   const stream = body.stream ?? false
   const model = body.model
-
   const conv = await store.getOrCreateConversation(convId)
   const incomingMessages = toInternalMessages(body.messages)
 
+  // Bridge profile compression settings to the conversation's MemoryPolicy
+  // This enables per-profile adaptive compression policies
+  if (profileCompression) {
+    applyProfileCompressionToConversation(conv, profileCompression)
+  }
+
   const budget = createBudget(body.max_tokens ? body.max_tokens * 4 : undefined)
-
   const assembled = engine.assemble(conv, incomingMessages, budget)
-
   const combinedMessages = [...assembled.systemMessages, ...assembled.workingMessages]
 
   const toolsWithHidden = [
-    ...(body.tools as Array<Record<string, unknown>> || []),
+    ...(body.tools || []),
     ...ALL_HIDDEN_TOOL_SCHEMAS,
   ]
 
@@ -780,11 +896,21 @@ async function handleChatRequest(
   metricsCollector?.recordRequest()
 
   if (stream) {
-    return handleStreaming(req, reply, conv, combinedMessages, toolsWithHidden, body, provider, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector, userStore, summarizationProvider, summarizationModel)
+    return handleStreaming(
+      req, reply, conv, combinedMessages, toolsWithHidden, body,
+      provider, store, engine, vectorStore, userId, model,
+      providerLabel, usageStore, metricsCollector, userStore,
+    )
   } else {
-    return handleNonStreaming(reply, conv, combinedMessages, toolsWithHidden, body, provider, store, engine, vectorStore, userId, model, providerLabel, usageStore, metricsCollector, userStore, summarizationProvider, summarizationModel)
+    return handleNonStreaming(
+      reply, conv, combinedMessages, toolsWithHidden, body,
+      provider, store, engine, vectorStore, userId, model,
+      providerLabel, usageStore, metricsCollector, userStore,
+    )
   }
 }
+
+// ── Streaming handler ──
 
 async function handleStreaming(
   request: FastifyRequest,
@@ -792,19 +918,17 @@ async function handleStreaming(
   conv: Conversation,
   messages: Message[],
   tools: unknown[],
-  body: ChatCompletionRequest,
+  body: any,
   provider: Provider,
   store: IMemoryStore,
   engine: ContextEngine,
-  vectorStore?: IVectorStore,
-  userId?: string,
-  model?: string,
-  providerLabel?: string,
-  usageStore?: IUsageStore,
-  metricsCollector?: MetricsCollector,
-  userStore?: IUserStore,
-  summarizationProvider?: Provider,
-  summarizationModel?: string,
+  vectorStore: IVectorStore | undefined,
+  userId: string | undefined,
+  model: string | undefined,
+  providerLabel: string | undefined,
+  usageStore: IUsageStore | undefined,
+  metricsCollector: MetricsCollector | undefined,
+  userStore: IUserStore | undefined,
 ): Promise<void> {
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -816,14 +940,13 @@ async function handleStreaming(
   const pricing = new PricingEngine()
   const resolvedModel = model || body.model
   const MAX_PASSES = 3
-
   let currentMessages = messages
   let finalContent = ""
   let finalUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null = null
 
   try {
     for (let pass = 0; pass < MAX_PASSES; pass++) {
-      const passEvents = []
+      const passEvents: any[] = []
       let passContent = ""
       let passUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null = null
       let hasToolCalls = false
@@ -839,7 +962,7 @@ async function handleStreaming(
         })) {
           passEvents.push(event)
           if (event.type === "usage") {
-            passUsage = event.data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+            passUsage = event.data
           } else if (event.type === "chunk" && typeof event.data === "string") {
             passContent += event.data
           } else if (event.type === "tool_call") {
@@ -853,7 +976,7 @@ async function handleStreaming(
         break
       }
 
-      // Record usage for every pass (including reinference overhead)
+      // Record usage
       if (usageStore && userId && resolvedModel && passUsage) {
         usageStore.record({
           id: randomUUID(),
@@ -875,7 +998,7 @@ async function handleStreaming(
         break
       }
 
-      // Execute hidden tools from this pass
+      // Execute hidden tools
       let needsReinference = false
       const toolCallEvents = passEvents.filter((e: any) => e.type === "tool_call")
       for (const tcEvent of toolCallEvents) {
@@ -884,7 +1007,10 @@ async function handleStreaming(
           const name = tc.function?.name
           if (!name) continue
           const args = JSON.parse(tc.function?.arguments || "{}")
-          const result = await executeHiddenTool(conv, name, args, store, engine, vectorStore, userStore, userId, summarizationProvider, summarizationModel)
+          const result = await executeHiddenTool(
+            conv, name, args, store, engine, vectorStore,
+            userStore, userId,
+          )
           if (result) {
             recordToolCall(conv, name, args, result.resultText || "")
             if (result.appendMessages.length > 0) {
@@ -905,7 +1031,7 @@ async function handleStreaming(
       }
     }
 
-    // Stream the stabilized final content to the client
+    // Stream the stabilized content
     if (finalContent) {
       reply.raw.write(serializeStreamChunk(`chat_${Date.now()}`, body.model, finalContent))
     }
@@ -914,7 +1040,6 @@ async function handleStreaming(
     console.error("Stream error:", err)
     reply.raw.write(serializeStreamDone())
   }
-
   reply.raw.end()
 
   const latency = Date.now() - startTime
@@ -932,24 +1057,24 @@ async function handleStreaming(
   await store.saveConversation(conv)
 }
 
+// ── Non-streaming handler ──
+
 async function handleNonStreaming(
   reply: FastifyReply,
   conv: Conversation,
   messages: Message[],
   tools: unknown[],
-  body: ChatCompletionRequest,
+  body: any,
   provider: Provider,
   store: IMemoryStore,
   engine: ContextEngine,
-  vectorStore?: IVectorStore,
-  userId?: string,
-  modelName?: string,
-  providerLabel?: string,
-  usageStore?: IUsageStore,
-  metricsCollector?: MetricsCollector,
-  userStore?: IUserStore,
-  summarizationProvider?: Provider,
-  summarizationModel?: string,
+  vectorStore: IVectorStore | undefined,
+  userId: string | undefined,
+  modelName: string | undefined,
+  providerLabel: string | undefined,
+  usageStore: IUsageStore | undefined,
+  metricsCollector: MetricsCollector | undefined,
+  userStore: IUserStore | undefined,
 ): Promise<void> {
   const maxReinferences = 3
   let reinferenceCount = 0
@@ -969,7 +1094,7 @@ async function handleNonStreaming(
     })
 
     if (usageStore && userId) {
-      const usage: UsageRecord = {
+      usageStore.record({
         id: randomUUID(),
         userId,
         conversationId: conv.id,
@@ -980,8 +1105,7 @@ async function handleNonStreaming(
         totalTokens: response.usage?.total_tokens ?? 0,
         cost: pricing.computeCost(model, response.usage?.prompt_tokens ?? 0, response.usage?.completion_tokens ?? 0),
         createdAt: Date.now(),
-      }
-      usageStore.record(usage)
+      })
     }
 
     const toolCalls = response.message.content.filter((p) => p.type === "tool_call")
@@ -995,7 +1119,10 @@ async function handleNonStreaming(
     for (const tc of toolCalls) {
       const name = tc.function.name
       const args = JSON.parse(tc.function.arguments)
-      const result = await executeHiddenTool(conv, name, args, store, engine, vectorStore, userStore, userId, summarizationProvider, summarizationModel)
+      const result = await executeHiddenTool(
+        conv, name, args, store, engine, vectorStore,
+        userStore, userId,
+      )
       if (result && result.needsReinference) {
         currentMessages = [...currentMessages, ...result.appendMessages]
         needsReinference = true
@@ -1010,17 +1137,6 @@ async function handleNonStreaming(
       break
     }
     reinferenceCount++
-
-    const newMessages = createSpanMessages(body, finalContent)
-    store.addSpan(conv, {
-      id: `span_${Date.now()}`,
-      messages: newMessages,
-      createdAt: Date.now(),
-      summaryIds: [],
-      embeddingIds: [],
-      tokenCount: Math.ceil(finalContent.length / 4),
-    })
-    await store.saveConversation(conv)
   }
 
   const latency = Date.now() - startTime
@@ -1039,17 +1155,17 @@ async function handleNonStreaming(
   reply.send(JSON.parse(serializeNonStreamResponse(`chat_${Date.now()}`, body.model, finalContent)))
 }
 
+// ── Hidden tool execution ──
+
 async function executeHiddenTool(
   conv: Conversation,
   name: string,
   args: Record<string, unknown>,
   store: IMemoryStore,
   engine: ContextEngine,
-  vectorStore?: IVectorStore,
-  userStore?: IUserStore,
-  userId?: string,
-  summarizationProvider?: Provider,
-  summarizationModel?: string,
+  vectorStore: IVectorStore | undefined,
+  userStore: IUserStore | undefined,
+  userId: string | undefined,
 ): Promise<{ needsReinference: boolean; appendMessages: Message[]; resultText?: string } | null> {
   let result: { needsReinference: boolean; appendMessages: Message[]; resultText?: string } | null = null
 
@@ -1078,7 +1194,7 @@ async function executeHiddenTool(
     }
 
     case "compress_memory": {
-      const r = await executeCompressMemory(conv, args.scope_id as string, args.level as CompressionLevel, summarizationProvider, summarizationModel)
+      const r = await executeCompressMemory(conv, args.scope_id as string, args.level as CompressionLevel)
       result = { needsReinference: false, appendMessages: [], resultText: r.message }
       break
     }
@@ -1110,7 +1226,11 @@ async function executeHiddenTool(
       if (vectorStore && r.memories.length === 0) {
         const scored = await vectorStore.searchMemories(args.query as string, conv.memories, 5)
         if (scored.length > 0) {
-          r = executeQueryMemoryGraph(conv, scored.map((s) => s.handle.topic).join(" "), (args.depth as number) || 1)
+          r = executeQueryMemoryGraph(
+            conv,
+            scored.map((s) => s.handle.topic).join(" "),
+            (args.depth as number) || 1,
+          )
         }
       }
       const text = `Memory graph: ${r.memories.length} memories, ${r.summaries.length} related summaries, ${r.events.length} related events`
@@ -1132,9 +1252,14 @@ async function executeHiddenTool(
 
     case "set_memory_policy": {
       const r = executeSetMemoryPolicy(conv, {
+        compressionStrategy: args.compression_strategy as CompressionStrategy,
         compressionRate: args.compression_rate as CompressionRate,
         recencyBias: args.recency_bias as number,
         retentionPriority: args.retention_priority as string[],
+        tokenThreshold: args.token_threshold as number,
+        messageThreshold: args.message_threshold as number,
+        idleThresholdMs: args.idle_threshold_ms as number,
+        semanticDistanceThreshold: args.semantic_distance_threshold as number,
       })
       result = { needsReinference: false, appendMessages: [], resultText: r.message }
       break
@@ -1176,6 +1301,8 @@ async function executeHiddenTool(
   recordToolCall(conv, name, args, result?.resultText || "")
   return result
 }
+
+// ── HTML templates (moved from compiled JS to keep the source in one place) ──
 
 const WEB_UI_HTML = `<!DOCTYPE html>
 <html lang="en" x-data="app()">
@@ -1398,13 +1525,9 @@ document.addEventListener("alpine:init", () => {
       label: "",
     },
     async init() {
-      // Don't load providers on the wizard if there's no token yet (first visit)
       const token = localStorage.getItem("engramic_token")
       if (token) await this.loadProviders()
       else this.loaded = true
-    },
-    async init() {
-      await this.loadProviders()
     },
     async api(path, opts = {}) {
       const headers = { "Content-Type": "application/json" }
@@ -1433,66 +1556,41 @@ document.addEventListener("alpine:init", () => {
           method: "POST",
           body: JSON.stringify({ base_url: this.form.baseUrl, api_key: this.form.apiKey }),
         })
-        if (!data.ok) {
-          this.testError = data.error || "Connection failed"
-          return
-        }
+        if (!data.ok) { this.testError = data.error || "Connection failed"; return }
         this.allModels = data.models || []
         this.tested = true
-        if (this.allModels.length > 0) {
-          this.form.selectedModels = [this.allModels[0].id]
-        }
-      } catch (e) {
-        this.testError = e.message
-      } finally {
-        this.testing = false
-      }
+        if (this.allModels.length > 0) this.form.selectedModels = [this.allModels[0].id]
+      } catch (e) { this.testError = e.message }
+      finally { this.testing = false }
     },
     toggleModel(id) {
       const idx = this.form.selectedModels.indexOf(id)
       if (idx >= 0) this.form.selectedModels.splice(idx, 1)
       else this.form.selectedModels.push(id)
     },
-    canProceedFromModels() {
-      return this.form.useWildcard || this.form.selectedModels.length > 0
-    },
+    canProceedFromModels() { return this.form.useWildcard || this.form.selectedModels.length > 0 },
     async testChat() {
       this.chatTest.loading = true
       this.chatTest.error = ""
       this.chatTest.result = ""
       this.chatTest.validated = false
-      const model = this.form.useWildcard
-        ? (this.allModels[0]?.id || "")
-        : (this.form.selectedModels[0] || "")
+      const model = this.form.useWildcard ? (this.allModels[0]?.id || "") : (this.form.selectedModels[0] || "")
       if (!model) { this.chatTest.error = "No model selected"; this.chatTest.loading = false; return }
       try {
         const data = await this.api("/test-chat", {
           method: "POST",
-          body: JSON.stringify({ base_url: this.form.baseUrl, api_key: this.form.apiKey, provider: this.form.providerType, model: model }),
+          body: JSON.stringify({ base_url: this.form.baseUrl, api_key: this.form.apiKey, provider: this.form.providerType, model }),
         })
-        if (!data.ok) {
-          this.chatTest.error = data.error || "Chat test failed"
-          return
-        }
+        if (!data.ok) { this.chatTest.error = data.error || "Chat test failed"; return }
         this.chatTest.result = data.response
         this.chatTest.validated = true
-      } catch (e) {
-        this.chatTest.error = e.message
-      } finally {
-        this.chatTest.loading = false
-      }
+      } catch (e) { this.chatTest.error = e.message }
+      finally { this.chatTest.loading = false }
     },
-    modelSummary() {
-      if (this.form.useWildcard) return "Any"
-      return this.form.selectedModels.join(", ")
-    },
+    modelSummary() { return this.form.useWildcard ? "Any" : this.form.selectedModels.join(", ") },
     async loadProviders() {
-      try {
-        const data = await this.api("/providers")
-        this.providers = data.providers || []
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
+      try { const d = await this.api("/providers"); this.providers = d.providers || [] }
+      catch (e) { this.notify(e.message, "err") }
       this.loaded = true
     },
     async saveProvider() {
@@ -1504,40 +1602,23 @@ document.addEventListener("alpine:init", () => {
         const data = await this.api("/register", {
           method: "POST",
           body: JSON.stringify({
-            label: f.label,
-            api_key: f.apiKey,
-            base_url: f.baseUrl,
-            default_model: defaultModel,
-            provider: f.providerType,
+            label: f.label, api_key: f.apiKey, base_url: f.baseUrl,
+            default_model: defaultModel, provider: f.providerType,
           }),
         })
-        if (data.token) {
-          localStorage.setItem("engramic_token", data.token)
-        }
+        if (data.token) localStorage.setItem("engramic_token", data.token)
         this.notify("Provider saved")
-        f.apiKey = ""
-        f.baseUrl = ""
-        f.selectedModels = []
-        f.useWildcard = false
-        f.label = ""
-        this.step = 1
-        this.tested = false
+        f.apiKey = ""; f.baseUrl = ""; f.selectedModels = []; f.useWildcard = false; f.label = ""
+        this.step = 1; this.tested = false
         this.chatTest = { loading: false, result: "", error: "", validated: false }
         await this.loadProviders()
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
-      this.saving = false
+      } catch (e) { this.notify(e.message, "err") }
+      finally { this.saving = false }
     },
     async removeProvider(label) {
       if (!confirm('Remove provider "' + label + '"?')) return
-      try {
-        await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
-        this.notify("Provider removed")
-        await this.loadProviders()
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
+      try { await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" }); this.notify("Provider removed"); await this.loadProviders() }
+      catch (e) { this.notify(e.message, "err") }
     },
   }))
 })
@@ -1567,22 +1648,12 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   .btn-danger:hover { background: #f85149; }
   .btn-add { font-size: 1.25rem; line-height: 1; padding: 4px 10px; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; padding-right: 8px; }
-  td { padding: 8px 8px; border-top: 1px solid #21262d; font-size: 0.9rem; vertical-align: middle; }
+  th { text-align: left; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; padding-bottom: 8px; }
+  td { padding: 8px 0; border-top: 1px solid #21262d; font-size: 0.9rem; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
-  .badge-green { background: #23863622; color: #3fb950; }
-  .badge-purple { background: #8957e522; color: #d2a8ff; }
   .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
   .provider-label { font-weight: 600; }
   .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .action-cell { white-space: nowrap; }
-  .btn-sm { padding: 4px 10px; font-size: 0.78rem; border: none; border-radius: 4px; cursor: pointer; }
-  .btn-sm-primary { background: #238636; color: #fff; }
-  .btn-sm-primary:hover { background: #2ea043; }
-  .btn-sm-danger { background: #da3633; color: #fff; }
-  .btn-sm-danger:hover { background: #f85149; }
-  .btn-sm-ghost { background: #21262d; color: #c9d1d9; }
-  .btn-sm-ghost:hover { background: #30363d; }
 </style>
 </head>
 <body>
@@ -1629,20 +1700,15 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     <p class="empty">No profiles created. <a href="/add-profile" style="color:#58a6ff;">Add one</a></p>
   </template>
   <table x-show="profilesLoaded && profiles.length > 0">
-    <thead><tr><th>Name</th><th>Execution</th><th>Sum.</th><th>Emb.</th><th>Context</th><th>Actions</th></tr></thead>
+    <thead><tr><th>Name</th><th>Execution</th><th>Summarization</th><th>Embedding</th><th>Context</th><th></th></tr></thead>
     <tbody>
       <template x-for="p in profiles" :key="p.id">
         <tr>
           <td class="provider-label" x-text="p.name"></td>
           <td><span class="badge" x-text="p.execution.provider + '/' + p.execution.model"></span></td>
-          <td><span class="badge badge-green" x-text="p.summarization.provider + '/' + p.summarization.model"></span></td>
-          <td><span class="badge badge-purple" x-text="p.embedding.provider + '/' + p.embedding.model"></span></td>
-          <td x-text="Number(p.contextWindow).toLocaleString()"></td>
-          <td class="action-cell">
-            <a :href="'/add-profile?id=' + p.id" class="btn btn-sm btn-sm-primary" style="text-decoration:none;">Edit</a>
-            <button class="btn btn-sm btn-sm-ghost" @click="showProfileToken(p)" title="View token">Token</button>
-            <button class="btn btn-sm btn-sm-danger" @click="deleteProfile(p)">Delete</button>
-          </td>
+          <td><span class="badge" x-text="p.summarization.provider + '/' + p.summarization.model"></span></td>
+          <td><span class="badge" x-text="p.embedding.provider + '/' + p.embedding.model"></span></td>
+          <td x-text="p.contextWindow"></td>
         </tr>
       </template>
     </tbody>
@@ -1670,10 +1736,7 @@ document.addEventListener("alpine:init", () => {
     loaded: false,
     profilesLoaded: false,
     toast: { show: false, message: "", type: "ok" },
-    async init() {
-      await this.loadProviders()
-      await this.loadProfiles()
-    },
+    async init() { await this.loadProviders(); await this.loadProfiles() },
     async api(path, opts = {}) {
       const headers = { "Content-Type": "application/json" }
       const token = localStorage.getItem("engramic_token")
@@ -1685,64 +1748,13 @@ document.addEventListener("alpine:init", () => {
       if (!res.ok) throw new Error(data.error || res.statusText)
       return data
     },
-    notify(msg, type = "ok") {
-      this.toast = { show: true, message: msg, type }
-      setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
-    },
-    async loadProviders() {
-      try {
-        const data = await this.api("/providers")
-        this.providers = data.providers || []
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
-      this.loaded = true
-    },
-    async loadProfiles() {
-      try {
-        const data = await this.api("/v1/profiles")
-        this.profiles = data.profiles || []
-      } catch (e) {
-        console.error("Failed to load profiles:", e)
-      }
-      this.profilesLoaded = true
-    },
+    notify(msg, type = "ok") { this.toast = { show: true, message: msg, type }; setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000) },
+    async loadProviders() { try { const d = await this.api("/providers"); this.providers = d.providers || [] } catch (e) { this.notify(e.message, "err") }; this.loaded = true },
+    async loadProfiles() { try { const d = await this.api("/v1/profiles"); this.profiles = d.profiles || [] } catch (e) { console.error("Failed to load profiles:", e) }; this.profilesLoaded = true },
     async removeProvider(label) {
       if (!confirm('Remove provider "' + label + '"?')) return
-      try {
-        await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" })
-        this.notify("Provider removed")
-        await this.loadProviders()
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
-    },
-    showProfileToken(profile) {
-      if (!profile.authToken) {
-        this.notify("No auth token available for this profile", "err")
-        return
-      }
-      navigator.clipboard.writeText(profile.authToken).then(() => {
-        this.notify("Token copied: " + profile.name)
-      }).catch(() => {
-        const ta = document.createElement("textarea")
-        ta.value = profile.authToken
-        document.body.appendChild(ta)
-        ta.select()
-        document.execCommand("copy")
-        document.body.removeChild(ta)
-        this.notify("Token copied: " + profile.name)
-      })
-    },
-    async deleteProfile(profile) {
-      if (!confirm('Delete profile "' + profile.name + '"? This cannot be undone.')) return
-      try {
-        await this.api("/v1/profiles/" + profile.id, { method: "DELETE" })
-        this.notify("Profile deleted")
-        await this.loadProfiles()
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
+      try { await this.api("/providers/" + encodeURIComponent(label), { method: "DELETE" }); this.notify("Provider removed"); await this.loadProviders() }
+      catch (e) { this.notify(e.message, "err") }
     },
   }))
 })
@@ -1750,16 +1762,16 @@ document.addEventListener("alpine:init", () => {
 </body>
 </html>`
 
-const PROFILE_MANAGER_HTML = `<!DOCTYPE html>
-<html lang="en" x-data="profileManager()">
+const ADD_PROFILE_HTML = `<!DOCTYPE html>
+<html lang="en" x-data="profileApp()">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>engramic — Profile Manager</title>
+<title>engramic — Add Profile</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 860px; margin: 0 auto; padding: 24px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; max-width: 720px; margin: 0 auto; padding: 24px; }
   h1 { font-size: 1.5rem; margin-bottom: 4px; color: #f0f6fc; }
   .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 24px; }
   .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
@@ -1767,214 +1779,47 @@ const PROFILE_MANAGER_HTML = `<!DOCTYPE html>
   label { display: block; font-size: 0.8rem; color: #8b949e; margin-bottom: 4px; }
   input, select { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem; margin-bottom: 12px; }
   input:focus, select:focus { outline: none; border-color: #58a6ff; }
-  textarea { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; margin-bottom: 12px; font-family: monospace; resize: vertical; }
-  textarea:focus { outline: none; border-color: #58a6ff; }
-  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer; }
   .btn-primary { background: #238636; color: #fff; }
-  .btn-primary:hover:not(:disabled) { background: #2ea043; }
-  .btn-danger { background: #da3633; color: #fff; }
-  .btn-danger:hover:not(:disabled) { background: #f85149; }
-  .btn-ghost { background: #21262d; color: #c9d1d9; }
-  .btn-ghost:hover:not(:disabled) { background: #30363d; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .actions-right { justify-content: flex-end; }
-  .actions-between { justify-content: space-between; }
+  .btn-primary:hover { background: #2ea043; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; background: #1f6feb22; color: #58a6ff; }
-  .badge-green { background: #23863622; color: #3fb950; }
-  .badge-purple { background: #8957e522; color: #d2a8ff; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-  .form-grid .full { grid-column: 1 / -1; }
-  .role-section { border: 1px solid #30363d; border-radius: 6px; padding: 12px; margin-bottom: 16px; background: #0d1117; }
-  .role-section h3 { font-size: 0.9rem; color: #f0f6fc; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-  .role-section h3 .role-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-  .token-display { display: flex; align-items: center; gap: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; }
-  .token-display code { flex: 1; font-size: 0.8rem; color: #d2a8ff; word-break: break-all; }
-  .empty { color: #8b949e; font-style: italic; padding: 16px 0; text-align: center; }
-  .meta-row { display: flex; gap: 16px; font-size: 0.8rem; color: #8b949e; margin-bottom: 12px; }
-  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .section-header .help { font-size: 0.75rem; color: #8b949e; font-weight: normal; }
-  .loading-spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
 <h1>engramic</h1>
-<p class="subtitle">
-  <span x-text="isEditing ? 'Edit Profile' : 'New Profile'"></span>
-  <span x-show="profileId"> &middot; <code style="color:#8b949e; font-size:0.75rem;" x-text="profileId"></code></span>
-</p>
+<p class="subtitle">Add Profile</p>
 
-<!-- Loading state -->
-<div class="card" x-show="loading">
-  <p class="empty"><span class="loading-spinner"></span> Loading...</p>
-</div>
+<div class="card">
+  <h2>New Profile</h2>
+  <label>Name</label>
+  <input x-model="form.name" placeholder="e.g. Default, Fast, Creative">
 
-<!-- Main form -->
-<div x-show="!loading">
-  <!-- Basic Info -->
-  <div class="card">
-    <h2>Basic Information</h2>
-    <div class="form-grid">
-      <div class="full">
-        <label>Profile Name</label>
-        <input x-model="form.name" placeholder="e.g. Default, Fast, Creative, Research">
-      </div>
-      <div style="margin-right:8px;">
-        <label>Context Window (tokens)</label>
-        <input x-model.number="form.contextWindow" type="number" placeholder="128000">
-      </div>
-      <div style="margin-left:8px;">
-        <label>Tools</label>
-        <input x-model="form.toolsStr" placeholder="e.g. remember, search_memory (comma sep)">
-      </div>
-    </div>
-  </div>
+  <label>Execution Provider</label>
+  <select x-model="form.executionProvider">
+    <template x-for="p in providers" :key="p.label">
+      <option x-text="p.label" :value="p.label"></option>
+    </template>
+  </select>
 
-  <!-- Model Assignments -->
-  <div class="card">
-    <h2>Model Assignments</h2>
-    <p style="color:#8b949e; font-size:0.8rem; margin-bottom:16px;">Each profile assigns a provider + model to each role.</p>
+  <label>Execution Model</label>
+  <input x-model="form.executionModel" placeholder="gpt-4o or * for wildcard">
 
-    <!-- Execution Role -->
-    <div class="role-section">
-      <h3><span class="role-dot" style="background:#58a6ff;"></span> Execution</h3>
-      <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">The primary chat/completions model. Required.</p>
-      <div class="form-grid">
-        <div style="margin-right:8px;">
-          <label>Provider</label>
-          <select x-model="form.execution.provider">
-            <option value="">Select a provider</option>
-            <template x-for="p in providers" :key="p.label">
-              <option x-text="p.label" :value="p.label"></option>
-            </template>
-          </select>
-        </div>
-        <div style="margin-left:8px;">
-          <label>Model</label>
-          <input x-model="form.execution.model" placeholder="gpt-4o, claude-3, or * for wildcard">
-        </div>
-      </div>
-    </div>
+  <label>Context Window</label>
+  <input x-model.number="form.contextWindow" type="number" placeholder="128000">
 
-    <!-- Summarization Role -->
-    <div class="role-section">
-      <h3><span class="role-dot" style="background:#3fb950;"></span> Summarization</h3>
-      <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">Used for context compression and summarization. Falls back to Execution if not set.</p>
-      <div class="form-grid">
-        <div style="margin-right:8px;">
-          <label>Provider</label>
-          <select x-model="form.summarization.provider">
-            <option value="">Same as Execution</option>
-            <template x-for="p in providers" :key="p.label">
-              <option x-text="p.label" :value="p.label"></option>
-            </template>
-          </select>
-        </div>
-        <div style="margin-left:8px;">
-          <label>Model</label>
-          <input x-model="form.summarization.model" placeholder="Leave blank to use execution model">
-        </div>
-      </div>
-    </div>
-
-    <!-- Embedding Role -->
-    <div class="role-section">
-      <h3><span class="role-dot" style="background:#d2a8ff;"></span> Embedding</h3>
-      <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">Used for semantic search and memory retrieval. Falls back to Execution if not set.</p>
-      <div class="form-grid">
-        <div style="margin-right:8px;">
-          <label>Provider</label>
-          <select x-model="form.embedding.provider">
-            <option value="">Same as Execution</option>
-            <template x-for="p in providers" :key="p.label">
-              <option x-text="p.label" :value="p.label"></option>
-            </template>
-          </select>
-        </div>
-        <div style="margin-left:8px;">
-          <label>Model</label>
-          <input x-model="form.embedding.model" placeholder="Leave blank to use execution model">
-        </div>
-      </div>
-    </div>
-
-    <!-- Model Preferences -->
-    <div class="full">
-      <label>Model Preferences (ordered priority)</label>
-      <input x-model="form.modelPreferencesStr" placeholder="e.g. gpt-4o, gpt-4o-mini, claude-sonnet (comma sep)">
-      <p style="color:#6e7681; font-size:0.75rem; margin-top:-10px; margin-bottom:8px;">Fallback model preference order when the primary is unavailable.</p>
-    </div>
-  </div>
-
-  <!-- Compression Policy -->
-  <div class="card">
-    <h2>Compression Policy</h2>
-    <p style="color:#8b949e; font-size:0.8rem; margin-bottom:16px;">Controls when and how aggressively context is compressed.</p>
-    <div class="form-grid">
-      <div style="margin-right:8px;">
-        <label>Trigger</label>
-        <select x-model="form.compression.trigger">
-          <option value="token_count">Token Count</option>
-          <option value="message_count">Message Count</option>
-          <option value="idle_time">Idle Time</option>
-        </select>
-      </div>
-      <div style="margin-left:8px;">
-        <label>Threshold</label>
-        <input x-model.number="form.compression.threshold" type="number" placeholder="80000">
-      </div>
-      <div style="margin-right:8px;">
-        <label>Compression Rate</label>
-        <select x-model="form.compression.rate">
-          <option value="low">Low (conservative)</option>
-          <option value="medium">Medium (balanced)</option>
-          <option value="high">High (aggressive)</option>
-        </select>
-      </div>
-      <div style="margin-left:8px;">
-        <!-- placeholder for alignment -->
-      </div>
-    </div>
-  </div>
-
-  <!-- Auth Token -->
-  <div class="card" x-show="profile.authToken">
-    <h2>Scoped Auth Token</h2>
-    <div class="token-display">
-      <code x-text="profile.authToken"></code>
-      <button class="btn btn-ghost" @click="copyToken()" title="Copy token" style="padding:4px 10px; font-size:0.8rem;">Copy</button>
-    </div>
-    <p style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">This token is scoped to this profile. Use it in the Authorization header: <code style="color:#58a6ff;">Bearer &lt;token&gt;</code></p>
-    <div class="actions actions-right">
-      <button class="btn btn-ghost" @click="regenerateToken()" x-text="regenerating ? 'Regenerating...' : 'Regenerate Token'" :disabled="regenerating"></button>
-    </div>
-  </div>
-
-  <!-- Actions -->
-  <div class="card">
-    <div class="actions actions-between">
-      <div>
-        <a href="/" class="btn btn-ghost" style="text-decoration:none;">&larr; Back to Dashboard</a>
-      </div>
-      <div>
-        <button x-show="isEditing" class="btn btn-danger" @click="deleteProfile()" x-text="deleting ? 'Deleting...' : 'Delete Profile'" :disabled="deleting" style="margin-right:8px;">Delete</button>
-        <button class="btn btn-primary" @click="saveProfile()" :disabled="saving || !form.name || !form.execution.provider || !form.execution.model">
-          <span x-show="saving"><span class="loading-spinner"></span> </span>
-          <span x-text="saving ? 'Saving...' : (isEditing ? 'Update Profile' : 'Create Profile')"></span>
-        </button>
-      </div>
-    </div>
+  <div class="actions">
+    <a href="/" class="btn" style="background:#21262d; color:#c9d1d9; text-decoration:none;">Cancel</a>
+    <button class="btn btn-primary" @click="saveProfile()" x-text="saving ? 'Saving...' : 'Save Profile'" :disabled="saving || !form.name || !form.executionProvider"></button>
   </div>
 </div>
 
-<!-- Toast -->
 <div
   x-show="toast.show"
   x-text="toast.message"
   :class="'toast ' + toast.type"
-  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer; z-index: 1000;"
+  style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 0.85rem; cursor: pointer"
   @click="toast.show = false"
 ></div>
 
@@ -1985,39 +1830,12 @@ const PROFILE_MANAGER_HTML = `<!DOCTYPE html>
 
 <script>
 document.addEventListener("alpine:init", () => {
-  Alpine.data("profileManager", () => ({
+  Alpine.data("profileApp", () => ({
     providers: [],
-    profile: {},
-    profileId: null,
-    isEditing: false,
-    loading: true,
     saving: false,
-    deleting: false,
-    regenerating: false,
     toast: { show: false, message: "", type: "ok" },
-    form: {
-      name: "",
-      contextWindow: 128000,
-      toolsStr: "",
-      execution: { provider: "", model: "" },
-      summarization: { provider: "", model: "" },
-      embedding: { provider: "", model: "" },
-      compression: { trigger: "token_count", threshold: 80000, rate: "medium" },
-      modelPreferencesStr: "",
-    },
-
-    async init() {
-      // Check if editing — look for ?id= in URL
-      const params = new URLSearchParams(window.location.search)
-      this.profileId = params.get("id")
-      this.isEditing = !!this.profileId
-      await this.loadProviders()
-      if (this.isEditing) {
-        await this.loadProfile()
-      }
-      this.loading = false
-    },
-
+    form: { name: "", executionProvider: "", executionModel: "*", contextWindow: 128000 },
+    async init() { await this.loadProviders() },
     async api(path, opts = {}) {
       const headers = { "Content-Type": "application/json" }
       const token = localStorage.getItem("engramic_token")
@@ -2029,147 +1847,18 @@ document.addEventListener("alpine:init", () => {
       if (!res.ok) throw new Error(data.error || res.statusText)
       return data
     },
-
-    notify(msg, type = "ok") {
-      this.toast = { show: true, message: msg, type }
-      setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000)
-    },
-
+    notify(msg, type = "ok") { this.toast = { show: true, message: msg, type }; setTimeout(() => { if (this.toast.message === msg) this.toast.show = false }, 3000) },
     async loadProviders() {
-      try {
-        const data = await this.api("/providers")
-        this.providers = data.providers || []
-        if (!this.isEditing && this.providers.length > 0) {
-          this.form.execution.provider = this.providers[0].label
-        }
-      } catch (e) {
-        console.error("Failed to load providers:", e)
-      }
+      try { const d = await this.api("/providers"); this.providers = d.providers || []; if (this.providers.length > 0) this.form.executionProvider = this.providers[0].label }
+      catch (e) { console.error("Failed to load providers:", e) }
     },
-
-    async loadProfile() {
-      try {
-        this.profile = await this.api("/v1/profiles/" + this.profileId)
-        this.form.name = this.profile.name || ""
-        this.form.contextWindow = this.profile.contextWindow || 128000
-        this.form.toolsStr = (this.profile.tools || []).join(", ")
-        this.form.execution = {
-          provider: this.profile.execution?.provider || "",
-          model: this.profile.execution?.model || "",
-        }
-        this.form.summarization = {
-          provider: this.profile.summarization?.provider || "",
-          model: this.profile.summarization?.model || "",
-        }
-        this.form.embedding = {
-          provider: this.profile.embedding?.provider || "",
-          model: this.profile.embedding?.model || "",
-        }
-        this.form.compression = {
-          trigger: this.profile.compression?.trigger || "token_count",
-          threshold: this.profile.compression?.threshold || 80000,
-          rate: this.profile.compression?.rate || "medium",
-        }
-        this.form.modelPreferencesStr = (this.profile.modelPreferences || []).join(", ")
-      } catch (e) {
-        this.notify("Failed to load profile: " + e.message, "err")
-      }
-    },
-
-    buildProfilePayload() {
-      const payload = {
-        name: this.form.name,
-        contextWindow: this.form.contextWindow,
-        execution: this.form.execution,
-        summarization: this.form.summarization.provider
-          ? this.form.summarization
-          : this.form.execution,
-        embedding: this.form.embedding.provider
-          ? this.form.embedding
-          : this.form.execution,
-        compression: this.form.compression,
-        tools: this.form.toolsStr
-          ? this.form.toolsStr.split(/\\s*,\\s*/).filter(Boolean)
-          : [],
-        modelPreferences: this.form.modelPreferencesStr
-          ? this.form.modelPreferencesStr.split(/\\s*,\\s*/).filter(Boolean)
-          : [],
-      }
-      return payload
-    },
-
     async saveProfile() {
       this.saving = true
       try {
-        const payload = this.buildProfilePayload()
-        if (this.isEditing) {
-          await this.api("/v1/profiles/" + this.profileId, {
-            method: "PUT",
-            body: JSON.stringify(payload),
-          })
-          this.notify("Profile updated")
-        } else {
-          const created = await this.api("/v1/profiles", {
-            method: "POST",
-            body: JSON.stringify(payload),
-          })
-          this.profileId = created.id
-          this.profile = created
-          this.isEditing = true
-          this.notify("Profile created")
-          // Update URL to edit mode without reload
-          window.history.replaceState({}, "", "/add-profile?id=" + created.id)
-        }
-        // Refresh profile data after save
-        if (this.isEditing) {
-          await this.loadProfile()
-        }
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
-      this.saving = false
-    },
-
-    async deleteProfile() {
-      if (!confirm('Delete profile "' + this.form.name + '"? This action cannot be undone.')) return
-      this.deleting = true
-      try {
-        await this.api("/v1/profiles/" + this.profileId, { method: "DELETE" })
-        this.notify("Profile deleted")
-        window.location.href = "/"
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
-      this.deleting = false
-    },
-
-    async regenerateToken() {
-      if (!confirm("Regenerate the auth token for this profile? The old token will stop working.")) return
-      this.regenerating = true
-      try {
-        const data = await this.api("/v1/profiles/" + this.profileId + "/regenerate-token", { method: "POST" })
-        this.profile.authToken = data.authToken
-        this.notify("Token regenerated")
-      } catch (e) {
-        this.notify(e.message, "err")
-      }
-      this.regenerating = false
-    },
-
-    copyToken() {
-      if (!this.profile.authToken) return
-      navigator.clipboard.writeText(this.profile.authToken).then(() => {
-        this.notify("Token copied to clipboard")
-      }).catch(() => {
-        // Fallback
-        const ta = document.createElement("textarea")
-        ta.value = this.profile.authToken
-        document.body.appendChild(ta)
-        ta.select()
-        document.execCommand("copy")
-        document.body.removeChild(ta)
-        this.notify("Token copied to clipboard")
-      })
+        await this.api("/v1/profiles", { method: "POST", body: JSON.stringify({ name: this.form.name, execution: { provider: this.form.executionProvider, model: this.form.executionModel }, contextWindow: this.form.contextWindow }) })
+        this.notify("Profile created"); window.location.href = "/"
+      } catch (e) { this.notify(e.message, "err") }
+      finally { this.saving = false }
     },
   }))
 })
@@ -2177,245 +1866,45 @@ document.addEventListener("alpine:init", () => {
 </body>
 </html>`
 
-function createSpanMessages(body: ChatCompletionRequest, assistantContent: string): Message[] {
-  const msgs = toInternalMessages(body.messages)
-  if (assistantContent) {
-    msgs.push({
-      id: `msg_${Date.now()}_assistant`,
-      role: "assistant",
-      content: [{ type: "text", text: assistantContent }],
-    })
-  }
-  return msgs
-}
-
 const CHATS_UI_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>engramic — Chat Browser</title>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<title>engramic — Conversations</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; height: 100vh; overflow: hidden; }
-  .layout { display: flex; height: 100vh; }
-  .sidebar { width: 320px; min-width: 320px; border-right: 1px solid #30363d; display: flex; flex-direction: column; background: #161b22; }
-  .sidebar-header { padding: 16px; border-bottom: 1px solid #30363d; }
-  .sidebar-header h1 { font-size: 1.1rem; color: #f0f6fc; }
-  .sidebar-header .sub { color: #8b949e; font-size: 0.75rem; margin-top: 2px; }
-  .sidebar-search { padding: 12px 16px; border-bottom: 1px solid #30363d; }
-  .sidebar-search input { width: 100%; padding: 8px 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem; outline: none; }
-  .sidebar-search input:focus { border-color: #58a6ff; }
-  .conv-list { flex: 1; overflow-y: auto; }
-  .conv-item { padding: 12px 16px; border-bottom: 1px solid #21262d; cursor: pointer; transition: background 0.15s; }
-  .conv-item:hover { background: #1c2128; }
-  .conv-item.active { background: #1f6feb22; border-left: 3px solid #58a6ff; }
-  .conv-item .id { font-size: 0.85rem; font-weight: 600; color: #f0f6fc; margin-bottom: 4px; }
-  .conv-item .meta { font-size: 0.75rem; color: #8b949e; display: flex; gap: 12px; }
-  .conv-item .meta span { display: flex; align-items: center; gap: 3px; }
-  .conv-item .preview { font-size: 0.8rem; color: #6e7681; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .main-header { padding: 16px 20px; border-bottom: 1px solid #30363d; display: flex; align-items: center; justify-content: space-between; }
-  .main-header h2 { font-size: 1rem; color: #f0f6fc; }
-  .main-header .stats { font-size: 0.75rem; color: #8b949e; display: flex; gap: 16px; }
-  .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; color: #484f58; font-size: 0.9rem; flex-direction: column; gap: 8px; }
-  .empty-state .big-icon { font-size: 2rem; opacity: 0.3; }
-  .timeline { flex: 1; overflow-y: auto; padding: 16px 20px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; background: #21262d; border-radius: 8px; overflow: hidden; border: 1px solid #30363d; }
-  .grid-header { background: #1c2128; padding: 8px 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #8b949e; text-align: center; }
-  .grid-header.user { color: #58a6ff; }
-  .grid-header.hidden { color: #d2a8ff; }
-  .grid-header.system { color: #3fb950; }
-  .cell { background: #0d1117; padding: 12px; min-height: 40px; font-size: 0.85rem; line-height: 1.5; }
-  .cell.empty { color: #21262d; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
-  .cell.user { color: #c9d1d9; }
-  .cell.hidden { color: #d2a8ff; }
-  .cell.system { color: #3fb950; }
-  .tool-name { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #2d1b4e; color: #d2a8ff; margin-bottom: 4px; font-family: monospace; }
-  .tool-detail { margin-top: 6px; font-family: monospace; font-size: 0.75rem; background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: #8b949e; }
-  .expand-btn { background: none; border: none; color: #58a6ff; cursor: pointer; font-size: 0.75rem; padding: 2px 0; }
-  .expand-btn:hover { text-decoration: underline; }
-  .sys-event { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; background: #1c3a1c; color: #7ee787; margin-bottom: 4px; }
-  .msg-text { word-break: break-word; }
-  .msg-text.collapsed { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .timestamp { font-size: 0.65rem; color: #484f58; margin-top: 4px; }
-  .badge-count { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; background: #1f6feb22; color: #58a6ff; }
-  .tool-count { background: #2d1b4e; color: #d2a8ff; }
-  .compression-event { background: #1c3a1c; color: #7ee787; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; border: 1px solid #2d5a2d; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0d1117; color: #c9d1d9; padding: 24px; }
+  h1 { font-size: 1.5rem; margin-bottom: 16px; }
+  .conv-list { display: flex; flex-direction: column; gap: 8px; }
+  .conv-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px 16px; cursor: pointer; }
+  .conv-card:hover { border-color: #58a6ff; }
+  .conv-id { font-weight: 600; font-size: 0.9rem; color: #f0f6fc; }
+  .conv-preview { font-size: 0.82rem; color: #8b949e; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-meta { font-size: 0.75rem; color: #484f58; margin-top: 4px; display: flex; gap: 12px; }
 </style>
 </head>
 <body>
-<div class="layout" x-data="chatsApp()">
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <h1>engramic</h1>
-      <div class="sub">Chat Browser</div>
-    </div>
-    <div class="sidebar-search">
-      <input type="text" x-model="search" placeholder="Search conversations..." @input.debounce="filterConversations()">
-    </div>
-    <div class="conv-list">
-      <template x-if="!loaded">
-        <div class="empty-state" style="padding:40px 16px">Loading...</div>
-      </template>
-      <template x-if="loaded && filteredConversations.length === 0">
-        <div class="empty-state" style="padding:40px 16px">No conversations found</div>
-      </template>
-      <template x-for="c in filteredConversations" :key="c.id">
-        <div class="conv-item" :class="{ active: selectedId === c.id }" @click="selectConversation(c.id)">
-          <div class="id" x-text="c.id"></div>
-          <div class="meta">
-            <span x-text="formatDate(c.updatedAt)"></span>
-            <span x-text="c.messageCount + ' msgs'"></span>
-            <span x-show="c.toolCallCount > 0" class="tool-count badge-count" x-text="c.toolCallCount + ' tools'"></span>
-          </div>
-          <div class="preview" x-text="c.preview || '(no content)'"></div>
-        </div>
-      </template>
-    </div>
-  </div>
-  <div class="main">
-    <template x-if="!selectedId">
-      <div class="empty-state">
-        <div class="big-icon">&#x1F4AC;</div>
-        <div>Select a conversation to browse</div>
-      </div>
-    </template>
-    <template x-if="selectedId && !loadingTimeline">
-      <template x-if="timeline.length === 0">
-        <div class="empty-state">
-          <div>No timeline entries</div>
-        </div>
-      </template>
-      <template x-if="timeline.length > 0">
-        <div>
-          <div class="main-header">
-            <div>
-              <h2 x-text="selectedId"></h2>
-              <div class="stats">
-                <span x-text="timeline.length + ' events'"></span>
-                <span x-text="'User: ' + timeline.filter(e => e.type === 'user').length"></span>
-                <span x-text="'Hidden: ' + timeline.filter(e => e.type === 'hidden').length"></span>
-                <span x-text="'System: ' + timeline.filter(e => ['assistant','system','compression','expansion','search','info'].includes(e.type)).length"></span>
-              </div>
-            </div>
-          </div>
-          <div class="timeline" x-data="{ expanded: {} }">
-            <div class="grid">
-              <div class="grid-header user">User</div>
-              <div class="grid-header hidden">Hidden</div>
-              <div class="grid-header system">System</div>
-              <template x-for="(entry, i) in timeline" :key="i">
-                  <template x-if="entry.type === 'user'">
-                    <div class="cell user">
-                      <div class="msg-text" :class="{ collapsed: entry.content && entry.content.length > 300 }" x-text="entry.content"></div>
-                      <button x-show="entry.content && entry.content.length > 300" class="expand-btn" @click="expanded['u'+i]=!expanded['u'+i]" x-text="expanded['u'+i] ? 'Collapse' : 'Expand'"></button>
-                      <div class="timestamp" x-text="formatTime(entry.timestamp)"></div>
-                    </div>
-                  </template>
-                  <template x-if="entry.type === 'hidden'">
-                    <div class="cell hidden" @click="expanded['h'+i]=!expanded['h'+i]" style="cursor:pointer">
-                      <div class="tool-name" x-text="entry.toolName"></div>
-                      <div class="timestamp" x-text="formatTime(entry.timestamp)"></div>
-                      <template x-if="expanded['h'+i]">
-                        <div class="tool-detail">
-                          <div style="color:#d2a8ff;margin-bottom:4px">Arguments:</div>
-                          <div x-text="JSON.stringify(entry.arguments, null, 2)"></div>
-                          <div style="color:#d2a8ff;margin:8px 0 4px" x-show="entry.result">Result:</div>
-                          <div x-show="entry.result" x-text="entry.result"></div>
-                        </div>
-                      </template>
-                    </div>
-                  </template>
-                  <template x-if="entry.type === 'assistant' || entry.type === 'system'">
-                    <div class="cell system">
-                      <div class="msg-text" :class="{ collapsed: entry.content && entry.content.length > 300 }" x-text="entry.content"></div>
-                      <button x-show="entry.content && entry.content.length > 300" class="expand-btn" @click="expanded['s'+i]=!expanded['s'+i]" x-text="expanded['s'+i] ? 'Collapse' : 'Expand'"></button>
-                      <div class="timestamp" x-text="formatTime(entry.timestamp)"></div>
-                    </div>
-                  </template>
-                  <template x-if="entry.type === 'compression' || entry.type === 'expansion' || entry.type === 'search' || entry.type === 'info'">
-                    <div class="cell system">
-                      <div class="sys-event" x-text="entry.type"></div>
-                      <div x-text="entry.description"></div>
-                      <div class="timestamp" x-text="formatTime(entry.timestamp)"></div>
-                    </div>
-                  </template>
-              </template>
-            </div>
-          </div>
-        </div>
-      </template>
-    </template>
-    <template x-if="selectedId && loadingTimeline">
-      <div class="empty-state">Loading...</div>
-    </template>
-  </div>
-</div>
+<h1>Conversations</h1>
+<div id="list" class="conv-list"></div>
 <script>
-document.addEventListener("alpine:init", () => {
-  Alpine.data("chatsApp", () => ({
-    loaded: false,
-    conversations: [],
-    filteredConversations: [],
-    search: "",
-    selectedId: null,
-    timeline: [],
-    loadingTimeline: false,
-    async init() {
-      await this.loadConversations()
-    },
-    async api(path, opts = {}) {
-      const res = await fetch(window.location.origin + path, {
-        headers: { "Content-Type": "application/json" },
-        ...opts,
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || res.statusText)
-      return data
-    },
-    async loadConversations() {
-      try {
-        const data = await this.api("/api/conversations")
-        this.conversations = data.conversations || []
-        this.filteredConversations = [...this.conversations]
-      } catch (e) {
-        console.error("Failed to load conversations:", e)
-      }
-      this.loaded = true
-    },
-    filterConversations() {
-      const q = this.search.toLowerCase()
-      if (!q) { this.filteredConversations = [...this.conversations]; return }
-      this.filteredConversations = this.conversations.filter((c) =>
-        c.id.toLowerCase().includes(q) || (c.preview || "").toLowerCase().includes(q)
-      )
-    },
-    async selectConversation(id) {
-      this.selectedId = id
-      this.loadingTimeline = true
-      this.timeline = []
-      try {
-        const data = await this.api("/api/conversations/" + encodeURIComponent(id))
-        this.timeline = data.timeline || []
-      } catch (e) {
-        console.error("Failed to load conversation:", e)
-      }
-      this.loadingTimeline = false
-    },
-    formatDate(ts) {
-      if (!ts) return ""
-      const d = new Date(ts)
-      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    },
-    formatTime(ts) {
-      if (!ts) return ""
-      const d = new Date(ts)
-      return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-    },
-  }))
-})
+async function load() {
+  const token = localStorage.getItem("engramic_token")
+  const headers = {}
+  if (token) headers["Authorization"] = "Bearer " + token
+  const res = await fetch("/api/conversations", { headers })
+  const data = await res.json()
+  const list = document.getElementById("list")
+  list.innerHTML = ""
+  for (const c of data.conversations) {
+    const card = document.createElement("div")
+    card.className = "conv-card"
+    card.innerHTML = '<div class="conv-id">' + c.id + '</div><div class="conv-preview">' + (c.preview || "(empty)") + '</div><div class="conv-meta"><span>' + c.spanCount + ' spans</span><span>' + c.messageCount + ' messages</span><span>' + new Date(c.updatedAt).toLocaleString() + '</span></div>'
+    card.onclick = () => window.location = "/api/conversations/" + c.id
+    list.appendChild(card)
+  }
+}
+load()
 </script>
 </body>
 </html>`

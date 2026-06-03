@@ -54,6 +54,27 @@ export async function sendChat(req: ChatRequest): Promise<ChatResponse> {
   })
 }
 
+export interface GenerateDeckRequest {
+  prompt: string
+  model?: 'flash' | 'pro'
+}
+
+export interface GenerateDeckResponse {
+  title: string
+  markdown: string
+  css: string
+  slideBundle: SlideBundle
+  cost: number
+  balance: number
+}
+
+export async function generateDeck(req: GenerateDeckRequest): Promise<GenerateDeckResponse> {
+  return request('/generate', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  })
+}
+
 export interface ImageGenRequest {
   prompt: string
   slideIndex: number

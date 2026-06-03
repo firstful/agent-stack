@@ -4,8 +4,8 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import type { MessagesStackParamList } from "../navigation/types";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+import { apiGet } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 type DM = {
   id: string;
@@ -17,15 +17,16 @@ type DM = {
 
 export function MessagesScreen() {
   const nav = useNavigation<NativeStackNavigationProp<MessagesStackParamList>>();
+  const { userId } = useAuth();
   const [dms, setDms] = useState<DM[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/api/messages`)
-      .then((r) => r.json())
+    apiGet<DM[]>("/api/dms", userId ?? undefined)
+      .then(setDms)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [userId]);
 
   if (loading) return <View style={styles.container}><ActivityIndicator /></View>;
 

@@ -41,7 +41,9 @@ COPY --from=builder /app/dist/ ./dist/
 
 ENV PORT=3001
 ENV NODE_ENV=production
-ENV PUPPETEER_CHROMIUM_REVISION=latest
+# Puppeteer will auto-download Chromium during npm ci (postinstall script)
+# Cache lives at /root/.cache/puppeteer/ inside the container
+ENV PUPPETEER_SKIP_DOWNLOAD=false
 
 RUN mkdir -p /app/data
 

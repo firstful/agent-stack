@@ -783,6 +783,25 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .impulse-card .meta { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
 .impulse-card p { font-size: 14px; color: var(--text-muted); margin-bottom: 8px; }
 
+/* ── Composer trigger button on impulse cards ── */
+.composer-trigger-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.composer-trigger-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+.composer-trigger-btn:active {
+  transform: scale(0.97);
+}
+
 .vote-bar {
   height: 4px;
   background: var(--border);
@@ -1359,6 +1378,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     grid-template-columns: 260px 1fr;
   }
 
+  .main-content {
+    padding-top: 52px;
+  }
+
   .detail-panel {
     position: fixed;
     top: 0;
@@ -1387,6 +1410,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .main-content {
     border-left: none;
+    border-right: none;
+    padding-top: 52px;
   }
 
   .nav-panel-wrapper {
@@ -2809,4 +2834,504 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+/* ══════════════════════════════════════════════
+   Error Boundaries — Panel-level crash isolation
+   ══════════════════════════════════════════════ */
+
+.error-boundary-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  gap: 8px;
+  min-height: 200px;
+}
+
+.error-boundary-fallback--compact {
+  padding: 24px 16px;
+  min-height: auto;
+  gap: 6px;
+}
+
+.error-boundary-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.error-boundary-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.error-boundary-message {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.5;
+}
+
+.error-boundary-retry {
+  margin-top: 8px;
+  background: var(--bg-surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.error-boundary-retry:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+/* ══════════════════════════════════════════════
+   Profile Page
+   ══════════════════════════════════════════════ */
+
+.profile-view {
+  padding: 24px 16px;
+}
+
+.profile-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.profile-header-skeleton {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.skeleton-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #d2a8ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.profile-header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-username {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.profile-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.profile-last-active {
+  font-size: 12px;
+}
+
+.profile-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ── Reputation Badge ── */
+
+.reputation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(139, 148, 158, 0.1);
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.reputation-icon {
+  font-size: 13px;
+}
+
+.reputation-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.reputation-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+
+.provider-badge {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(139, 148, 158, 0.12);
+  color: var(--text-muted);
+  text-transform: capitalize;
+  border: 1px solid var(--border);
+}
+
+/* ── Stats Row ── */
+
+.profile-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.profile-stat {
+  flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.profile-stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-stat-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+/* ── Profile Sections ── */
+
+.profile-section {
+  margin-bottom: 24px;
+}
+
+.profile-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+/* ── Group Memberships ── */
+
+.profile-groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-group-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.profile-group-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-group-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.profile-group-name:hover {
+  color: var(--accent-hover);
+}
+
+.profile-group-bio {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.profile-group-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.vouched-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(63, 185, 80, 0.12);
+  color: var(--success);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+}
+
+.profile-group-tenure {
+  text-align: right;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+/* ── Message History ── */
+
+.profile-messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-message-card {
+  display: block;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.profile-message-card:hover {
+  border-color: var(--accent);
+}
+
+.profile-message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.profile-message-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* ══════════════════════════════════════════════
+   Search Enhancements
+   ══════════════════════════════════════════════ */
+
+/* ── Search Highlight ── */
+
+mark.search-highlight {
+  background: rgba(210, 153, 34, 0.3);
+  color: var(--warning);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+/* ── Search Count ── */
+
+.search-count {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
+/* ── Search Hint ── */
+
+.search-hint {
+  margin-top: 24px;
+}
+
+/* ── Search Bar ── */
+
+.search-bar-form {
+  margin-bottom: 12px;
+}
+
+.search-bar-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-bar-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 15px;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--text-muted);
+}
+
+.search-bar-input {
+  width: 100%;
+  padding: 10px 12px 10px 38px;
+  font-size: 15px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-bar-input:focus {
+  border-color: var(--accent);
+}
+
+.search-bar-shortcut {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.search-bar-shortcut kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+/* ── Search Form Shortcut (nav) ── */
+
+.search-form-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-form-shortcut {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.search-form-shortcut kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+}
+
+/* ── Search Scope Toggle ── */
+
+.search-scope-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.search-scope-btn {
+  flex: 1;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.search-scope-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.search-scope-btn.active {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.search-scope-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+/* ── Search Loading ── */
+
+.search-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0;
+}
+
+/* ── Search Result Group Label ── */
+
+.search-result-group-label {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 13px;
 }

@@ -91,7 +91,7 @@ async function main() {
   pruneUsage()
   setInterval(pruneUsage, 6 * 60 * 60 * 1000)
 
-  registerRoutes(app, store, globalProvider, engine, vectorStore, embeddingsProvider, userStore, usageStore, metricsCollector)
+  registerRoutes(app, store, globalProvider, engine, vectorStore, embeddingsProvider, userStore, usageStore, metricsCollector, crossSessionStore)
 
   try {
     await app.listen({ port: PORT, host: HOST })

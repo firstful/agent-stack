@@ -79,12 +79,19 @@ ingress:
     // No proxy — generate per-service ingress rules
     const ingressLines = enabled
       .filter((s) => s.expose!.hostname)
-      .map((s) => {
+      .flatMap((s) => {
         const port =
           getActualPort(runtime[s.name] || {}) ||
           (s.container && (s.container.host_port || s.container.port)) ||
           s.service?.port;
-        return { hostname: s.expose!.hostname!, service: `http://127.0.0.1:${port}` };
+        const entries = [{ hostname: s.expose!.hostname!, service: `http://127.0.0.1:${port}` }];
+        // Add ingress entries for each additional hostname (e.g., profile-scoped URLs)
+        if (s.expose?.hostnames && Array.isArray(s.expose.hostnames)) {
+          for (const hn of s.expose.hostnames) {
+            entries.push({ hostname: hn, service: `http://127.0.0.1:${port}` });
+          }
+        }
+        return entries;
       });
     yaml = `tunnel: ${tunnel}
 ingress:

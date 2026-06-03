@@ -249,4 +249,12 @@ export const api = {
   // Search
   search: (q: string) =>
     fetchApi<any>(`/api/search?q=${encodeURIComponent(q)}`),
+
+  // Intra-group search
+  searchGroups: (q: string) =>
+    fetchApi<any>(`/api/search/groups?q=${encodeURIComponent(q)}`),
+
+  // User profile
+  userProfile: (id: string) =>
+    fetchApi<any>(`/api/users/${id}/profile`),
 };

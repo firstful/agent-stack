@@ -69,6 +69,7 @@ interface AppState {
   showThemePanel: boolean
   showFileManager: boolean
   showTemplateSelector: boolean
+  showGenerateDeck: boolean
   palettes: ThemePalette[]
   showOutline: boolean
   model: 'flash' | 'pro'

@@ -3,8 +3,8 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
 import type { FeedStackParamList } from "../navigation/types";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+import { apiGet } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 type Impulse = { id: string; title: string; status: string; queuePosition: number; description: string };
 
@@ -12,16 +12,16 @@ export function GroupDetailScreen() {
   const nav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const route = useRoute();
   const { id } = route.params as { id: string };
+  const { userId } = useAuth();
   const [impulses, setImpulses] = useState<Impulse[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/api/groups/${id}/impulses`)
-      .then((r) => r.json())
+    apiGet<Impulse[]>(`/api/groups/${id}/impulses`, userId ?? undefined)
       .then(setImpulses)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, userId]);
 
   if (loading) return <View style={styles.container}><ActivityIndicator /></View>;
 

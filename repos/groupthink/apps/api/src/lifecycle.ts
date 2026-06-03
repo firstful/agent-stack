@@ -72,59 +72,6 @@ export async function fetchBannedWordList(
   return rows.map((r) => r.word);
 }
 
-// ── Phase 3b: trigger LLM summarization ──
-
-/**
- * Find all impulses in "summarizing" phase and trigger LLM summarization
- * for those that do not yet have any candidate responses stored.
- * Calls runLLMSummarization for each qualifying impulse.
- */
-async function triggerSummarization(
-  client: postgres.Sql,
-  redis: RedisClientType
-) {
-  const db = drizzle(client, { schema });
-
-  const summarizing = await db
-    .select()
-    .from(schema.impulses)
-    .where(eq(schema.impulses.status, "summarizing"));
-
-  for (const impulse of summarizing) {
-    try {
-      // Skip if candidates already exist (avoids re-running on retries)
-      const existingCount = await db.$count(
-        schema.summaryCandidates,
-        eq(schema.summaryCandidates.impulseId, impulse.id)
-      );
-      if (existingCount > 0) continue;
-
-      log(
-        `triggerSummarization: impulse ${impulse.id.slice(0, 8)} ` +
-        `(group ${impulse.groupId.slice(0, 8)})`
-      );
-
-      const result = await runLLMSummarization(client, redis, impulse.id);
-
-      if (result.success) {
-        log(
-          `summarization complete: ${impulse.id.slice(0, 8)} ` +
-          `(${result.candidates.length} candidates)`
-        );
-      } else {
-        error(
-          `summarization failed: ${impulse.id.slice(0, 8)} — ${result.error}`
-        );
-      }
-    } catch (err) {
-      error(
-        `triggerSummarization ${impulse.id.slice(0, 8)}`,
-        err
-      );
-    }
-  }
-}
-
 // ── Phase 3b: summarizing — trigger LLM ──
 
 /**

@@ -206,6 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_TOKEN, token);
       localStorage.setItem(STORAGE_USER, JSON.stringify(user));
+      // Bridge: set legacy key for existing API client
+      localStorage.setItem("gt-user-id", user.id);
     } catch {
       // localStorage full or unavailable — session survives in memory only
     }
@@ -217,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.removeItem(STORAGE_TOKEN);
       localStorage.removeItem(STORAGE_USER);
+      localStorage.removeItem("gt-user-id");
     } catch {
       // Ignore storage errors on cleanup
     }

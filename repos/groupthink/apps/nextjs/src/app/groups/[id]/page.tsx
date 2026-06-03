@@ -8,232 +8,39 @@ import { AppShell } from "@/components/AppShell";
 import { EnergyBadge } from "@/components/EnergyBadge";
 import { SkeletonGroupDetail } from "@/components/SkeletonGroupDetail";
 import { ComposerModal } from "@/components/ComposerModal";
+import { ImpulseForm } from "@/components/ImpulseForm";
+import { ImpulseCard } from "@/components/ImpulseCard";
 import {
   adaptiveRemaining,
   MAX_VOTING_WINDOW,
-  tenureWeight,
-  sortQueue,
   assignQueuePositions,
   type QueuedImpulse,
 } from "@groupthink/shared";
-
-// ── Types ──
-
-type Group = {
-  id: string;
-  name: string;
-  bio: string;
-  energy: string;
-  timezone: string | null;
-  tier: string;
-  memberCount: number;
-  minInteractionTier?: string;
-  sabbaticalUntil?: string | null;
-  lastEnergyChangeAt?: string;
-};
-
-type Member = {
-  id: string;
-  userId: string;
-  joinedAt: string;
-  isVouched: boolean;
-  user: { id: string; username: string; createdAt: string };
-};
-
-type Impulse = {
-  id: string;
-  groupId: string;
-  targetGroupId: string | null;
-  targetPostId: string | null;
-  title: string;
-  description: string;
-  createdBy: string;
-  status: string;
-  queuePosition: number | null;
-  votingEndsAt: string | null;
-  createdAt: string;
-};
-
-type TallyCohort = {
-  range: string;
-  minDays: number;
-  maxDays: number;
-  yesWeight: number;
-  noWeight: number;
-  voterCount: number;
-};
-
-type Tally = {
-  cohorts: TallyCohort[];
-  totals: { yesWeight: number; noWeight: number; totalVoters: number };
-};
-
-type GroupBlock = {
-  id: string;
-  blockerGroupId: string;
-  blockedGroupId: string;
-  createdAt: string;
-  blockedGroup: { id: string; name: string; energy: string };
-};
-
-type KickVote = {
-  id: string;
-  groupId: string;
-  targetUserId: string;
-  initiatedBy: string;
-  reason: string;
-  status: string;
-  createdAt: string;
-  expiresAt: string;
-  targetUser?: { id: string; username: string };
-  initiatedByUser?: { id: string; username: string };
-  records?: { id: string; userId: string; vote: string; weight: number; user: { id: string; username: string } }[];
-  tally?: { yesWeight: number; noWeight: number; totalWeight: number };
-};
-
-type SplitVote = {
-  id: string;
-  groupId: string;
-  initiatedBy: string;
-  newGroupName: string;
-  status: string;
-  createdAt: string;
-  expiresAt: string;
-  memberCount?: number;
-  selectionsCount?: number;
-  stayingCount?: number;
-  splinteringCount?: number;
-  selections?: { id: string; userId: string; chooseOriginal: boolean; user: { id: string; username: string } }[];
-};
-
-type MergeVote = {
-  id: string;
-  initiatedByGroupId: string;
-  targetGroupId: string;
-  initiatedBy: string;
-  status: string;
-  createdAt: string;
-  expiresAt: string;
-  initiatedByGroup?: { id: string; name: string };
-  targetGroup?: { id: string; name: string };
-  initiatorApprovals?: { id: string; userId: string; approved: boolean; user: { id: string; username: string } }[];
-  targetApprovals?: { id: string; userId: string; approved: boolean; user: { id: string; username: string } }[];
-};
-
-type SabbaticalVote = {
-  id: string;
-  groupId: string;
-  initiatedBy: string;
-  direction: string;
-  durationHours: number;
-  status: string;
-  createdAt: string;
-  expiresAt: string;
-  records?: { id: string; userId: string; vote: string; weight: number; user: { id: string; username: string } }[];
-  tally?: { yesWeight: number; noWeight: number; totalWeight: number };
-};
+import {
+  type Group,
+  type Member,
+  type Impulse,
+  type Tally,
+  type TallyCohort,
+  type GroupBlock,
+  type KickVote,
+  type SplitVote,
+  type MergeVote,
+  type SabbaticalVote,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  TIER_ORDER,
+  ENERGY_OPTIONS,
+  TIMEZONE_OPTIONS,
+  tenureDays,
+  tenureLabel,
+  tenureBarWidth,
+  tenureCohort,
+  tenureDaysFromCreation,
+  formatTimeLeft,
+} from "@/components/group-detail-types";
 
 // ── Constants ──
-
-const STATUS_LABELS: Record<string, string> = {
-  queued: "Queued",
-  voting: "Voting",
-  composing: "Drafting",
-  summarizing: "Summarizing",
-  approval: "Approval",
-  broadcast: "✓ Broadcast",
-  expired: "✗ Expired",
-  discarded: "— Discarded",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  queued: "var(--text-muted)",
-  voting: "var(--accent)",
-  composing: "var(--warning)",
-  summarizing: "var(--energy-snarky)",
-  approval: "var(--energy-thoughtful)",
-  broadcast: "var(--success)",
-  expired: "var(--danger)",
-  discarded: "var(--text-muted)",
-};
-
-const TIER_ORDER = ["fringe", "small", "medium", "large", "huge", "massive"];
-
-const ENERGY_OPTIONS = [
-  { value: "thoughtful", label: "Thoughtful 💭", icon: "💭" },
-  { value: "snarky", label: "Snarky 🔥", icon: "🔥" },
-  { value: "funny", label: "Funny 🎭", icon: "🎭" },
-  { value: "mixed", label: "Mixed 🌈", icon: "🌈" },
-] as const;
-
-const TIMEZONE_OPTIONS = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Moscow",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-];
-
-// ── Helpers ──
-
-function formatTimeLeft(ms: number): string {
-  if (ms <= 0) return "Ending now";
-  const hours = Math.floor(ms / 3600000);
-  const minutes = Math.floor((ms % 3600000) / 60000);
-  const seconds = Math.floor((ms % 60000) / 1000);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
-
-function tenureDays(joinedAt: string): number {
-  return Math.max(
-    1,
-    Math.floor(
-      (Date.now() - new Date(joinedAt).getTime()) / 86400000
-    )
-  );
-}
-
-function tenureDaysFromCreation(createdAt: string): number {
-  return Math.max(
-    1,
-    Math.floor(
-      (Date.now() - new Date(createdAt).getTime()) / 86400000
-    )
-  );
-}
-
-function tenureLabel(days: number): string {
-  if (days >= 365) return `${Math.floor(days / 365)}y`;
-  if (days >= 30) return `${Math.floor(days / 30)}mo`;
-  return `${days}d`;
-}
-
-function tenureBarWidth(days: number): number {
-  // Cap at 2 years for display purposes
-  return Math.min(100, (days / 730) * 100);
-}
-
-function tenureCohort(days: number): { color: string; label: string } {
-  if (days >= 365) return { color: "#d2a8ff", label: "Veteran" };
-  if (days >= 90) return { color: "#58a6ff", label: "Regular" };
-  if (days >= 30) return { color: "#3fb950", label: "Growing" };
-  return { color: "#8b949e", label: "New" };
-}
 
 // ── Component ──
 
@@ -251,14 +58,6 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"impulses" | "members" | "settings" | "governance">("impulses");
   const [filterStatus, setFilterStatus] = useState("");
-
-  // Impulse form
-  const [formTitle, setFormTitle] = useState("");
-  const [formDesc, setFormDesc] = useState("");
-  const [formTarget, setFormTarget] = useState("");
-  const [formError, setFormError] = useState("");
-  const [formLoading, setFormLoading] = useState(false);
-  const [showForm, setShowForm] = useState(false);
 
   // Polling refs
   const tallyIntervals = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
@@ -488,35 +287,6 @@ export default function GroupDetailPage() {
     const interval = setInterval(updateTimers, 1000);
     return () => clearInterval(interval);
   }, [impulses, members.length, tallies]);
-
-  // ── Create impulse ──
-  const handleCreateImpulse = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formTitle.trim()) {
-      setFormError("Title is required");
-      return;
-    }
-    setFormLoading(true);
-    setFormError("");
-    try {
-      const data: { title: string; description?: string; targetGroupId?: string } = {
-        title: formTitle.trim(),
-      };
-      if (formDesc.trim()) data.description = formDesc.trim();
-      if (formTarget) data.targetGroupId = formTarget;
-
-      await api.createImpulse(id, data);
-      setFormTitle("");
-      setFormDesc("");
-      setFormTarget("");
-      setShowForm(false);
-      await load();
-    } catch (err: any) {
-      setFormError(err.message);
-    } finally {
-      setFormLoading(false);
-    }
-  };
 
   // ── Vote ──
   const handleVote = async (impulseId: string, vote: "yes" | "no" | "abstain") => {
@@ -1060,7 +830,7 @@ export default function GroupDetailPage() {
             <div className="governance-section">
               <h3>Vote-Kick</h3>
               <p className="governance-note">
-                Propose to remove a member from this group. A majority vote (>50% weighted by tenure) is required.
+                Propose to remove a member from this group. A majority vote (&gt;50% weighted by tenure) is required.
               </p>
 
               {activeKickVote ? (
@@ -1327,6 +1097,17 @@ export default function GroupDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Composer modal overlay */}
+      {composerImpulse && userId && (
+        <ComposerModal
+          impulse={composerImpulse}
+          groupName={group.name}
+          currentUserId={userId}
+          onClose={() => setComposingImpulseId(null)}
+          onTransition={() => { setComposingImpulseId(null); load(); }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -1342,6 +1123,7 @@ function ImpulseCard({
   timer,
   onVote,
   onRefresh,
+  onOpenComposer,
 }: {
   impulse: Impulse;
   group: Group;
@@ -1351,6 +1133,7 @@ function ImpulseCard({
   timer?: string;
   onVote: (id: string, vote: "yes" | "no" | "abstain") => void;
   onRefresh: () => void;
+  onOpenComposer?: (id: string) => void;
 }) {
   const [localVote, setLocalVote] = useState<"yes" | "no" | "abstain" | null>(null);
 
@@ -1358,6 +1141,10 @@ function ImpulseCard({
   const isQueued = status === "queued";
   const isVoting = status === "voting";
   const isComposing = status === "composing";
+  const isSummarizing = status === "summarizing";
+  const isApproval = status === "approval";
+  const isBroadcast = status === "broadcast";
+  const isModalPhase = isComposing || isSummarizing || isApproval || isBroadcast;
 
   // Find the creator's tenure
   const creatorMembership = members.find((m) => m.userId === impulse.createdBy);
@@ -1415,11 +1202,38 @@ function ImpulseCard({
           </span>
         )}
 
-        {/* Composing phase */}
+        {/* Modal phases: composing, summarizing, approval, broadcast */}
         {isComposing && (
-          <span className="phase-info">
-            ✏️ Composing phase active — drafts in progress
-          </span>
+          <button
+            className="composer-trigger-btn"
+            onClick={() => onOpenComposer?.(impulse.id)}
+          >
+            ✏️ Composing — open drafts
+          </button>
+        )}
+        {isSummarizing && (
+          <button
+            className="composer-trigger-btn"
+            onClick={() => onOpenComposer?.(impulse.id)}
+          >
+            🤖 Summarizing — view status
+          </button>
+        )}
+        {isApproval && (
+          <button
+            className="composer-trigger-btn"
+            onClick={() => onOpenComposer?.(impulse.id)}
+          >
+            🗳️ Approval — vote on summaries
+          </button>
+        )}
+        {isBroadcast && (
+          <button
+            className="composer-trigger-btn"
+            onClick={() => onOpenComposer?.(impulse.id)}
+          >
+            📢 Broadcast — view message
+          </button>
         )}
       </div>
 

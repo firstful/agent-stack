@@ -9,6 +9,8 @@ import { eq, and, gt, or, isNull } from "drizzle-orm";
 import * as schema from "@groupthink/db";
 import { logger } from "./logger";
 import { rateLimitMiddleware } from "./rate-limiter";
+import { requestLoggingMiddleware } from "./request-logger";
+import { initTelemetry } from "./telemetry";
 import { authMiddleware } from "./auth-middleware";
 import {
   signToken,
@@ -37,7 +39,13 @@ import {
   activityGateBreakdown,
   combinedVoteWeight,
   vouchMultiplier,
+  sanitizeText,
+  sanitizeRichText,
+  sanitizeAndTruncate,
+  MAX_LENGTHS,
+  type EngagementEvent,
 } from "@groupthink/shared";
+import { auditLog, AuditActions } from "./audit-logger";
 
 const pg = postgres(process.env.DATABASE_URL!);
 const db = drizzle(pg, { schema });
@@ -82,6 +90,83 @@ async function tenureWeight(userId: string, groupId: string): Promise<number> {
     (Date.now() - membership.joinedAt.getTime()) / 86400000
   );
   return Math.max(1, days);
+}
+
+// ── Engagement Event Logger (for Activity Gate) ──
+async function logEngagementEvent(
+  userId: string,
+  groupId: string,
+  eventType: "impulse_created" | "draft_submitted" | "dm_sent" | "invite_used",
+) {
+  await db.insert(schema.activityEvents).values({
+    userId,
+    groupId,
+    eventType,
+  });
+}
+
+// ── Compute combined vote weight (tenure × activity gate × vouch × suppression) ──
+async function combinedWeight(
+  userId: string,
+  groupId: string,
+): Promise<number> {
+  const base = await tenureWeight(userId, groupId);
+  if (base === 0) return 0;
+
+  // Fetch engagement events for activity gate
+  const cutoff = new Date(Date.now() - 30 * 86400000);
+  const events = await db
+    .select({ eventType: schema.activityEvents.eventType, createdAt: schema.activityEvents.createdAt })
+    .from(schema.activityEvents)
+    .where(
+      and(
+        eq(schema.activityEvents.userId, userId),
+        eq(schema.activityEvents.groupId, groupId),
+        gt(schema.activityEvents.createdAt, cutoff),
+      ),
+    );
+
+  const activityMultiplier = activityGateMultiplier(
+    events.map((e) => ({
+      eventType: e.eventType as EngagementEvent["eventType"],
+      createdAt: e.createdAt,
+    })),
+  );
+
+  // Check if user is vouched in this group
+  const membership = await db.query.memberships.findFirst({
+    where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+  });
+  const isVouched = membership?.isVouched ?? false;
+
+  // Shadow-ban + fraud flag suppression
+  const now = new Date();
+  const activeBan = await db.query.shadowBans.findFirst({
+    where: (sb, { and, eq, or, isNull, gt }) =>
+      and(
+        eq(sb.userId, userId),
+        or(eq(sb.groupId, groupId), isNull(sb.groupId)),
+        isNull(sb.liftedAt),
+        or(isNull(sb.expiresAt), gt(sb.expiresAt, now)),
+      ),
+  });
+
+  const fraudResult = (await pg.unsafe(
+    `SELECT COUNT(*)::int AS cnt FROM fraud_audit_log
+     WHERE action IN ('cohort_flag', 'cross_group_flag')
+       AND (user_id = $1
+         OR ((action = 'cohort_flag')
+           AND details->'userIds' ? $1::text))`,
+    [userId],
+  )) as Array<{ cnt: number }>;
+
+  const suppressed = applyVoteSuppression(
+    combinedVoteWeight(base, activityMultiplier, isVouched),
+    !!activeBan,
+    fraudResult[0]?.cnt > 0,
+  );
+
+  return suppressed;
 }
 
 async function updateGroupTier(groupId: string) {
@@ -232,16 +317,32 @@ app.get("/api/feed", async (c) => {
 
 // ── Auth ──
 app.post("/api/auth/register", async (c) => {
-  const { provider, providerId, username } = await c.req.json();
+  const { provider, providerId, username, turnstileToken } = await c.req.json();
   if (!provider || !providerId || !username) {
     return c.json({ error: "provider, providerId, and username required" }, 400);
+  }
+
+  // Sanitize username and providerId
+  const sanitizedUsername = sanitizeText(username).slice(0, MAX_LENGTHS.username);
+  const sanitizedProviderId = sanitizeText(providerId).slice(0, 255);
+
+  if (!isValidUsername(sanitizedUsername)) {
+    return c.json({ error: "username must be 2–30 alphanumeric characters (underscores allowed)" }, 400);
+  }
+
+  // Cloudflare Turnstile verification on sign-up
+  if (turnstileToken) {
+    const valid = await verifyTurnstile(turnstileToken);
+    if (!valid) {
+      return c.json({ error: "turnstile verification failed" }, 400);
+    }
   }
 
   const existing = await db.query.users.findFirst({
     where: (u, { or, and, eq }) =>
       or(
-        and(eq(u.oauthProvider, provider), eq(u.oauthId, providerId)),
-        eq(u.username, username)
+        and(eq(u.oauthProvider, provider), eq(u.oauthId, sanitizedProviderId)),
+        eq(u.username, sanitizedUsername)
       ),
   });
   if (existing) {
@@ -250,9 +351,16 @@ app.post("/api/auth/register", async (c) => {
 
   const user = await db.insert(schema.users).values({
     oauthProvider: provider,
-    oauthId: providerId,
-    username,
+    oauthId: sanitizedProviderId,
+    username: sanitizedUsername,
   }).returning();
+
+  await auditLog(db)
+    .action(AuditActions.UserRegister)
+    .user(user[0].id)
+    .detail({ provider, username: sanitizedUsername })
+    .captureRequest(c)
+    .log();
 
   return c.json(user[0], 201);
 });
@@ -527,6 +635,9 @@ app.post("/api/join", async (c) => {
     .set({ usedBy: userId, usedAt: new Date() })
     .where(eq(schema.inviteCodes.id, invite.id));
 
+  // Log engagement event for activity gate
+  await logEngagementEvent(userId, invite.groupId, "invite_used");
+
   return c.json({ ok: true, groupId: invite.groupId }, 200);
 });
 
@@ -677,6 +788,9 @@ app.post("/api/groups/:id/impulses", async (c) => {
     queuePosition: position,
   }).returning();
 
+  // Log engagement event for activity gate
+  await logEngagementEvent(userId, groupId, "impulse_created");
+
   return c.json(impulse[0], 201);
 });
 
@@ -713,33 +827,9 @@ app.post("/api/impulses/:id/vote", async (c) => {
     return c.json({ error: "not in voting phase" }, 400);
   }
 
-  // ── Vote suppression check ──
-  const now = new Date();
-  const activeBan = await db.query.shadowBans.findFirst({
-    where: (sb, { and, eq, or, isNull, gt }) =>
-      and(
-        eq(sb.userId, userId),
-        or(eq(sb.groupId, impulse.groupId), isNull(sb.groupId)),
-        isNull(sb.liftedAt),
-        or(isNull(sb.expiresAt), gt(sb.expiresAt, now)),
-      ),
-  });
-
-  // Check fraud audit log for this user (direct matches + cohort flags)
-  const fraudResult = (await pg.unsafe(
-    `SELECT COUNT(*)::int AS cnt FROM fraud_audit_log
-     WHERE action IN ('cohort_flag', 'cross_group_flag')
-       AND (user_id = $1
-         OR ((action = 'cohort_flag')
-           AND details->'userIds' ? $1::text))`,
-    [userId],
-  )) as Array<{ cnt: number }>;
-
-  const isShadowBanned = !!activeBan;
-  const isFraudFlagged = fraudResult[0]?.cnt > 0;
-
-  let baseWeight = await tenureWeight(userId, impulse.groupId);
-  const weight = applyVoteSuppression(baseWeight, isShadowBanned, isFraudFlagged);
+  // ── Compute combined voting weight ──
+  // Applies tenure × activity gate multiplier × vouch boost × suppression
+  const weight = await combinedWeight(userId, impulse.groupId);
 
   // ── Record or update vote ──
   const existing = await db.query.votes.findFirst({
@@ -863,6 +953,9 @@ app.post("/api/impulses/:id/draft", async (c) => {
     parentDraftId: body.parentDraftId || null,
   }).returning();
 
+  // Log engagement event for activity gate
+  await logEngagementEvent(userId, impulse.groupId, "draft_submitted");
+
   return c.json(draft[0], 201);
 });
 
@@ -909,6 +1002,37 @@ app.post("/api/messages/:id/revoke", async (c) => {
     .where(eq(schema.messages.id, c.req.param("id")));
 
   return c.json({ ok: true });
+});
+
+// ── Message Report ──
+app.post("/api/messages/:id/report", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const messageId = c.req.param("id");
+
+  const message = await db.query.messages.findFirst({
+    where: (m, { eq }) => eq(m.id, messageId),
+  });
+  if (!message) return c.json({ error: "message not found" }, 404);
+  if (message.status !== "active") {
+    return c.json({ error: "can only report active messages" }, 400);
+  }
+
+  const { reason } = await c.req.json();
+  if (reason !== undefined && (typeof reason !== "string" || reason.trim().length === 0)) {
+    return c.json({ error: "reason must be a non-empty string if provided" }, 400);
+  }
+
+  const report = await db.insert(schema.messageReports).values({
+    messageId,
+    reportedBy: userId,
+    reason: reason?.trim() ?? null,
+  }).returning();
+
+  const created = await db.query.messageReports.findFirst({
+    where: (r, { eq }) => eq(r.id, report[0].id),
+  });
+
+  return c.json(created, 201);
 });
 
 // ── Retweet / Endorsement (with global rate limit) ──
@@ -1167,6 +1291,9 @@ app.post("/api/dms", async (c) => {
     recipientId: input.recipientId,
     content: input.content,
   }).returning();
+
+  // Log engagement event for activity gate
+  await logEngagementEvent(userId, input.groupId, "dm_sent");
 
   const created = dm[0];
   const [sender, recipient] = await Promise.all([
@@ -2181,6 +2308,451 @@ app.get("/api/sabbatical-votes/:id", async (c) => {
     ...sv,
     tally: { yesWeight, noWeight, totalWeight },
   });
+});
+
+// ── Push Tokens ──
+
+/** Register or update an Expo push token for the current user */
+app.post("/api/push-tokens", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const { token, platform } = await c.req.json();
+  if (!token || !platform) {
+    return c.json({ error: "token and platform are required" }, 400);
+  }
+
+  if (!["ios", "android", "web"].includes(platform)) {
+    return c.json({ error: "platform must be ios, android, or web" }, 400);
+  }
+
+  // Upsert: if the user already has a token for this platform, update it
+  const existing = await db.query.pushTokens.findFirst({
+    where: (pt, { and, eq }) =>
+      and(eq(pt.userId, userId), eq(pt.platform, platform)),
+  });
+
+  if (existing) {
+    await db
+      .update(schema.pushTokens)
+      .set({ token })
+      .where(eq(schema.pushTokens.id, existing.id));
+    return c.json({ ok: true, updated: true });
+  }
+
+  await db.insert(schema.pushTokens).values({
+    userId,
+    token,
+    platform,
+  });
+
+  return c.json({ ok: true, created: true }, 201);
+});
+
+/** Get all registered push tokens for the current user */
+app.get("/api/push-tokens", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const tokens = await db.query.pushTokens.findMany({
+    where: (pt, { eq }) => eq(pt.userId, userId),
+  });
+  return c.json({ tokens });
+});
+
+/** Delete a push token */
+app.delete("/api/push-tokens/:id", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const id = c.req.param("id");
+  const existing = await db.query.pushTokens.findFirst({
+    where: (pt, { and, eq }) => and(eq(pt.id, id), eq(pt.userId, userId)),
+  });
+  if (!existing) return c.json({ error: "not found" }, 404);
+
+  await db.delete(schema.pushTokens).where(eq(schema.pushTokens.id, id));
+  return c.json({ ok: true });
+});
+
+// ── In-app Notifications ──
+
+/** List the current user's notifications, newest first, with cursor pagination */
+app.get("/api/notifications", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const cursor = c.req.query("cursor");
+  const limit = Math.min(Number(c.req.query("limit") ?? "20"), 50);
+
+  const wheres: string[] = ["n.user_id = $1"];
+  const params: any[] = [userId];
+
+  if (cursor) {
+    const pIdx = params.length + 1;
+    wheres.push(`n.created_at < $${pIdx}::timestamptz`);
+    params.push(cursor);
+  }
+
+  const sql = `
+    SELECT n.id, n.type, n.title, n.body, n.read_at, n.created_at
+    FROM notifications n
+    WHERE ${wheres.join(" AND ")}
+    ORDER BY n.created_at DESC
+    LIMIT ${limit + 1}
+  `;
+
+  const rows = await pg.unsafe(sql, params);
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && page.length > 0) {
+    const last = page[page.length - 1];
+    nextCursor =
+      last.created_at instanceof Date
+        ? last.created_at.toISOString()
+        : String(last.created_at);
+  }
+
+  const notifications = page.map((row: any) => ({
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    readAt: row.read_at?.toISOString?.() ?? null,
+    createdAt: row.created_at instanceof Date
+      ? row.created_at.toISOString()
+      : String(row.created_at),
+  }));
+
+  return c.json({ notifications, nextCursor });
+});
+
+/** Mark a single notification as read */
+app.post("/api/notifications/:id/read", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const id = c.req.param("id");
+  const existing = await db.query.notifications.findFirst({
+    where: (n, { and, eq }) => and(eq(n.id, id), eq(n.userId, userId)),
+  });
+  if (!existing) return c.json({ error: "not found" }, 404);
+
+  await db
+    .update(schema.notifications)
+    .set({ readAt: new Date() })
+    .where(eq(schema.notifications.id, id));
+
+  return c.json({ ok: true });
+});
+
+/** Mark all notifications as read for the current user */
+app.post("/api/notifications/read-all", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  await db
+    .update(schema.notifications)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(schema.notifications.userId, userId),
+        isNull(schema.notifications.readAt),
+      )
+    );
+
+  return c.json({ ok: true });
+});
+
+/** Get unread notification count */
+app.get("/api/notifications/unread-count", async (c) => {
+  const userId = c.req.header("x-user-id");
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const count = await db.$count(
+    schema.notifications,
+    and(
+      eq(schema.notifications.userId, userId),
+      isNull(schema.notifications.readAt),
+    )
+  );
+
+  return c.json({ count });
+});
+
+// ── Notification Creation Helper (used internally) ──
+
+/**
+ * Create a notification for a user and optionally send a push notification
+ * via Expo Push API.
+ */
+async function createNotification(
+  userId: string,
+  type: string,
+  title: string,
+  body?: string,
+  sendPush = true,
+): Promise<void> {
+  await db.insert(schema.notifications).values({
+    userId,
+    type,
+    title,
+    body,
+  });
+
+  if (!sendPush) return;
+
+  // Fetch user's push tokens
+  const tokens = await db.query.pushTokens.findMany({
+    where: (pt, { eq }) => eq(pt.userId, userId),
+  });
+
+  if (tokens.length === 0) return;
+
+  // Send via Expo Push API
+  const messages = tokens.map((t) => ({
+    to: t.token,
+    sound: "default" as const,
+    title,
+    body: body ?? title,
+    data: { type },
+  }));
+
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(messages),
+    });
+  } catch (err) {
+    console.error("Failed to send push notification:", err);
+  }
+}
+
+// ── Vouch System ──
+
+/**
+ * Vouch for a member — grants them isVouched=true in the group,
+ * which accelerates their voting weight via vouchMultiplier.
+ * Requires the actor to be an existing member of the group.
+ * Logs the action to the fraud audit log.
+ */
+app.post("/api/groups/:id/vouch", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+  const { targetUserId } = await c.req.json();
+  if (!targetUserId) return c.json({ error: "targetUserId required" }, 400);
+  if (targetUserId === userId) return c.json({ error: "cannot vouch for yourself" }, 400);
+
+  // Both users must be members of the group
+  const [actorMember, targetMember] = await Promise.all([
+    db.query.memberships.findFirst({
+      where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+    }),
+    db.query.memberships.findFirst({
+      where: (m, { and, eq }) => and(eq(m.userId, targetUserId), eq(m.groupId, groupId)),
+    }),
+  ]);
+  if (!actorMember) return c.json({ error: "not a member" }, 403);
+  if (!targetMember) return c.json({ error: "target is not a member" }, 400);
+  if (targetMember.isVouched) return c.json({ error: "target already vouched" }, 400);
+
+  await db.update(schema.memberships)
+    .set({ isVouched: true, vouchedBy: userId })
+    .where(eq(schema.memberships.id, targetMember.id));
+
+  // Audit log
+  await db.insert(schema.fraudAuditLog).values({
+    action: "vouch",
+    userId: targetUserId,
+    groupId,
+    createdBy: userId,
+    details: { action: "vouch_added", vouchedBy: userId },
+  });
+
+  return c.json({ ok: true }, 200);
+});
+
+/**
+ * Remove vouch from a member. Requires the original voucher or
+ * the vouched user themselves.
+ */
+app.post("/api/groups/:id/unvouch", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const groupId = c.req.param("id");
+  const { targetUserId } = await c.req.json();
+  if (!targetUserId) return c.json({ error: "targetUserId required" }, 400);
+
+  const [actorMember, targetMember] = await Promise.all([
+    db.query.memberships.findFirst({
+      where: (m, { and, eq }) => and(eq(m.userId, userId), eq(m.groupId, groupId)),
+    }),
+    db.query.memberships.findFirst({
+      where: (m, { and, eq }) => and(eq(m.userId, targetUserId), eq(m.groupId, groupId)),
+    }),
+  ]);
+  if (!actorMember) return c.json({ error: "not a member" }, 403);
+  if (!targetMember) return c.json({ error: "target is not a member" }, 400);
+  if (!targetMember.isVouched) return c.json({ error: "target is not vouched" }, 400);
+
+  // Allow unvouch by: the original voucher, the vouched user themselves
+  if (targetMember.vouchedBy !== userId && targetUserId !== userId) {
+    return c.json({ error: "not authorized to unvouch" }, 403);
+  }
+
+  await db.update(schema.memberships)
+    .set({ isVouched: false, vouchedBy: null })
+    .where(eq(schema.memberships.id, targetMember.id));
+
+  // Audit log
+  await db.insert(schema.fraudAuditLog).values({
+    action: "vouch",
+    userId: targetUserId,
+    groupId,
+    createdBy: userId,
+    details: { action: "vouch_removed", removedBy: userId },
+  });
+
+  return c.json({ ok: true });
+});
+
+// ── Shadow-Ban Endpoints ──
+
+/**
+ * List all active shadow bans. Supports cursor-based pagination.
+ */
+app.get("/api/admin/shadow-bans", async (c) => {
+  const cursor = c.req.query("cursor");
+  const limit = Math.min(Number(c.req.query("limit") ?? "50"), 100);
+
+  const wheres: string[] = ["sb.lifted_at IS NULL"];
+  const params: any[] = [];
+
+  if (cursor) {
+    const pIdx = params.length + 1;
+    wheres.push(`sb.created_at < $${pIdx}::timestamptz`);
+    params.push(cursor);
+  }
+
+  const whereClause = `WHERE ${wheres.join(" AND ")}`;
+  const sql = `
+    SELECT sb.id, sb.user_id, sb.group_id, sb.reason, sb.shadow_banned_by,
+           sb.lifted_by, sb.lifted_at, sb.created_at, sb.expires_at,
+           u.username AS user_username
+    FROM shadow_bans sb
+    LEFT JOIN users u ON u.id = sb.user_id
+    ${whereClause}
+    ORDER BY sb.created_at DESC
+    LIMIT ${limit + 1}
+  `;
+
+  const rows = await pg.unsafe(sql, params);
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+
+  let nextCursor: string | null = null;
+  if (hasMore && page.length > 0) {
+    const last = page[page.length - 1];
+    nextCursor =
+      last.created_at instanceof Date
+        ? last.created_at.toISOString()
+        : String(last.created_at);
+  }
+
+  return c.json({ entries: page, nextCursor });
+});
+
+/**
+ * Create a shadow ban for a user, optionally scoped to a group.
+ * Global shadow bans (groupId = null) suppress voting everywhere.
+ */
+app.post("/api/admin/shadow-bans", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const { targetUserId, groupId, reason, expiresInHours } = await c.req.json();
+  if (!targetUserId) return c.json({ error: "targetUserId required" }, 400);
+
+  // Target user must exist
+  const targetUser = await db.query.users.findFirst({
+    where: (u, { eq }) => eq(u.id, targetUserId),
+  });
+  if (!targetUser) return c.json({ error: "target user not found" }, 404);
+
+  // Check for existing active shadow ban
+  const now = new Date();
+  const existing = await db.query.shadowBans.findFirst({
+    where: (sb, { and, eq, or, isNull, gt }) =>
+      and(
+        eq(sb.userId, targetUserId),
+        isNull(sb.liftedAt),
+        or(isNull(sb.expiresAt), gt(sb.expiresAt, now)),
+        groupId ? eq(sb.groupId, groupId) : isNull(sb.groupId),
+      ),
+  });
+  if (existing) return c.json({ error: "active shadow ban already exists" }, 400);
+
+  const expiresAt = expiresInHours
+    ? new Date(Date.now() + expiresInHours * 3600000)
+    : null;
+
+  const ban = await db.insert(schema.shadowBans).values({
+    userId: targetUserId,
+    groupId: groupId || null,
+    reason: reason || null,
+    shadowBannedBy: userId,
+    expiresAt,
+  }).returning();
+
+  const created = ban[0];
+
+  // Audit log
+  await db.insert(schema.fraudAuditLog).values({
+    action: "shadow_ban",
+    userId: targetUserId,
+    groupId: groupId || null,
+    createdBy: userId,
+    details: {
+      shadowBanId: created.id,
+      reason: reason || null,
+      expiresAt: expiresAt?.toISOString() ?? null,
+      action: "shadow_ban_created",
+    },
+  });
+
+  return c.json(created, 201);
+});
+
+/**
+ * Lift a shadow ban by ID.
+ */
+app.post("/api/admin/shadow-bans/:id/lift", async (c) => {
+  const userId = c.req.header("x-user-id")!;
+  const banId = c.req.param("id");
+
+  const ban = await db.query.shadowBans.findFirst({
+    where: (sb, { eq }) => eq(sb.id, banId),
+  });
+  if (!ban) return c.json({ error: "shadow ban not found" }, 404);
+  if (ban.liftedAt) return c.json({ error: "shadow ban already lifted" }, 400);
+
+  await db.update(schema.shadowBans)
+    .set({ liftedAt: new Date(), liftedBy: userId })
+    .where(eq(schema.shadowBans.id, banId));
+
+  // Audit log
+  await db.insert(schema.fraudAuditLog).values({
+    action: "shadow_ban",
+    userId: ban.userId,
+    groupId: ban.groupId,
+    createdBy: userId,
+    details: {
+      shadowBanId: banId,
+      action: "shadow_ban_lifted",
+    },
+  });
+
+  return c.json({ ok: true });
 });
 
 // ── Health ──

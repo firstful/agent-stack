@@ -32,7 +32,7 @@ const linking: LinkingOptions<RootStackParamList> = {
             screens: {
               Feed: "feed",
               GroupDetail: "feed/:group",
-              Impulse: "feed/:group/:impulse",
+              Impulse: "feed/:impulse",
               Search: "search",
             },
           },

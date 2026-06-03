@@ -75,4 +75,18 @@ export interface User {
   createdAt?: number
 }
 
+export interface DeckGenerationRequest {
+  prompt: string
+  model?: 'flash' | 'pro'
+}
+
+export interface DeckGenerationResponse {
+  title: string
+  markdown: string
+  css: string
+  slideBundle: SlideBundle
+  cost: number
+  balance: number
+}
+
 export type LayoutMode = 'chat' | 'split' | 'fullscreen'

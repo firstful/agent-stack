@@ -1,36 +1,31 @@
 import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useState } from "react";
 import { useRoute } from "@react-navigation/native";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+import { useAuth } from "../context/AuthContext";
+import { apiGet, apiPost } from "../api/client";
 
 type Draft = { id: string; content: string; createdAt: string; user: { username: string } };
 
 export function ImpulseScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
+  const { userId } = useAuth();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [draftText, setDraftText] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/api/impulses/${id}/drafts`)
-      .then((r) => r.json())
+    apiGet<Draft[]>(`/api/impulses/${id}/drafts`)
       .then(setDrafts)
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
 
   const sendDraft = async () => {
-    if (!draftText.trim()) return;
-    const userId = "";
-    await fetch(`${API}/api/impulses/${id}/draft`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-user-id": userId },
-      body: JSON.stringify({ impulseId: id, content: draftText }),
-    });
+    if (!draftText.trim() || !userId) return;
+    await apiPost(`/api/impulses/${id}/draft`, { impulseId: id, content: draftText }, userId);
     setDraftText("");
-    const updated = await fetch(`${API}/api/impulses/${id}/drafts`).then((r) => r.json());
+    const updated = await apiGet<Draft[]>(`/api/impulses/${id}/drafts`);
     setDrafts(updated);
   };
 

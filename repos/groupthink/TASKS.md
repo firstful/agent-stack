@@ -6,9 +6,9 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 
 ## Status
 
-- **Completion**: ~88/203 deliverables done (~43%)
-- **Phase/Stage**: Alpha — core impulse loop automated, group management (create, join, leave, settings, nicknames), voting (cast + tenure-weighted tally), endorsements with rate limiting, search, auth scaffold.
-- **Last updated**: 2026-05-29
+- **Completion**: ~96/203 deliverables done (~47%)
+- **Phase/Stage**: Alpha — core impulse loop automated, group management (create, join, leave, settings, nicknames), voting (cast + tenure-weighted tally), endorsements with rate limiting, search, auth scaffold. Composer modal with full-screen overlay, threaded drafts, adaptive timer, lock transition, LLM summary voting, and broadcast confirmation.
+- **Last updated**: 2026-06-02
 
 ## Deliverables
 
@@ -129,11 +129,11 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Session persistence
 - [ ] Auth middleware redirects
 
-### 4.2 Layout (1/4 complete)
+### 4.2 Layout (4/4 complete)
 - [x] Three-panel shell scaffold (nav, main, detail)
-- [ ] Responsive breakpoint (collapses right sidebar)
-- [ ] Loading skeletons for all panels
-- [ ] Error boundaries per panel
+- [x] Responsive breakpoint (collapses right sidebar)
+- [x] Loading skeletons for all panels
+- [x] Error boundaries per panel
 
 ### 4.3 Home Feed (3/8 complete)
 - [x] Real feed from API
@@ -163,15 +163,15 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Governance tab
 - [ ] Member search
 
-### 4.5 Composer Modal (0/8 complete)
-- [ ] Full-screen overlay with threaded draft view
-- [ ] Real-time draft updates (SSE/WS)
-- [ ] Adaptive timer display
-- [ ] Lock transition animation
-- [ ] LLM summary cards
-- [ ] Summary voting with selection
-- [ ] Broadcast confirmation animation
-- [ ] "Send nothing" option
+### 4.5 Composer Modal (8/8 complete)
+- [x] Full-screen overlay with threaded draft view
+- [x] Real-time draft updates (SSE/WS)
+- [x] Adaptive timer display
+- [x] Lock transition animation
+- [x] LLM summary cards
+- [x] Summary voting with selection
+- [x] Broadcast confirmation animation
+- [x] "Send nothing" option
 
 ### 4.6 Profile (0/3 complete)
 - [ ] Public profile with group memberships

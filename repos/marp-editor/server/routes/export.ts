@@ -1,21 +1,11 @@
 import { Router, Request, Response } from 'express'
 import Marp from '@marp-team/marp-core'
-import { chromium, Browser } from 'playwright'
+import puppeteer from 'puppeteer'
+import type { Browser } from 'puppeteer'
 
 const router = Router()
 
-let browser: Browser | null = null
-
-async function getBrowser(): Promise<Browser> {
-  if (browser && browser.isConnected()) {
-    return browser
-  }
-  browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  })
-  return browser
-}
+// ─── Marp rendering ────────────────────────────────────────────────
 
 function renderPresentation(markdown: string, css?: string): { slides: string[]; css: string } {
   const marp = new Marp()
@@ -40,6 +30,55 @@ function renderPresentation(markdown: string, css?: string): { slides: string[];
 
   return { slides: slides.length > 0 ? slides : [rendered.html], css: combinedCss }
 }
+
+// ─── Browser lifecycle ─────────────────────────────────────────────
+
+let browser: Browser | null = null
+let browserPromise: Promise<Browser> | null = null
+
+async function getBrowser(): Promise<Browser> {
+  if (browser && browser.connected) return browser
+
+  if (browserPromise) return browserPromise
+
+  browserPromise = puppeteer.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ],
+  })
+
+  browser = await browserPromise
+  browserPromise = null
+  return browser
+}
+
+// Graceful shutdown on SIGTERM / SIGINT
+process.on('SIGTERM', async () => {
+  if (browser) {
+    await browser.close().catch(() => {})
+    browser = null
+  }
+})
+process.on('SIGINT', async () => {
+  if (browser) {
+    await browser.close().catch(() => {})
+    browser = null
+  }
+})
+
+// ─── Extract title from frontmatter ────────────────────────────────
+
+function extractTitle(markdown: string): string | null {
+  const match = markdown.match(/^---[\s\S]*?^title:\s*(.+)$[\s\S]*?^---/m)
+  if (match) return match[1].trim()
+  return null
+}
+
+// ─── Build HTML for PDF rendering ──────────────────────────────────
 
 function buildPdfHtml(slides: string[], css: string): string {
   const slideHtml = slides
@@ -90,7 +129,8 @@ ${slideHtml}
 </html>`
 }
 
-// POST /api/export (mounted at /api/export) — render markdown and return a PDF file
+// ─── Route: POST /api/export ───────────────────────────────────────
+
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { markdown, css } = req.body
@@ -111,6 +151,12 @@ router.post('/', async (req: Request, res: Response) => {
     // Build the full HTML document for PDF rendering
     const html = buildPdfHtml(slides, combinedCss)
 
+    // Determine filename based on presentation title
+    const title = extractTitle(markdown)
+    const filename = title
+      ? `presentation-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.pdf`
+      : 'presentation.pdf'
+
     // Launch browser and generate PDF
     const br = await getBrowser()
     const page = await br.newPage()
@@ -128,7 +174,7 @@ router.post('/', async (req: Request, res: Response) => {
 
       res.set({
         'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="presentation.pdf"',
+        'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': pdfBuffer.length.toString(),
       })
       res.send(pdfBuffer)
@@ -137,6 +183,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
   } catch (err: unknown) {
     const error = err instanceof Error ? err.message : 'PDF export failed'
+    console.error('PDF export error:', error)
     res.status(500).json({ error })
   }
 })

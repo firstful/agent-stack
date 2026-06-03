@@ -1,54 +1,74 @@
 /**
  * Structured request-logging middleware for Hono.
- *
- * Logs every HTTP request as a single JSON line after the response is sent,
- * capturing method, path, status, latency, user agent, client IP, and the
- * x-user-id header for per-user observability.
- *
- * Output goes to stdout via the existing structured logger so the OTEL
- * → Quickwit pipeline picks it up automatically.
- */
+ /**
+  * Request Logging Middleware for Hono
+  *
+  * Logs each HTTP request as a single structured JSON line after completion,
+  * capturing method, path, status code, duration, and client metadata.
+  * Integrates with the existing structured JSON logger, outputting to stdout
+  * for the OTEL filelog receiver or log-aggregation pipeline to pick up.
+  */
 
-import type { Context, Next } from "hono";
-import { logger } from "./logger";
+ import type { Context, Next } from "hono";
+ import { logger } from "./logger";
 
-const requestLogger = logger.child({ component: "http" });
+ interface RequestLogMeta {
+   method: string;
+   path: string;
+   status: number;
+   durationMs: number;
+   userAgent?: string;
+   ip?: string;
+   userId?: string;
+   contentLength?: string;
+ }
 
-/**
- * Middleware that wraps the request lifecycle, measures wall-clock latency,
- * and writes a structured log entry on completion.
- *
- * Usage:
- *   app.use("*", requestLoggingMiddleware);
- */
-export async function requestLoggingMiddleware(
-  c: Context,
-  next: Next,
-): Promise<void> {
-  const start = performance.now();
-  const method = c.req.method;
-  const path = c.req.path;
-  const userId = c.req.header("x-user-id") ?? null;
-  const userAgent = c.req.header("user-agent") ?? null;
-  const ip =
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    c.req.header("x-real-ip") ??
-    null;
+ /**
+  * Hono middleware that logs completed requests to stdout as structured JSON.
+  *
+  * Usage:
+  *   app.use(requestLogger());
+  *   // or per-route: app.get("/api/*", requestLogger());
+  */
+ export function requestLogger() {
+   return async (c: Context, next: Next) => {
+     const start = performance.now();
 
-  await next();
+     // Capture request metadata before handler runs
+     const method = c.req.method;
+     const path = c.req.path;
+     const userAgent = c.req.header("user-agent");
+     const ip =
+       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+       c.req.header("x-real-ip") ||
+       "unknown";
+     const userId = c.req.header("x-user-id") || undefined;
 
-  const latencyMs = Math.round((performance.now() - start) * 100) / 100;
-  const status = c.res.status;
+     await next();
 
-  requestLogger.info(`${method} ${path} → ${status}`, {
-    http: {
-      method,
-      path,
-      status,
-      latency_ms: latencyMs,
-      user_agent: userAgent,
-      client_ip: ip,
-      user_id: userId,
-    },
-  });
-}
+     const durationMs = Math.round(performance.now() - start);
+     const status = c.res.status;
+
+     const meta: RequestLogMeta = {
+       method,
+       path,
+       status,
+       durationMs,
+     };
+     if (userAgent) meta.userAgent = userAgent;
+     if (ip !== "unknown") meta.ip = ip;
+     if (userId) meta.userId = userId;
+
+     // Use the structured logger — level based on status code
+     if (status >= 500) {
+       logger.error(`request ${method} ${path}`, meta);
+     } else if (status >= 400) {
+       logger.warn(`request ${method} ${path}`, meta);
+     } else {
+       logger.info(`request ${method} ${path}`, meta);
+     }
+   };
+ }
+
+ // Alias for backward compatibility with existing imports in index.ts
+ export const requestLoggingMiddleware = requestLogger();

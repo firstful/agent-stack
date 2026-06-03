@@ -3,23 +3,23 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useEffect, useState } from "react";
 import type { GroupsStackParamList } from "../navigation/types";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+import { apiGet } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 type Group = { id: string; name: string; bio: string; energy: string };
 
 export function GroupsScreen() {
   const nav = useNavigation<NativeStackNavigationProp<GroupsStackParamList>>();
+  const { userId } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API}/api/groups`)
-      .then((r) => r.json())
+    apiGet<Group[]>("/api/groups", userId ?? undefined)
       .then(setGroups)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [userId]);
 
   if (loading) return <View style={styles.container}><ActivityIndicator /></View>;
 

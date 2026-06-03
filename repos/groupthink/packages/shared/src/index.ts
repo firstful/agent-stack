@@ -129,7 +129,7 @@ export type SendDraftInput = z.infer<typeof SendDraftInput>;
 export const AuthRegisterInput = z.object({
   provider: z.enum(["google", "github", "apple"]),
   providerId: z.string().min(1),
-  username: z.string().min(2).max(30),
+  username: sText(30).pipe(z.string().min(2)),
 });
 export type AuthRegisterInput = z.infer<typeof AuthRegisterInput>;
 
@@ -137,7 +137,7 @@ export type AuthRegisterInput = z.infer<typeof AuthRegisterInput>;
 export const SendDMInput = z.object({
   groupId: z.string().uuid(),
   recipientId: z.string().uuid(),
-  content: z.string().min(1).max(5000),
+  content: sRich(5000).pipe(z.string().min(1)),
 });
 export type SendDMInput = z.infer<typeof SendDMInput>;
 
