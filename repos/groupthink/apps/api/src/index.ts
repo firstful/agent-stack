@@ -47,6 +47,10 @@ import {
 } from "@groupthink/shared";
 import { auditLog, AuditActions } from "./audit-logger";
 
+// Initialise OpenTelemetry before any other runtime code
+// so auto-instrumentation can patch 'hono', 'postgres', etc.
+initTelemetry();
+
 const pg = postgres(process.env.DATABASE_URL!);
 const db = drizzle(pg, { schema });
 const redis = createClient({ url: process.env.REDIS_URL });
@@ -54,6 +58,9 @@ await redis.connect();
 
 const app = new Hono();
 app.use("/*", cors());
+
+// Structured request logging — runs before any route handler
+app.use("*", requestLoggingMiddleware);
 
 // Apply rate limiting middleware to /api/* routes
 app.use(
@@ -413,6 +420,14 @@ app.post("/api/groups", async (c) => {
     codes.push(code);
   }
 
+  await auditLog(db)
+    .action(AuditActions.GroupCreate)
+    .user(userId)
+    .group(created.id)
+    .detail({ name: input.name, energy: input.energy })
+    .captureRequest(c)
+    .log();
+
   return c.json({ ...created, inviteCodes: codes }, 201);
 });
 
@@ -455,6 +470,10 @@ app.patch("/api/groups/:id/settings", async (c) => {
 
   const { bio, energy, timezone, minInteractionTier } = await c.req.json();
 
+  // Sanitize text fields
+  const sanitizedBio = bio !== undefined ? sanitizeRichText(String(bio)).slice(0, MAX_LENGTHS.bio) : undefined;
+  const sanitizedTimezone = timezone !== undefined ? sanitizeText(String(timezone)).slice(0, 50) : undefined;
+
   // Energy change requires 72-hour cooldown
   if (energy && energy !== group.energy) {
     const hoursSinceLastChange =
@@ -468,12 +487,12 @@ app.patch("/api/groups/:id/settings", async (c) => {
   }
 
   const updateData: Record<string, any> = {};
-  if (bio !== undefined) updateData.bio = bio;
+  if (bio !== undefined) updateData.bio = sanitizedBio;
   if (energy !== undefined && energy !== group.energy) {
     updateData.energy = energy;
     updateData.lastEnergyChangeAt = new Date();
   }
-  if (timezone !== undefined) updateData.timezone = timezone;
+  if (timezone !== undefined) updateData.timezone = sanitizedTimezone;
   if (minInteractionTier !== undefined) {
     // Validate: cannot exclude own tier
     const memberCount = await db.$count(
@@ -502,6 +521,15 @@ app.patch("/api/groups/:id/settings", async (c) => {
   const updated = await db.query.groups.findFirst({
     where: (g, { eq }) => eq(g.id, groupId),
   });
+
+  await auditLog(db)
+    .action(AuditActions.GroupUpdateSettings)
+    .user(userId)
+    .group(groupId)
+    .detail({ changes: updateData })
+    .captureRequest(c)
+    .log();
+
   return c.json(updated);
 });
 
@@ -529,6 +557,14 @@ app.post("/api/groups/:id/block", async (c) => {
     blockedGroupId: targetGroupId,
   });
 
+  await auditLog(db)
+    .action(AuditActions.GroupBlock)
+    .user(userId)
+    .group(groupId)
+    .target(targetGroupId)
+    .captureRequest(c)
+    .log();
+
   return c.json({ ok: true }, 201);
 });
 
@@ -550,6 +586,15 @@ app.post("/api/groups/:id/unblock", async (c) => {
   if (!block) return c.json({ error: "not blocked" }, 404);
 
   await db.delete(schema.groupBlocks).where(eq(schema.groupBlocks.id, block.id));
+
+  await auditLog(db)
+    .action(AuditActions.GroupUnblock)
+    .user(userId)
+    .group(groupId)
+    .target(targetGroupId)
+    .captureRequest(c)
+    .log();
+
   return c.json({ ok: true });
 });
 
@@ -2571,6 +2616,14 @@ app.post("/api/groups/:id/vouch", async (c) => {
     createdBy: userId,
     details: { action: "vouch_added", vouchedBy: userId },
   });
+
+  await auditLog(db)
+    .action(AuditActions.VouchAdd)
+    .user(userId)
+    .group(groupId)
+    .target(targetUserId)
+    .detail({ vouchedBy: userId })
+    .log();
 
   return c.json({ ok: true }, 200);
 });
