@@ -116,11 +116,11 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] LLM system prompt injection with content rules
 - [x] Report endpoint for public messages
 
-### 3.12 Scheduled Jobs (0/4 complete)
-- [ ] Reputation decay job (daily)
-- [ ] Impulse expiry job (minute)
-- [ ] Sabbatical expiry job (hourly)
-- [ ] Invite code cleanup job (daily)
+### 3.12 Scheduled Jobs (4/4 complete)
+- [x] Reputation decay job (daily — halves every 60 days inactive)
+- [x] Impulse expiry job (minute — safety net for stalled impulses)
+- [x] Sabbatical expiry job (hourly — clears expired sabbaticals)
+- [x] Invite code cleanup job (daily — removes expired unused codes)
 
 ### 4. Desktop Web — Auth (0/5 complete)
 - [ ] OAuth login buttons (Google, GitHub, Apple)
