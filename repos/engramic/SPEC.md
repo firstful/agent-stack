@@ -40,11 +40,11 @@ Semantic Context Virtualization Middleware — a stateful middleware server that
 - [x] Token budgeting
 - [x] Streaming passthrough
 
-### Phase 2 — Rich Features (5/6 complete)
+### Phase 2 — Rich Features (6/6 complete)
 - [x] Recursive summaries
 - [x] `search_memory()` tool
 - [x] Embedding retrieval (Transformers.js + PG vector)
-- [ ] Responses API compatibility — **not yet implemented**
+- [x] Responses API compatibility
 - [x] Multi-provider routing
 - [x] Semantic ranking
 

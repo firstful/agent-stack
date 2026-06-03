@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import Marp from '@marp-team/marp-core'
 import puppeteer from 'puppeteer'
 import type { Browser } from 'puppeteer'
+import fs from 'fs'
 
 const router = Router()
 
@@ -36,12 +37,31 @@ function renderPresentation(markdown: string, css?: string): { slides: string[];
 let browser: Browser | null = null
 let browserPromise: Promise<Browser> | null = null
 
+// Detect system Chromium path (installed via apt in the container)
+function getSystemChromePath(): string | null {
+  const candidates = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    process.env.PUPPETEER_CHROME_PATH,
+  ].filter(Boolean) as string[]
+
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p
+    } catch { /* ignore */ }
+  }
+  return null
+}
+
 async function getBrowser(): Promise<Browser> {
   if (browser && browser.connected) return browser
 
   if (browserPromise) return browserPromise
 
-  browserPromise = puppeteer.launch({
+  const systemChrome = getSystemChromePath()
+  const launchOptions: Parameters<typeof puppeteer.launch>[0] = {
     headless: true,
     args: [
       '--no-sandbox',
@@ -49,7 +69,15 @@ async function getBrowser(): Promise<Browser> {
       '--disable-dev-shm-usage',
       '--disable-gpu',
     ],
-  })
+  }
+
+  // Use system Chromium if available (faster, no huge download)
+  if (systemChrome) {
+    launchOptions.executablePath = systemChrome
+    console.log(`PDF export: using system Chromium at ${systemChrome}`)
+  }
+
+  browserPromise = puppeteer.launch(launchOptions)
 
   browser = await browserPromise
   browserPromise = null
@@ -162,7 +190,7 @@ router.post('/', async (req: Request, res: Response) => {
     const page = await br.newPage()
 
     try {
-      await page.setContent(html, { waitUntil: 'networkidle' })
+      await page.setContent(html, { waitUntil: 'load' })
 
       const pdfBuffer = await page.pdf({
         width: '1920px',

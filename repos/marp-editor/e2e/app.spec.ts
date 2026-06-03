@@ -300,3 +300,75 @@ test.describe('File management (V2)', () => {
   // since we only support social sign-in which requires manual interaction
   // In a real scenario, users would need to sign in with Google first
 })
+
+test.describe('AI Deck Generator', () => {
+  test('Generate button opens the deck generator form', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForSelector('.marp-slide iframe', { timeout: 10000 })
+
+    // Click the Generate button in the sidebar header
+    await page.locator('button[title="Generate a deck from a natural language prompt"]').click()
+
+    // The form should appear with its heading
+    await expect(page.getByText('AI Deck Generator')).toBeVisible()
+    // The textarea with the placeholder should be visible
+    await expect(page.locator('textarea[placeholder*="Create a 5-slide deck about"]')).toBeVisible()
+  })
+
+  test('can close the deck generator form', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForSelector('.marp-slide iframe', { timeout: 10000 })
+
+    // Open the form
+    await page.locator('button[title="Generate a deck from a natural language prompt"]').click()
+    await expect(page.getByText('AI Deck Generator')).toBeVisible()
+
+    // Close via the ✕ button
+    await page.locator('button[title="Close"]').click()
+    await expect(page.getByText('AI Deck Generator')).not.toBeVisible()
+  })
+
+  test('Generate button highlights when form is open', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForSelector('.marp-slide iframe', { timeout: 10000 })
+
+    const genBtn = page.locator('button[title="Generate a deck from a natural language prompt"]')
+
+    // Not highlighted initially
+    await expect(genBtn).not.toHaveClass(/text-green-400/)
+
+    // Click to open
+    await genBtn.click()
+    await expect(genBtn).toHaveClass(/text-green-400/)
+
+    // Click again to close
+    await genBtn.click()
+    await expect(genBtn).not.toHaveClass(/text-green-400/)
+  })
+
+  test('generates a deck and loads it as slides', async ({ page }) => {
+    // The test LLM will return a default 4-slide deck
+    await page.goto('/')
+    await page.waitForSelector('.marp-slide iframe', { timeout: 10000 })
+
+    // Open the generator
+    await page.locator('button[title="Generate a deck from a natural language prompt"]').click()
+    await expect(page.getByText('AI Deck Generator')).toBeVisible()
+
+    // Type a prompt
+    const textarea = page.locator('textarea[placeholder*="Create a 5-slide deck about"]')
+    await textarea.fill('Q3 earnings report')
+
+    // Click Generate
+    await page.locator('button', { hasText: 'Generate' }).click()
+
+    // Should show chat message with the generated deck title
+    await expect(page.getByText(/generated successfully/)).toBeVisible({ timeout: 10000 })
+
+    // The form should auto-close
+    await expect(page.getByText('AI Deck Generator')).not.toBeVisible()
+
+    // Should have loaded slides
+    await expect(page.getByText(/Slide \d+ of \d+/)).toBeVisible()
+  })
+})

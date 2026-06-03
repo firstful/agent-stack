@@ -52,6 +52,7 @@ const linking: LinkingOptions<RootStackParamList> = {
             screens: {
               Profile: "profile",
               Settings: "profile/settings",
+              Notifications: "notifications",
             },
           },
         },

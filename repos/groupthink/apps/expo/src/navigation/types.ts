@@ -34,6 +34,7 @@ export type MessagesStackParamList = {
 export type ProfileStackParamList = {
   Profile: undefined;
   Settings: undefined;
+  Notifications: undefined;
 };
 
 // ── Bottom tab ──

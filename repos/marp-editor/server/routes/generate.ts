@@ -86,19 +86,31 @@ router.post('/', async (req: Request, res: Response) => {
       ? (process.env.LLM_MODEL_PRO || 'gpt-4o')
       : (process.env.LLM_MODEL || 'gpt-4o')
 
-    const result = await generateText({
-      model: provider(underlyingModel),
-      system: DECK_GEN_SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: `Generate a MARP slide deck based on this prompt: ${prompt}`,
-        },
-      ],
-      maxSteps: 1,
-    })
+    const isTest = process.env.TEST_MODE === '1'
 
-    const rawMarkdown = result.text?.trim() || ''
+    let rawMarkdown: string
+    let usage: any = undefined
+
+    if (isTest) {
+      const { testLlm } = await import('../llm-test.js')
+      rawMarkdown = await testLlm.generate(prompt)
+      usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    } else {
+      const result = await generateText({
+        model: provider(underlyingModel),
+        system: DECK_GEN_SYSTEM,
+        messages: [
+          {
+            role: 'user',
+            content: `Generate a MARP slide deck based on this prompt: ${prompt}`,
+          },
+        ],
+        maxSteps: 1,
+      })
+
+      rawMarkdown = result.text?.trim() || ''
+      usage = result.totalUsage
+    }
 
     if (!rawMarkdown) {
       res.status(500).json({ error: 'LLM returned empty response' })
@@ -124,7 +136,6 @@ router.post('/', async (req: Request, res: Response) => {
     // Cost estimate (for display only since we deduct flat rate)
     const IN_RATE = 0.14
     const OUT_RATE = 0.28
-    const usage = result.totalUsage
     const estimatedCost = usage
       ? (usage.promptTokens * IN_RATE + usage.completionTokens * OUT_RATE) / 1_000_000
       : 0

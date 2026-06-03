@@ -44,6 +44,9 @@ export const AuditActions = {
   AdminFraudAuditLog: "admin.fraud_audit_log",
   AdminShadowBanCreate: "admin.shadow_ban.create",
   AdminShadowBanLift: "admin.shadow_ban.lift",
+  // Vouch
+  VouchAdd: "vouch.add",
+  VouchRemove: "vouch.remove",
   // Governance
   GovernanceKickInitiate: "governance.kick.initiate",
   GovernanceKickVote: "governance.kick.vote",
@@ -60,6 +63,9 @@ export const AuditActions = {
   // Reports
   ReportCreate: "report.create",
   ReportReview: "report.review",
+  // Vouch
+  VouchAdd: "vouch.add",
+  VouchRemove: "vouch.remove",
 } as const;
 
 export type AuditAction = (typeof AuditActions)[keyof typeof AuditActions];

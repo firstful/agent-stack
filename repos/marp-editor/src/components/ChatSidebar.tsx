@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../lib/store'
 import { sendChat } from '../lib/api'
 import { generateId } from '../lib/cookies'
+import { GenerateDeckForm } from './GenerateDeckForm'
 import { SlideOutline } from './SlideOutline'
 import { SlideThumbnail } from './SlideThumbnail'
 import { renderSlideToHtml } from '../lib/marp'
@@ -30,6 +31,7 @@ export function ChatSidebar() {
     messages, addMessage, markdown, css, slides, renderedCss,
     setMarkdown, setCss, setCurrentSlide, setLayout,
     isGenerating, setIsGenerating, layout, showOutline, setShowOutline,
+    showGenerateDeck, setShowGenerateDeck,
     model, setModel, balance, setBalance,
   } = useStore()
 
@@ -155,6 +157,13 @@ export function ChatSidebar() {
           >
             Outline
           </button>
+          <button
+            className={`btn-ghost btn text-[10px] px-1.5 py-0.5 ${showGenerateDeck ? 'text-green-400' : 'text-gray-600'}`}
+            onClick={() => setShowGenerateDeck(!showGenerateDeck)}
+            title="Generate a deck from a natural language prompt"
+          >
+            Generate
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-500 whitespace-nowrap">{balance}¢</span>
@@ -193,6 +202,9 @@ export function ChatSidebar() {
 
       {/* Slide Outline */}
       <SlideOutline />
+
+      {/* Generate Deck Form */}
+      {showGenerateDeck && <GenerateDeckForm />}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">

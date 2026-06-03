@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { api } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 import { EnergyBadge } from "@/components/EnergyBadge";
@@ -40,7 +39,6 @@ import {
   formatTimeLeft,
 } from "@/components/group-detail-types";
 
-// ── Constants ──
 
 // ── Component ──
 
@@ -556,52 +554,15 @@ export default function GroupDetailPage() {
                 <option value="broadcast">Broadcast</option>
                 <option value="expired">Expired</option>
               </select>
-
-              <button
-                className="new-impulse-btn"
-                onClick={() => setShowForm(!showForm)}
-              >
-                {showForm ? "Cancel" : "+ New Impulse"}
-              </button>
             </div>
 
             {/* Impulse creation form */}
-            {showForm && (
-              <form className="impulse-form" onSubmit={handleCreateImpulse}>
-                <input
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="Impulse title"
-                  maxLength={200}
-                  required
-                  autoFocus
-                />
-                <textarea
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  placeholder="Description (optional)"
-                  maxLength={2000}
-                  rows={3}
-                />
-                <select
-                  value={formTarget}
-                  onChange={(e) => setFormTarget(e.target.value)}
-                >
-                  <option value="">No target group (internal impulse)</option>
-                  {allGroups
-                    .filter((g) => g.id !== id)
-                    .map((g) => (
-                      <option key={g.id} value={g.id}>
-                        → {g.name} ({g.tier})
-                      </option>
-                    ))}
-                </select>
-                {formError && <p className="form-error">{formError}</p>}
-                <button type="submit" disabled={formLoading}>
-                  {formLoading ? "Creating..." : "Create Impulse"}
-                </button>
-              </form>
-            )}
+            <ImpulseForm
+              groupId={id}
+              allGroups={allGroups}
+              onCreated={load}
+              disabled={isSabbatical}
+            />
 
             {/* Impulse list */}
             {filteredImpulses.length === 0 ? (
@@ -621,6 +582,8 @@ export default function GroupDetailPage() {
                     userId={userId}
                     tally={tallies[imp.id]}
                     timer={timers[imp.id]}
+                    queuedPositions={queuedPositions}
+                    totalQueued={impulses.filter((i) => i.status === "queued").length}
                     onVote={handleVote}
                     onRefresh={load}
                     onOpenComposer={setComposingImpulseId}
@@ -1112,182 +1075,3 @@ export default function GroupDetailPage() {
   );
 }
 
-// ── Impulse Card Sub-component ──
-
-function ImpulseCard({
-  impulse,
-  group,
-  members,
-  userId,
-  tally,
-  timer,
-  onVote,
-  onRefresh,
-  onOpenComposer,
-}: {
-  impulse: Impulse;
-  group: Group;
-  members: Member[];
-  userId: string | null;
-  tally?: Tally;
-  timer?: string;
-  onVote: (id: string, vote: "yes" | "no" | "abstain") => void;
-  onRefresh: () => void;
-  onOpenComposer?: (id: string) => void;
-}) {
-  const [localVote, setLocalVote] = useState<"yes" | "no" | "abstain" | null>(null);
-
-  const status = impulse.status;
-  const isQueued = status === "queued";
-  const isVoting = status === "voting";
-  const isComposing = status === "composing";
-  const isSummarizing = status === "summarizing";
-  const isApproval = status === "approval";
-  const isBroadcast = status === "broadcast";
-  const isModalPhase = isComposing || isSummarizing || isApproval || isBroadcast;
-
-  // Find the creator's tenure
-  const creatorMembership = members.find((m) => m.userId === impulse.createdBy);
-  const creatorTenure = creatorMembership
-    ? tenureDays(creatorMembership.joinedAt)
-    : 0;
-
-  // Tally display values
-  const yesWeight = tally?.totals.yesWeight ?? 0;
-  const noWeight = tally?.totals.noWeight ?? 0;
-  const totalWeight = yesWeight + noWeight;
-  const yesPct = totalWeight > 0 ? (yesWeight / totalWeight) * 100 : 50;
-  const totalVoters = tally?.totals.totalVoters ?? 0;
-
-  const handleVote = async (vote: "yes" | "no" | "abstain") => {
-    setLocalVote(vote);
-    await onVote(impulse.id, vote);
-  };
-
-  return (
-    <div className={`impulse-card ${isVoting ? "impulse-card--voting" : ""}`}>
-      <div className="impulse-card-header">
-        <Link
-          href={`/impulses/${impulse.id}`}
-          className="impulse-card-title"
-        >
-          {impulse.title}
-        </Link>
-        <span
-          className="status-pill"
-          style={{ borderColor: STATUS_COLORS[status] || "var(--border)", color: STATUS_COLORS[status] || "var(--text-muted)" }}
-        >
-          {STATUS_LABELS[status] || status}
-        </span>
-      </div>
-
-      {impulse.description && (
-        <p className="impulse-card-desc">{impulse.description}</p>
-      )}
-
-      {/* Meta row */}
-      <div className="meta">
-        {/* Queue position + tenure for queued impulses */}
-        {isQueued && (
-          <span className="queue-info">
-            Queue: #{impulse.queuePosition ?? "?"} — Creator tenure:{" "}
-            {tenureLabel(creatorTenure)}
-          </span>
-        )}
-
-        {/* Adaptive timer for voting */}
-        {isVoting && timer !== undefined && (
-          <span className="timer-info">
-            ⏱ {timer}
-          </span>
-        )}
-
-        {/* Modal phases: composing, summarizing, approval, broadcast */}
-        {isComposing && (
-          <button
-            className="composer-trigger-btn"
-            onClick={() => onOpenComposer?.(impulse.id)}
-          >
-            ✏️ Composing — open drafts
-          </button>
-        )}
-        {isSummarizing && (
-          <button
-            className="composer-trigger-btn"
-            onClick={() => onOpenComposer?.(impulse.id)}
-          >
-            🤖 Summarizing — view status
-          </button>
-        )}
-        {isApproval && (
-          <button
-            className="composer-trigger-btn"
-            onClick={() => onOpenComposer?.(impulse.id)}
-          >
-            🗳️ Approval — vote on summaries
-          </button>
-        )}
-        {isBroadcast && (
-          <button
-            className="composer-trigger-btn"
-            onClick={() => onOpenComposer?.(impulse.id)}
-          >
-            📢 Broadcast — view message
-          </button>
-        )}
-      </div>
-
-      {/* Voting phase: tally bar + inline vote buttons */}
-      {isVoting && (
-        <div className="vote-section">
-          {/* Weighted tally bar */}
-          <div className="vote-bar">
-            <div
-              className="vote-fill vote-fill-yes"
-              style={{ width: `${yesPct}%` }}
-            />
-            <div
-              className="vote-fill vote-fill-no"
-              style={{ width: `${100 - yesPct}%` }}
-            />
-          </div>
-
-          <div className="vote-tally-numbers">
-            <span className="vote-tally-yes">
-              👍 {yesWeight} ({yesPct.toFixed(0)}%)
-            </span>
-            <span className="vote-tally-voters">{totalVoters} voted</span>
-            <span className="vote-tally-no">
-              👎 {noWeight} ({(100 - yesPct).toFixed(0)}%)
-            </span>
-          </div>
-
-          {/* Inline vote buttons */}
-          <div className="vote-actions">
-            <button
-              className={`vote-btn vote-btn-yes ${localVote === "yes" ? "vote-btn--active" : ""}`}
-              onClick={() => handleVote("yes")}
-              disabled={localVote !== null}
-            >
-              Yes
-            </button>
-            <button
-              className={`vote-btn vote-btn-no ${localVote === "no" ? "vote-btn--active" : ""}`}
-              onClick={() => handleVote("no")}
-              disabled={localVote !== null}
-            >
-              No
-            </button>
-            <button
-              className={`vote-btn vote-btn-abstain ${localVote === "abstain" ? "vote-btn--active" : ""}`}
-              onClick={() => handleVote("abstain")}
-              disabled={localVote !== null}
-            >
-              Abstain
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}

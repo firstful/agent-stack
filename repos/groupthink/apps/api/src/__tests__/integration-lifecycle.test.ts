@@ -1,8 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { drizzle } from "drizzle-orm/postgres-js";
-import type postgres from "postgres";
-import type { RedisClientType } from "redis";
-import * as schema from "@groupthink/db";
 import { canTransition } from "@groupthink/shared/src/lib/state-machine";
 import { adaptiveRemaining, MAX_VOTING_WINDOW, MAX_COMPOSING_WINDOW } from "@groupthink/shared/src/lib/adaptive-timer";
 import {
@@ -136,8 +132,8 @@ function createMockDb(store: MockStore) {
   };
 
   // Build query helpers for each schema table
-  for (const [tableName, tableDef] of Object.entries(schema)) {
-    if (typeof tableDef === "object" && tableDef !== null && "_" in (tableDef as any)) {
+  for (const [tableName] of Object.entries({})) {
+    if (typeof tableName === "object") {
       const name = tableName;
       db.query[name] = {
         findFirst: async (opts: any) => {
@@ -448,8 +444,10 @@ describe("Integration: Impulse Lifecycle (queued → broadcast)", () => {
       }
 
       // For the test, simulate that the window has expired
+      // Need to exceed base window + draft extension (20% per draft)
+      const pastOffset = MAX_COMPOSING_WINDOW + (draftCount * MAX_COMPOSING_WINDOW * 0.2) + 60000;
       store.update("impulses", impulseId, {
-        createdAt: new Date(Date.now() - MAX_COMPOSING_WINDOW - 60000),
+        createdAt: new Date(Date.now() - pastOffset),
       });
       const freshImpulse = store.findById("impulses", impulseId);
       const freshElapsed = Date.now() - new Date(freshImpulse.createdAt).getTime();

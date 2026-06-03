@@ -62,6 +62,21 @@ describe("Integration: Auth — JWT tokens", () => {
 // ── OAuth Provider Configuration ──
 
 describe("Integration: OAuth — authorize URLs", () => {
+  const origGoogleId = process.env.GOOGLE_CLIENT_ID;
+  const origGithubId = process.env.GITHUB_CLIENT_ID;
+  const origAppleId = process.env.APPLE_CLIENT_ID;
+
+  beforeAll(() => {
+    process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
+    process.env.GITHUB_CLIENT_ID = "test-github-client-id";
+    process.env.APPLE_CLIENT_ID = "test-apple-client-id";
+  });
+
+  afterAll(() => {
+    process.env.GOOGLE_CLIENT_ID = origGoogleId ?? "";
+    process.env.GITHUB_CLIENT_ID = origGithubId ?? "";
+    process.env.APPLE_CLIENT_ID = origAppleId ?? "";
+  });
   it("generates valid Google OAuth URL", () => {
     const url = getAuthorizeUrl("google", "http://localhost:3000/auth/callback", "state123");
     expect(url).toContain("accounts.google.com");
@@ -182,7 +197,14 @@ describe("Integration: OAuth — Apple ID token decoding", () => {
 // ── Turnstile ──
 
 describe("Integration: Turnstile verification", () => {
+  const origTurnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+
+  beforeAll(() => {
+    process.env.TURNSTILE_SECRET_KEY = "test-turnstile-secret";
+  });
+
   afterAll(() => {
+    process.env.TURNSTILE_SECRET_KEY = origTurnstileSecret;
     nock.cleanAll();
   });
 

@@ -3,6 +3,9 @@ FROM docker.io/library/node:22 AS builder
 WORKDIR /app
 RUN npm config set registry https://registry.npmjs.org/
 
+# Builder only needs frontend deps — skip Chromium download
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps
 
@@ -14,9 +17,12 @@ FROM docker.io/library/node:22
 WORKDIR /app
 RUN npm config set registry https://registry.npmjs.org/
 
-# Puppeteer / Chromium system dependencies
+# Chromium + Puppeteer system dependencies
+# Chromium is installed system-wide so Puppeteer doesn't need to download
+# its own copy (saves ~300MB in the image)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    chromium \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -34,6 +40,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
+
+# Using system Chromium (installed via apt above), so skip Puppeteer's
+# bundled download to save ~300MB in the image and avoid network timeouts
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 RUN npm ci --omit=dev --legacy-peer-deps
 
 COPY server/ ./server/
@@ -41,9 +52,6 @@ COPY --from=builder /app/dist/ ./dist/
 
 ENV PORT=3001
 ENV NODE_ENV=production
-# Puppeteer will auto-download Chromium during npm ci (postinstall script)
-# Cache lives at /root/.cache/puppeteer/ inside the container
-ENV PUPPETEER_SKIP_DOWNLOAD=false
 
 RUN mkdir -p /app/data
 

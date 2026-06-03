@@ -3,8 +3,8 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { FeedStackParamList } from "../navigation/types";
-
-const API = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
+import { apiGet } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 type GroupResult = { id: string; name: string; bio: string; energy: string };
 type MessageResult = {
@@ -39,6 +39,7 @@ export function SearchScreen() {
   const nav = useNavigation<NativeStackNavigationProp<FeedStackParamList>>();
   const route = useRoute();
   const initialQuery = (route.params as { query?: string } | undefined)?.query ?? "";
+  const { userId } = useAuth();
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,8 +65,7 @@ export function SearchScreen() {
     setLoading(true);
     timerRef.current = setTimeout(() => {
       const endpoint = scope === "my-groups" ? "/api/search/groups" : "/api/search";
-      fetch(`${API}${endpoint}?q=${encodeURIComponent(query.trim())}`)
-        .then((r) => r.json())
+      apiGet<SearchResults>(`${endpoint}?q=${encodeURIComponent(query.trim())}`, userId ?? undefined)
         .then(setResults)
         .catch(() => {})
         .finally(() => setLoading(false));

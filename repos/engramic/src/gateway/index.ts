@@ -17,6 +17,9 @@ import type { IVectorStore } from "../memory/vector.js"
 import type { IUserStore } from "../auth/user-store.js"
 import type { IUsageStore } from "../usage/store.js"
 import type { EmbeddingsProvider } from "../provider/embeddings.js"
+import { handleResponsesRequest } from "./responses.js"
+import type { ResponsesApiRequest } from "../types.js"
+import type { ICrossSessionStore } from "../memory/cross-session.js"
 import { PricingEngine } from "../usage/pricing.js"
 import { MetricsCollector } from "../usage/metrics.js"
 import { randomUUID } from "node:crypto"
@@ -365,6 +368,69 @@ const ALL_HIDDEN_TOOL_SCHEMAS: Array<Record<string, unknown>> = [
       },
     },
   },
+  // ── Cross-session memory tools ──
+  {
+    type: "function",
+    function: {
+      name: "remember_cross_session",
+      description: "Recall a cross-session memory by ID from another conversation",
+      parameters: {
+        type: "object",
+        properties: { memory_id: { type: "string" } },
+        required: ["memory_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_cross_session",
+      description: "Search cross-session memories across all user conversations",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_cross_session",
+      description: "List all cross-session memories",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "pin_cross_session_memory",
+      description: "Pin a cross-session memory so it survives retention eviction",
+      parameters: {
+        type: "object",
+        properties: {
+          memory_id: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["memory_id", "reason"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "unpin_cross_session_memory",
+      description: "Unpin a previously pinned cross-session memory",
+      parameters: {
+        type: "object",
+        properties: { memory_id: { type: "string" } },
+        required: ["memory_id"],
+      },
+    },
+  },
 ]
 
 // ── Route registration ──
@@ -379,6 +445,7 @@ export function registerRoutes(
   userStore: IUserStore,
   usageStore: IUsageStore,
   metricsCollector: MetricsCollector,
+  crossSessionStore?: ICrossSessionStore,
 ): void {
   app.get("/health", async () => ({ status: "ok" }))
 
@@ -695,7 +762,7 @@ export function registerRoutes(
     app.put("/v1/profiles/:profileId", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const profile = await userStore.updateProfile(token, (request.params as { profileId: string }).profileId, request.body)
+      const profile = await userStore.updateProfile(token, (request.params as { profileId: string }).profileId, request.body as Partial<Profile>)
       if (!profile) return reply.status(404).send({ error: "Profile not found" })
       return reply.send(profile)
     })
@@ -731,8 +798,8 @@ export function registerRoutes(
     app.post("/v1/:profileId/chat/completions", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const resolved = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
-      if ("error" in resolved) return reply.status(resolved.error.status).send(resolved.error.body)
+      const resolved: any = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
+      if (resolved.error) return reply.status(resolved.error.status).send(resolved.error.body)
       const { account, profile } = resolved
 
       let providers
@@ -742,7 +809,8 @@ export function registerRoutes(
         return reply.status(400).send({ error: e.message })
       }
 
-      const chatBody = { ...request.body, model: providers.chatModel }
+      const body = request.body as Record<string, unknown>
+      const chatBody = { ...body, model: providers.chatModel }
 
       // Apply profile compression settings to the conversation
       // This bridges ProfileCompression → MemoryPolicy before the chat handler runs
@@ -755,11 +823,34 @@ export function registerRoutes(
       )
     })
 
+    // Profile-scoped Responses API
+    app.post("/v1/:profileId/responses", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization required" })
+      const resolved: any = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
+      if (resolved.error) return reply.status(resolved.error.status).send(resolved.error.body)
+      const { account, profile } = resolved
+
+      let providers
+      try {
+        providers = createProfileProviders(profile, account)
+      } catch (e: any) {
+        return reply.status(400).send({ error: e.message })
+      }
+
+      return handleResponsesRequest(
+        request.body as any, reply, store, providers.chat, engine, vectorStore,
+        providers.embeddings, token, profile.execution.provider,
+        usageStore, metricsCollector,
+        providers.summarization, providers.summarizationModel, userStore,
+      )
+    })
+
     app.get("/v1/:profileId/models", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractAuthToken(request)
       if (!token) return reply.status(401).send({ error: "Authorization required" })
-      const resolved = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
-      if ("error" in resolved) return reply.status(resolved.error.status).send(resolved.error.body)
+      const resolved: any = await resolveAccountAndProfile(token, (request.params as { profileId: string }).profileId)
+      if (resolved.error) return reply.status(resolved.error.status).send(resolved.error.body)
       const { account, profile } = resolved
       const seen = new Set<string>()
       const models: Array<{ id: string; owned_by: string }> = []
@@ -807,7 +898,8 @@ export function registerRoutes(
         })
       }
       const { provider: providerConfig, model } = resolved
-      const chatBody = { ...request.body, model }
+      const body = request.body as Record<string, unknown>
+      const chatBody = { ...body, model }
       const providers = createUserProviders(providerConfig)
       return handleChatRequest(
         chatBody, reply, store, providers.chat, engine, vectorStore,
@@ -815,6 +907,31 @@ export function registerRoutes(
         usageStore, metricsCollector, undefined, undefined, userStore, undefined,
       )
     })
+
+    // ── Account-scoped responses ──
+    app.post("/v1/responses", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const modelName = (request.body as Record<string, unknown>).model as string
+      const resolved = await userStore.resolveProvider(token, modelName)
+      if (!resolved) {
+        const account = await userStore.getAccount(token)
+        if (!account) return reply.status(401).send({ error: "Invalid token" })
+        return reply.status(400).send({
+          error: `Unknown model '${modelName}'. Available models: ${account.providers.map((p: any) => `${p.label}/${p.defaultModel}`).join(", ")}`,
+        })
+      }
+      const { provider: providerConfig, model } = resolved
+      const body = request.body as Record<string, unknown>
+      const responsesBody = { ...body, model }
+      const providers = createUserProviders(providerConfig)
+      return handleResponsesRequest(
+        responsesBody as any, reply, store, providers.chat, engine, vectorStore,
+        providers.embeddings, token, providerConfig.label,
+        usageStore, metricsCollector, undefined, undefined, userStore,
+      )
+    })
+
     return
   }
 
@@ -837,6 +954,116 @@ export function registerRoutes(
       usageStore, metricsCollector, undefined, undefined, userStore, undefined,
     )
   })
+
+  app.post("/v1/responses", async (request: FastifyRequest, reply: FastifyReply) => {
+    const defaults = createFallbackProviders()
+    const token = extractAuthToken(request)
+    return handleResponsesRequest(
+      request.body as any, reply, store, defaults.chat, engine, vectorStore,
+      defaults.embeddings, token || undefined, "default",
+      usageStore, metricsCollector, undefined, undefined, userStore,
+    )
+  })
+
+  if (crossSessionStore) {
+    // ── Cross-session memory API ──
+    app.get("/v1/cross-session/memories", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const profileId = (request.query as Record<string, string>).profile_id
+      const memories = await crossSessionStore!.getMemories(token, profileId)
+      return reply.send({ memories })
+    })
+
+    app.get("/v1/cross-session/memories/:memoryId", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const { memoryId } = request.params as { memoryId: string }
+      const memory = await crossSessionStore!.getMemory(token, memoryId)
+      if (!memory) return reply.status(404).send({ error: "Memory not found" })
+      return reply.send(memory)
+    })
+
+    app.post("/v1/cross-session/memories", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const body = request.body as Record<string, unknown>
+      if (!body.topic || !body.summary_text || !body.source_conversation_id) {
+        return reply.status(400).send({ error: "topic, summary_text, and source_conversation_id are required" })
+      }
+      const { executeStoreCrossSessionMemory } = await import("./hidden-tools.js")
+      const result = await executeStoreCrossSessionMemory(
+        token, body.topic as string, body.summary_text as string, body.source_conversation_id as string,
+        (body.source_span_ids as string[]) || [], crossSessionStore!,
+        body.profile_id as string | undefined, body.importance_score as number | undefined,
+      )
+      return reply.status(201).send(result)
+    })
+
+    app.delete("/v1/cross-session/memories/:memoryId", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const { memoryId } = request.params as { memoryId: string }
+      const removed = await crossSessionStore!.removeMemory(token, memoryId)
+      if (!removed) return reply.status(404).send({ error: "Memory not found" })
+      return reply.send({ removed: true })
+    })
+
+    app.post("/v1/cross-session/memories/:memoryId/pin", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const { memoryId } = request.params as { memoryId: string }
+      const body = request.body as Record<string, unknown>
+      const ok = await crossSessionStore!.pinMemory(token, memoryId, (body.reason as string) || "User requested")
+      if (!ok) return reply.status(404).send({ error: "Memory not found" })
+      return reply.send({ pinned: true })
+    })
+
+    app.post("/v1/cross-session/memories/:memoryId/unpin", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const { memoryId } = request.params as { memoryId: string }
+      const ok = await crossSessionStore!.unpinMemory(token, memoryId)
+      if (!ok) return reply.status(404).send({ error: "Memory not found" })
+      return reply.send({ unpinned: true })
+    })
+
+    app.get("/v1/cross-session/memories/search/:query", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const { query } = request.params as { query: string }
+      const profileId = (request.query as Record<string, string>).profile_id
+      const results = await crossSessionStore!.searchMemories(token, query, profileId)
+      return reply.send({ results })
+    })
+
+    app.get("/v1/cross-session/size", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const profileId = (request.query as Record<string, string>).profile_id
+      const size = await crossSessionStore!.size(token, profileId)
+      return reply.send({ size })
+    })
+
+    app.post("/v1/cross-session/stitch", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const body = request.body as { conversation_id?: string }
+      const convId = body.conversation_id || `conv_${Date.now()}`
+      const conv = await store.getOrCreateConversation(convId)
+      const result = await crossSessionStore!.stitchIntoConversation(token, conv)
+      return reply.send(result)
+    })
+
+    app.post("/v1/cross-session/enforce-retention", async (request: FastifyRequest, reply: FastifyReply) => {
+      const token = extractAuthToken(request)
+      if (!token) return reply.status(401).send({ error: "Authorization header required" })
+      const body = request.body as { profile_id?: string }
+      const { DEFAULT_RETENTION_POLICY } = await import("../types.js")
+      const evicted = await crossSessionStore!.enforceRetention(token, DEFAULT_RETENTION_POLICY, body.profile_id)
+      return reply.send({ evicted })
+    })
+  }
 }
 
 // ── Chat request handler ──
@@ -961,9 +1188,9 @@ async function handleStreaming(
           temperature: body.temperature,
         })) {
           passEvents.push(event)
-          if (event.type === "usage") {
-            passUsage = event.data
-          } else if (event.type === "chunk" && typeof event.data === "string") {
+          if (event.type === 'usage') {
+            passUsage = event.data as { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+          } else if (event.type === 'chunk' && typeof event.data === 'string') {
             passContent += event.data
           } else if (event.type === "tool_call") {
             hasToolCalls = true

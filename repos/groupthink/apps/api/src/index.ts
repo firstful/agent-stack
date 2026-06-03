@@ -46,6 +46,7 @@ import {
   type EngagementEvent,
 } from "@groupthink/shared";
 import { auditLog, AuditActions } from "./audit-logger";
+import { getLLMMetrics } from "./llm-service";
 
 // Initialise OpenTelemetry before any other runtime code
 // so auto-instrumentation can patch 'hono', 'postgres', etc.
@@ -649,6 +650,15 @@ app.post("/api/groups/:id/invite-codes", async (c) => {
     where: (ic, { and, eq, isNull }) =>
       and(eq(ic.groupId, groupId), isNull(ic.usedBy)),
   });
+
+  await auditLog(db)
+    .action(AuditActions.GroupInviteCodeCreate)
+    .user(userId)
+    .group(groupId)
+    .detail({ code })
+    .captureRequest(c)
+    .log();
+
   return c.json(codes, 201);
 });
 
@@ -683,6 +693,14 @@ app.post("/api/join", async (c) => {
   // Log engagement event for activity gate
   await logEngagementEvent(userId, invite.groupId, "invite_used");
 
+  await auditLog(db)
+    .action(AuditActions.GroupJoin)
+    .user(userId)
+    .group(invite.groupId)
+    .detail({ inviteCodeId: invite.id })
+    .captureRequest(c)
+    .log();
+
   return c.json({ ok: true, groupId: invite.groupId }, 200);
 });
 
@@ -707,6 +725,13 @@ app.post("/api/groups/:id/leave", async (c) => {
 
   await db.delete(schema.memberships)
     .where(eq(schema.memberships.id, membership.id));
+
+  await auditLog(db)
+    .action(AuditActions.GroupLeave)
+    .user(userId)
+    .group(groupId)
+    .captureRequest(c)
+    .log();
 
   return c.json({ ok: true });
 });
@@ -741,6 +766,9 @@ app.post("/api/groups/:id/nicknames", async (c) => {
   });
   if (!member) return c.json({ error: "not a member" }, 403);
 
+  // Sanitize nickname
+  const sanitizedNickname = sanitizeText(String(nickname)).slice(0, 100);
+
   // Upsert: replace any existing nickname for this target
   const existing = await db.query.groupNicknames.findFirst({
     where: (n, { and, eq }) =>
@@ -749,15 +777,24 @@ app.post("/api/groups/:id/nicknames", async (c) => {
 
   if (existing) {
     await db.update(schema.groupNicknames)
-      .set({ nickname })
+      .set({ nickname: sanitizedNickname })
       .where(eq(schema.groupNicknames.id, existing.id));
   } else {
     await db.insert(schema.groupNicknames).values({
       sourceGroupId: groupId,
       targetGroupId,
-      nickname,
+      nickname: sanitizedNickname,
     });
   }
+
+  await auditLog(db)
+    .action(AuditActions.GroupNicknameSet)
+    .user(userId)
+    .group(groupId)
+    .target(targetGroupId)
+    .detail({ nickname: sanitizedNickname })
+    .captureRequest(c)
+    .log();
 
   return c.json({ ok: true });
 });
@@ -780,6 +817,15 @@ app.delete("/api/nicknames/:id", async (c) => {
 
   await db.delete(schema.groupNicknames)
     .where(eq(schema.groupNicknames.id, nicknameId));
+
+  await auditLog(db)
+    .action(AuditActions.GroupNicknameDelete)
+    .user(userId)
+    .group(nickname.sourceGroupId)
+    .target(nicknameId)
+    .detail({ targetGroupId: nickname.targetGroupId })
+    .captureRequest(c)
+    .log();
 
   return c.json({ ok: true });
 });
@@ -835,6 +881,15 @@ app.post("/api/groups/:id/impulses", async (c) => {
 
   // Log engagement event for activity gate
   await logEngagementEvent(userId, groupId, "impulse_created");
+
+  await auditLog(db)
+    .action(AuditActions.ImpulseCreate)
+    .user(userId)
+    .group(groupId)
+    .target(impulse[0].id)
+    .detail({ title: input.title })
+    .captureRequest(c)
+    .log();
 
   return c.json(impulse[0], 201);
 });
@@ -2668,6 +2723,14 @@ app.post("/api/groups/:id/unvouch", async (c) => {
     details: { action: "vouch_removed", removedBy: userId },
   });
 
+  await auditLog(db)
+    .action(AuditActions.VouchRemove)
+    .user(userId)
+    .group(groupId)
+    .target(targetUserId)
+    .detail({ removedBy: userId })
+    .log();
+
   return c.json({ ok: true });
 });
 
@@ -2773,6 +2836,14 @@ app.post("/api/admin/shadow-bans", async (c) => {
     },
   });
 
+  await auditLog(db)
+    .action(AuditActions.AdminShadowBanCreate)
+    .user(userId)
+    .group(groupId || undefined)
+    .target(targetUserId)
+    .detail({ shadowBanId: created.id, reason: reason || null, expiresAt: expiresAt?.toISOString() ?? null })
+    .log();
+
   return c.json(created, 201);
 });
 
@@ -2805,7 +2876,25 @@ app.post("/api/admin/shadow-bans/:id/lift", async (c) => {
     },
   });
 
+  await auditLog(db)
+    .action(AuditActions.AdminShadowBanLift)
+    .user(userId)
+    .group(ban.groupId || undefined)
+    .target(ban.userId)
+    .detail({ shadowBanId: banId })
+    .log();
+
   return c.json({ ok: true });
+});
+
+// ── Monitoring ──
+
+/**
+ * LLM monitoring endpoint — exposes in-memory metrics about LLM
+ * summarization calls (counts, latency, token usage, fallback usage).
+ */
+app.get("/api/monitoring/llm", (c) => {
+  return c.json({ ok: true, metrics: getLLMMetrics() });
 });
 
 // ── Health ──

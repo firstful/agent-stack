@@ -87,6 +87,7 @@ interface AppState {
   toggleThemePanel: () => void
   toggleFileManager: () => void
   toggleTemplateSelector: () => void
+  setShowGenerateDeck: (v: boolean) => void
   setPalettes: (p: ThemePalette[]) => void
   setShowOutline: (v: boolean) => void
   setModel: (m: 'flash' | 'pro') => void
@@ -121,6 +122,7 @@ export const useStore = create<AppState>((set, get) => ({
   showThemePanel: false,
   showFileManager: false,
   showTemplateSelector: false,
+  showGenerateDeck: false,
   palettes: [],
   showOutline: true,
   model: 'flash',
@@ -158,6 +160,8 @@ export const useStore = create<AppState>((set, get) => ({
   toggleFileManager: () => set((s) => ({ showFileManager: !s.showFileManager })),
 
   toggleTemplateSelector: () => set((s) => ({ showTemplateSelector: !s.showTemplateSelector })),
+
+  setShowGenerateDeck: (showGenerateDeck) => set({ showGenerateDeck }),
 
   setPalettes: (palettes) => set({ palettes }),
   setShowOutline: (showOutline) => set({ showOutline }),

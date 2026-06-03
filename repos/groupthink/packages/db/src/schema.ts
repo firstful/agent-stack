@@ -182,8 +182,13 @@ export const messages = pgTable("messages", {
   ),
 });
 
-export const messagesSearchIndex = index("idx_messages_search")
-  .using("gin", messages.searchVector);
+// Temporarily commented out — drizzle-kit 0.30.6 can't parse custom type columns
+// in index definitions. The GIN index is created manually via SQL migration.
+// NOTE: GIN index disabled for load tests — tsvector + .using("gin") throws
+//   "SyntaxError: "undefined" is not valid JSON" in drizzle-orm 0.38.4.
+// Re-enable after drizzle upgrade or fix.
+// export const messagesSearchIndex = index("idx_messages_search")
+//   .using("gin", messages.searchVector);
 
 // ── Retweets (Endorsements) ──
 export const retweets = pgTable("retweets", {

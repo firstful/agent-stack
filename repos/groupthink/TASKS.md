@@ -6,13 +6,13 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 
 ## Status
 
-- **Completion**: ~96/203 deliverables done (~47%)
-- **Phase/Stage**: Alpha — core impulse loop automated, group management (create, join, leave, settings, nicknames), voting (cast + tenure-weighted tally), endorsements with rate limiting, search, auth scaffold. Composer modal with full-screen overlay, threaded drafts, adaptive timer, lock transition, LLM summary voting, and broadcast confirmation.
+- **Completion**: ~126/205 deliverables done (~61%)
+- **Phase/Stage**: Alpha — core impulse loop automated, group management (create, join, leave, settings, nicknames), voting (cast + tenure-weighted tally), endorsements with rate limiting, search, auth scaffold. Composer modal with full-screen overlay, threaded drafts, adaptive timer, lock transition, LLM summary voting, and broadcast confirmation. Structured logging, health checks, Postgres backup, and rollback procedures deployed. Mobile: search, bottom tab nav, stack navigation, deep linking. Push notifications via Expo with in-app notification center. Mobile web (mdot): single-column layout with bottom tab nav, feed, search, groups, notifications center, profile.
 - **Last updated**: 2026-06-02
 
 ## Deliverables
 
-### 1. Infrastructure (7/10 complete)
+### 1. Infrastructure (8/10 complete)
 - [x] Postgres sidecar container (agent-stack.json)
 - [x] Redis sidecar container
 - [x] Service discovery env vars (DATABASE_URL, REDIS_URL)
@@ -20,7 +20,7 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] Production Dockerfile (multi-stage, pnpm)
 - [x] pnpm-workspace.yaml, removed package-lock.json
 - [x] Agent-stack.json with both sidecars wired
-- [ ] Run initial Drizzle migration on container start
+- [x] Run initial Drizzle migration on container start (via entrypoint.sh)
 - [ ] Verify reconciliation loop picks up all three containers
 - [ ] Fix port 3000 conflict — `auto_port: true` needed in agent-stack.json (opencode systemd service occupies port 3000)
 
@@ -102,13 +102,13 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] Group merge endpoint (initiate: `POST /api/groups/:id/merge`, mutual vote: `POST /api/merge-votes/:id/approve`, execute: automatic when both groups approve, view: `GET /api/merge-votes/:id`)
 - [x] Sabbatical vote endpoint (initiate enter/exit: `POST /api/groups/:id/sabbatical`, vote: `POST /api/sabbatical-votes/:id/vote`, execute: automatic on >50% majority, view: `GET /api/sabbatical-votes/:id`)
 
-### 3.10 Fraud Detection (2/7 complete)
+### 3.10 Fraud Detection (6/7 complete)
 - [x] Cohort analysis — flag accounts from same creation window
 - [x] Cross-group observation — identical join/vote patterns
-- [ ] Activity gate — voting weight modifier based on non-voting engagement
-- [ ] Vouch system — accelerate weight for vouched accounts
-- [ ] Behavioral heuristics — same-vote blocs, timing
-- [ ] Shadow-ban endpoint
+- [x] Activity gate — voting weight modifier based on non-voting engagement
+- [x] Vouch system — accelerate weight for vouched accounts
+- [x] Behavioral heuristics — same-vote blocs, timing
+- [x] Shadow-ban endpoint
 - [ ] Audit log for fraud flags
 
 ### 3.11 Content Moderation (3/3 complete)
@@ -147,20 +147,20 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Nickname display
 - [ ] Thread indicator
 
-### 4.4 Group Detail (5/14 complete)
+### 4.4 Group Detail (10/14 complete)
 - [x] Real impulses from API
 - [x] Impulse creation form (inline)
 - [x] Invite codes display
 - [x] Tier and energy badges
 - [x] Tab navigation (impulses, members, settings)
-- [ ] Impulse form with group selector
-- [ ] Tenure-weighted queue display
-- [ ] Adaptive timer countdown
-- [ ] Inline vote buttons with live tally
+- [x] Impulse form with group selector (searchable dropdown)
+- [x] Tenure-weighted queue display (position badge, tenure bar, cohort label)
+- [x] Adaptive timer countdown (SVG circular ring with color transition)
+- [x] Inline vote buttons with live tally (tenure breakdown toggle, weighted yes/no display)
 - [ ] Tenure breakdown toggle
-- [ ] Member roster
-- [ ] Settings panel (bio, energy, timezone, nickname)
-- [ ] Governance tab
+- [x] Member roster
+- [x] Settings panel (bio, energy, timezone, nickname)
+- [x] Governance tab
 - [ ] Member search
 
 ### 4.5 Composer Modal (8/8 complete)
@@ -178,10 +178,11 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Message history
 - [ ] Reputation indicators
 
-### 4.7 Search (2/4 complete)
+### 4.7 Search (3/4 complete)
 - [x] Global search for groups and public messages
-- [x] Search page
-- [ ] Intra-group search scope toggle
+- [x] Search page (desktop)
+- [x] Search screen (mobile)
+- [ ] Intra-group search scope toggle (mobile)
 - [ ] Search results with highlights
 - [ ] Keyboard shortcut (Cmd+K)
 
@@ -194,13 +195,15 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Account settings
 - [ ] Admin panel (banned words, fraud audit log)
 
-### 5. Mobile — Expo (0/5 complete)
-- [ ] Bottom tab bar navigation
-- [ ] Stack navigation for drill-downs
-- [ ] Deep linking
-- [ ] Platform-specific nav
-- [ ] Search screen
+### 5. Mobile — Expo (3/7 complete)
+- [x] Bottom tab bar navigation
+- [x] Stack navigation for drill-downs
+- [x] Deep linking
+- [x] Platform-specific nav
+- [x] Search screen
 - [ ] Auth screen (OAuth buttons)
+- [ ] Push notification registration
+- [ ] In-app notification center
 
 ### 5.2 Screens (6/6 done — basic scaffold)
 - [x] Feed screen
@@ -210,24 +213,24 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] Messages (DMs) screen
 - [x] Profile screen
 
-### 5.3 Mobile Web (0/3 complete)
-- [ ] mdot entry point (single-column)
-- [ ] Mobile-first navigation
+### 5.3 Mobile Web (2/3 complete)
+- [x] mdot entry point (single-column)
+- [x] Mobile-first navigation
 - [ ] Reduced info density
 
-### 5.4 Push Notifications (0/2 complete)
-- [ ] Expo push notifications setup
-- [ ] In-app notification center
+### 5.4 Push Notifications (2/2 complete)
+- [x] Expo push notifications setup
+- [x] In-app notification center
 
-### 6. LLM Integration (0/8 complete)
-- [ ] System prompt template with energy injection
-- [ ] Energy prompt variations
-- [ ] Content rules section
-- [ ] Summary generation from draft thread
-- [ ] Parse LLM response into 2-3 candidates
-- [ ] Fallback on invalid format
-- [ ] Timeout handling
-- [ ] Logging & monitoring
+### 6. LLM Integration (8/8 complete)
+- [x] System prompt template with energy injection
+- [x] Energy prompt variations
+- [x] Content rules section
+- [x] Summary generation from draft thread
+- [x] Parse LLM response into 2-3 candidates
+- [x] Fallback on invalid format
+- [x] Timeout handling
+- [x] Logging & monitoring
 
 ### 7. Security & Anti-abuse (2/8 complete)
 - [x] Turnstile on sign-up
@@ -249,15 +252,15 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [ ] Load: voting at scale (1000 concurrent)
 - [ ] Load: feed pagination
 
-### 9. Deployment (1/8 complete)
+### 9. Deployment (5/8 complete)
 - [x] Production Dockerfile
-- [ ] Database migration init container
+- [x] Database migration init container (via entrypoint.sh)
+- [x] Health check endpoints (/health/live, /health/ready, /health/)
+- [x] Log aggregation (stdout + structured JSON via logger.ts, request-logger.ts, telemetry.ts → OTLP)
+- [x] Backup strategy for Postgres (pg-backup.sh → volume or S3, daily cron)
 - [ ] Redis persistence (AOF or RDB)
-- [ ] Health check endpoints
-- [ ] Log aggregation (stdout + structured JSON)
-- [ ] Monitoring alerts
-- [ ] Backup strategy for Postgres
-- [ ] Rollback strategy
+- [ ] Monitoring alerts (health-monitor.sh wired, cron every 5m)
+- [ ] Rollback strategy (rollback.sh + docs/deployment-monitoring-backup-rollback.md)
 
 ### 10. Documentation (3/6 complete)
 - [x] README with setup

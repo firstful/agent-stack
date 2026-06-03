@@ -380,12 +380,13 @@ export async function selectSpansForCompression(
 export function shouldCompress(conv: Conversation): boolean {
   const policy = conv.policy
 
-  // Compression rate adjusts sensitivity: low → need higher thresholds, high → lower thresholds
+  // Compression rate adjusts sensitivity: high → lower thresholds (more aggressive),
+  // low → higher thresholds (less aggressive)
   const rateMultiplier = policy.compressionRate === "high"
-    ? 1.0
+    ? 0.75
     : policy.compressionRate === "low"
-      ? 1.5
-      : 1.25
+      ? 1.25
+      : 1.0
 
   // If strategy is "auto", use heuristics to determine threshold
   const totalTokens = conv.spans.reduce((sum, s) => sum + s.tokenCount, 0)
@@ -394,11 +395,12 @@ export function shouldCompress(conv: Conversation): boolean {
   if (totalTokens > getTokenThreshold(policy) * rateMultiplier) return true
   if (totalMessages > getMessageThreshold(policy) * rateMultiplier) return true
 
-  // Idle check — more aggressive with higher rate
-  const idleThreshold = Math.max(
-    getIdleThreshold(policy),
-    policy.compressionRate === "high" ? 15_000 : 30_000,
-  )
+  // Idle check — more aggressive with higher rate (shorter idle wait)
+  const idleThreshold = policy.compressionRate === "high"
+    ? Math.min(getIdleThreshold(policy), 15_000)
+    : policy.compressionRate === "low"
+      ? Math.max(getIdleThreshold(policy), 60_000)
+      : getIdleThreshold(policy)
   if (Date.now() - conv.updatedAt > idleThreshold && totalTokens > 10_000) return true
 
   // For semantic_distance strategy, also check if there are enough spans

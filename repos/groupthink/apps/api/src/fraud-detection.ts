@@ -7,7 +7,7 @@ import * as schema from "@groupthink/db";
 // Fraud Detection Engine
 // ═══════════════════════════════════════════════════════════
 //
-// Two detection strategies run on a periodic scan:
+// Four detection strategies run on a periodic scan:
 //
 // 1. Cohort Analysis — flag accounts created within the same
 //    time window (cohort) whose voting patterns show suspicious
@@ -16,6 +16,15 @@ import * as schema from "@groupthink/db";
 // 2. Cross-Group Observation — flag accounts that share membership
 //    in the same set of groups and vote identically across those
 //    groups, suggesting a single entity controlling multiple accounts.
+//
+// 3. Behavioral Heuristics — Same-Vote Blocs — flag user pairs
+//    that vote identically on ≥90% of common impulses, suggesting
+//    coordinated voting blocs.
+//
+// 4. Behavioral Heuristics — Coordinated Timing — flag user pairs
+//    that cast votes within a very narrow time window (3 seconds)
+//    across multiple impulses, suggesting scripted or orchestrated
+//    voting.
 // ═══════════════════════════════════════════════════════════
 
 // ── Configuration ──
@@ -307,7 +316,10 @@ async function detectCrossGroupAnomalies(db: ReturnType<typeof drizzle<typeof sc
   log(`cross-group scan: examining ${flaggedPairs.length} user pairs with shared memberships`);
 
   for (const { userA, userB, sharedGroupIds } of flaggedPairs) {
-    // Check for existing flag between this pair (in either direction)
+    // Check for existing flag between this pair (in either direction).
+    // The details JSONB stores userA/userB as nested {id, username} objects,
+    // so we must drill into ->'userB'->>'id' to extract the UUID, not use
+    // ->>'userB' which would return the full serialized object as a JSON string.
     const existingFlags = await db
       .select({ count: count() })
       .from(schema.fraudAuditLog)
@@ -317,11 +329,11 @@ async function detectCrossGroupAnomalies(db: ReturnType<typeof drizzle<typeof sc
           or(
             and(
               eq(schema.fraudAuditLog.userId, userA),
-              sql`${schema.fraudAuditLog.details}->>'userB' = ${userB}`
+              sql`${schema.fraudAuditLog.details}->'userB'->>'id' = ${userB}`
             ),
             and(
               eq(schema.fraudAuditLog.userId, userB),
-              sql`${schema.fraudAuditLog.details}->>'userB' = ${userA}`
+              sql`${schema.fraudAuditLog.details}->'userB'->>'id' = ${userA}`
             )
           )
         )

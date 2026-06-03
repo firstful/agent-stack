@@ -24,11 +24,16 @@ class GovStore {
     };
   }
 
-  insert(table: string, row: Row): Row {
-    const id = row.id ?? crypto.randomUUID();
-    const full = { ...row, id };
-    this.data[table].set(id, full);
-    return full;
+  insert(table: string, rows: Row | Row[]): Row | Row[] {
+    const input = Array.isArray(rows) ? rows : [rows];
+    const results: Row[] = [];
+    for (const row of input) {
+      const id = row.id ?? crypto.randomUUID();
+      const full = { ...row, id };
+      this.data[table].set(id, full);
+      results.push(full);
+    }
+    return Array.isArray(rows) ? results : results[0];
   }
 
   findById(table: string, id: string): Row | undefined {
@@ -655,9 +660,12 @@ describe("Integration: Governance — Sabbatical", () => {
     });
 
     it("expires sabbatical vote without majority", () => {
+      // Alice (720d) votes no — weight 720
+      // Bob (100d) votes yes — weight 100
+      // Total non-abstain = 820. Yes = 100. 100 > 410? No — no majority → expires
       store.insert("sabbaticalVoteRecords", [
-        { sabbaticalVoteId: sabbVoteId, userId: initiatorId, vote: "yes", weight: 720 },
-        { sabbaticalVoteId: sabbVoteId, userId: voterId, vote: "no", weight: 100 },
+        { sabbaticalVoteId: sabbVoteId, userId: initiatorId, vote: "no", weight: 720 },
+        { sabbaticalVoteId: sabbVoteId, userId: voterId, vote: "yes", weight: 100 },
       ]);
 
       const records = store.findWhere("sabbaticalVoteRecords", (r) => r.sabbaticalVoteId === sabbVoteId);

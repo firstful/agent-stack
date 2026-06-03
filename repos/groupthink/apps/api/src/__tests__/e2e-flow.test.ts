@@ -18,11 +18,16 @@ class E2EStore {
     for (const t of tables) this.tables[t] = new Map();
   }
 
-  insert(table: string, row: Row): Row {
-    const id = row.id ?? crypto.randomUUID();
-    const full = { ...row, id };
-    this.tables[table].set(id, full);
-    return full;
+  insert(table: string, rows: Row | Row[]): Row | Row[] {
+    const input = Array.isArray(rows) ? rows : [rows];
+    const results: Row[] = [];
+    for (const row of input) {
+      const id = row.id ?? crypto.randomUUID();
+      const full = { ...row, id };
+      this.tables[table].set(id, full);
+      results.push(full);
+    }
+    return Array.isArray(rows) ? results : results[0];
   }
 
   findById(table: string, id: string): Row | undefined {

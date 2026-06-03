@@ -18,3 +18,12 @@ export { executeSimulateExpansionCost } from "../tools/simulate_expansion_cost.j
 export { executeMarkEvent } from "../tools/mark_event.js"
 export { executeRebuildContextWindow } from "../tools/rebuild_context_window.js"
 export { executePredictivePrefetch } from "../tools/predictive_prefetch.js"
+// ── Cross-session memory tools ──
+export {
+  executeRememberCrossSession,
+  executeSearchCrossSession,
+  executeStoreCrossSessionMemory,
+  executePinCrossSessionMemory,
+  executeUnpinCrossSessionMemory,
+  executeListCrossSessionMemories,
+} from "../tools/remember_cross_session.js"

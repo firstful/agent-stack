@@ -27,6 +27,82 @@ interface LLMServiceResult {
   error?: string;
 }
 
+interface LLMCallResult {
+  success: boolean;
+  rawContent?: string;
+  error?: string;
+  latencyMs: number;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
+// ── In-memory LLM metrics — exported for OTEL / monitoring endpoint ──
+
+export interface LLMMetricsSnapshot {
+  totalCalls: number;
+  successCount: number;
+  failureCount: number;
+  totalLatencyMs: number;
+  avgLatencyMs: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  fallbackCount: number;
+}
+
+interface LLMMetricsState {
+  totalCalls: number;
+  successCount: number;
+  failureCount: number;
+  totalLatencyMs: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  fallbackCount: number;
+}
+
+const llmMetrics: LLMMetricsState = {
+  totalCalls: 0,
+  successCount: 0,
+  failureCount: 0,
+  totalLatencyMs: 0,
+  totalPromptTokens: 0,
+  totalCompletionTokens: 0,
+  fallbackCount: 0,
+};
+
+function recordLLMCall(result: LLMCallResult): void {
+  llmMetrics.totalCalls++;
+  if (result.success) {
+    llmMetrics.successCount++;
+    llmMetrics.totalPromptTokens += result.promptTokens ?? 0;
+    llmMetrics.totalCompletionTokens += result.completionTokens ?? 0;
+  } else {
+    llmMetrics.failureCount++;
+  }
+  llmMetrics.totalLatencyMs += result.latencyMs;
+}
+
+function recordFallback(): void {
+  llmMetrics.fallbackCount++;
+}
+
+/** Return a snapshot of LLM metrics for health / monitoring endpoints. */
+export function getLLMMetrics(): LLMMetricsSnapshot {
+  return {
+    totalCalls: llmMetrics.totalCalls,
+    successCount: llmMetrics.successCount,
+    failureCount: llmMetrics.failureCount,
+    totalLatencyMs: llmMetrics.totalLatencyMs,
+    avgLatencyMs:
+      llmMetrics.totalCalls > 0
+        ? Math.round(llmMetrics.totalLatencyMs / llmMetrics.totalCalls)
+        : 0,
+    totalPromptTokens: llmMetrics.totalPromptTokens,
+    totalCompletionTokens: llmMetrics.totalCompletionTokens,
+    fallbackCount: llmMetrics.fallbackCount,
+  };
+}
+
 // ── Main ──
 
 /**
@@ -90,26 +166,62 @@ export async function runLLMSummarization(
     });
 
     // 5. Call LLM provider
-    const result = await callLLM(systemPrompt, userPrompt);
+    const llmResult = await callLLM(systemPrompt, userPrompt);
 
-    if (!result.success) {
-      return result;
+    // Record metrics for monitoring
+    recordLLMCall(llmResult);
+
+    if (!llmResult.success) {
+      log.error(`LLM summarization failed for ${impulseId.slice(0, 8)}`, {
+        impulseId: impulseId.slice(0, 8),
+        error: llmResult.error,
+        latencyMs: llmResult.latencyMs,
+      });
+
+      // Fallback: try to generate a simple candidate
+      const fallback = generateFallbackCandidate(draftThread, impulse);
+      if (fallback) {
+        recordFallback();
+        await db.insert(schema.summaryCandidates).values({
+          impulseId,
+          content: fallback,
+        });
+        log.info(
+          `impulse ${impulseId.slice(0, 8)}: LLM call failed, inserted fallback candidate`,
+          { impulseId: impulseId.slice(0, 8), fallback: true }
+        );
+        return { success: true, candidates: [fallback] };
+      }
+
+      return {
+        success: false,
+        candidates: [],
+        error: llmResult.error ?? "LLM summarization failed with no fallback",
+      };
     }
 
     // 6. Parse and store candidates
-    const candidates = parseLLMResponse(result.rawContent ?? "");
+    const candidates = parseLLMResponse(llmResult.rawContent ?? "");
 
     if (candidates.length === 0) {
       // Fallback: generate a simple candidate based on the top draft
+      recordFallback();
       const fallback = generateFallbackCandidate(draftThread, impulse);
       if (fallback) {
         await db.insert(schema.summaryCandidates).values({
           impulseId,
           content: fallback,
         });
-        log(
-          `impulse ${impulseId.slice(0, 8)}: LLM returned 0 candidates, ` +
-            `inserted fallback candidate`
+        log.info(
+          `impulse ${impulseId.slice(0, 8)}: LLM returned 0 candidates, inserted fallback`,
+          {
+            impulseId: impulseId.slice(0, 8),
+            fallback: true,
+            llmLatencyMs: llmResult.latencyMs,
+            llmModel: llmResult.model,
+            promptTokens: llmResult.promptTokens,
+            completionTokens: llmResult.completionTokens,
+          }
         );
         return { success: true, candidates: [fallback] };
       }
@@ -128,15 +240,26 @@ export async function runLLMSummarization(
       });
     }
 
-    log(
-      `impulse ${impulseId.slice(0, 8)}: generated ${candidates.length} ` +
-        `candidates from LLM (banned words: ${bannedWords.length})`
+    log.info(
+      `impulse ${impulseId.slice(0, 8)}: generated ${candidates.length} candidates from LLM`,
+      {
+        impulseId: impulseId.slice(0, 8),
+        candidateCount: candidates.length,
+        bannedWordCount: bannedWords.length,
+        llmLatencyMs: llmResult.latencyMs,
+        llmModel: llmResult.model,
+        promptTokens: llmResult.promptTokens,
+        completionTokens: llmResult.completionTokens,
+      }
     );
 
     return { success: true, candidates };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error(`summarization failed for ${impulseId.slice(0, 8)}`, { error: msg });
+    log.error(`summarization failed for ${impulseId.slice(0, 8)}`, {
+      error: msg,
+      impulseId: impulseId.slice(0, 8),
+    });
 
     // Fallback: try to generate a simple candidate
     try {
@@ -155,6 +278,7 @@ export async function runLLMSummarization(
         }));
         const fallback = generateFallbackCandidate(thread, impulse);
         if (fallback) {
+          recordFallback();
           await db.insert(schema.summaryCandidates).values({
             impulseId,
             content: fallback,
@@ -175,9 +299,11 @@ export async function runLLMSummarization(
 async function callLLM(
   systemPrompt: string,
   userPrompt: string
-): Promise<{ success: boolean; rawContent?: string; error?: string }> {
+): Promise<LLMCallResult> {
+  const start = performance.now();
+
   if (!LLM_API_KEY) {
-    return { success: false, error: "LLM_API_KEY not configured" };
+    return { success: false, error: "LLM_API_KEY not configured", latencyMs: 0 };
   }
 
   const controller = new AbortController();
@@ -202,30 +328,85 @@ async function callLLM(
       signal: controller.signal,
     });
 
+    const latencyMs = Math.round(performance.now() - start);
+
     if (!response.ok) {
       const body = await response.text().catch(() => "");
+      log.warn(`LLM returned HTTP ${response.status}`, {
+        status: response.status,
+        latencyMs,
+        model: LLM_MODEL,
+      });
       return {
         success: false,
         error: `LLM responded ${response.status}: ${body.slice(0, 200)}`,
+        latencyMs,
+        model: LLM_MODEL,
       };
     }
 
     const data = (await response.json()) as {
       choices: { message: { content: string }; finish_reason: string }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
 
     const rawContent = data.choices?.[0]?.message?.content;
     if (!rawContent) {
-      return { success: false, error: "LLM returned empty response" };
+      return {
+        success: false,
+        error: "LLM returned empty response",
+        latencyMs,
+        model: LLM_MODEL,
+      };
     }
 
-    return { success: true, rawContent };
+    const promptTokens = data.usage?.prompt_tokens;
+    const completionTokens = data.usage?.completion_tokens;
+
+    log.info("LLM call succeeded", {
+      latencyMs,
+      model: LLM_MODEL,
+      promptTokens,
+      completionTokens,
+      finishReason: data.choices?.[0]?.finish_reason,
+    });
+
+    return {
+      success: true,
+      rawContent,
+      latencyMs,
+      model: LLM_MODEL,
+      promptTokens,
+      completionTokens,
+    };
   } catch (err) {
+    const latencyMs = Math.round(performance.now() - start);
+
     if (err instanceof Error && err.name === "AbortError") {
-      return { success: false, error: "LLM request timed out" };
+      log.warn("LLM request timed out", {
+        latencyMs,
+        timeoutMs: LLM_TIMEOUT_MS,
+        model: LLM_MODEL,
+      });
+      return {
+        success: false,
+        error: "LLM request timed out",
+        latencyMs,
+        model: LLM_MODEL,
+      };
     }
     const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, error: `LLM request failed: ${msg}` };
+    log.error("LLM request failed", {
+      error: msg,
+      latencyMs,
+      model: LLM_MODEL,
+    });
+    return {
+      success: false,
+      error: `LLM request failed: ${msg}`,
+      latencyMs,
+      model: LLM_MODEL,
+    };
   } finally {
     clearTimeout(timeoutId);
   }
