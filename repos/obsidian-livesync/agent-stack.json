@@ -13,7 +13,8 @@
     }
   },
   "expose": {
-    "enabled": false
+    "enabled": true,
+    "hostname": "obsidian.ffilt.us"
   },
   "logo": {
     "_type": "file",
