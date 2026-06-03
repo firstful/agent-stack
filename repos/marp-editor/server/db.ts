@@ -128,6 +128,41 @@ function initSchema() {
       created_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
+
+    -- Analytics / view tracking
+    CREATE TABLE IF NOT EXISTS view_events (
+      id TEXT PRIMARY KEY,
+      presentation_id TEXT NOT NULL,
+      share_link_id TEXT,
+      viewer_id TEXT NOT NULL,
+      slide_index INTEGER NOT NULL DEFAULT 0,
+      event_type TEXT NOT NULL DEFAULT 'view',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (presentation_id) REFERENCES presentations(id),
+      FOREIGN KEY (share_link_id) REFERENCES share_links(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS view_sessions (
+      id TEXT PRIMARY KEY,
+      presentation_id TEXT NOT NULL,
+      share_link_id TEXT,
+      viewer_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      ended_at INTEGER,
+      total_slides INTEGER NOT NULL DEFAULT 0,
+      slides_viewed INTEGER NOT NULL DEFAULT 0,
+      max_slide_index INTEGER NOT NULL DEFAULT 0,
+      last_slide_index INTEGER NOT NULL DEFAULT 0,
+      last_activity_at INTEGER NOT NULL,
+      FOREIGN KEY (presentation_id) REFERENCES presentations(id),
+      FOREIGN KEY (share_link_id) REFERENCES share_links(id)
+    );
+
+    -- Indexes for analytics queries
+    CREATE INDEX IF NOT EXISTS idx_view_events_presentation ON view_events(presentation_id);
+    CREATE INDEX IF NOT EXISTS idx_view_events_created ON view_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_view_sessions_presentation ON view_sessions(presentation_id);
+    CREATE INDEX IF NOT EXISTS idx_view_sessions_viewer ON view_sessions(presentation_id, viewer_id);
   `)
 }
 

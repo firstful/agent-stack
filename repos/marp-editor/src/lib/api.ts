@@ -185,6 +185,134 @@ export async function getVersions(id: string): Promise<VersionNodeResponse[]> {
   return request(`/presentations/${id}/versions`)
 }
 
+// ─── Analytics / view tracking ──────────────────────────────────────────
+
+export interface ViewEvent {
+  viewerId: string
+  slideIndex: number
+  eventType: 'view' | 'slide_change' | 'heartbeat'
+  sessionId?: string
+}
+
+export async function recordView(token: string, event: ViewEvent): Promise<{ ok: boolean; sessionId: string; eventId: string }> {
+  const res = await fetch(`/api/share/${token}/view`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err || 'Failed to record view')
+  }
+  return res.json()
+}
+
+export async function endViewSession(token: string, viewerId: string, sessionId: string): Promise<void> {
+  await fetch(`/api/share/${token}/view/session/end`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ viewerId, sessionId }),
+  })
+}
+
+export interface PresentationAnalytics {
+  totalViews: number
+  uniqueViewers: number
+  totalSessions: number
+  avgTimePerSlideMs: number
+  avgTimePerSlideSec: number
+  viewsOverTime: { day: string; views: number; uniqueViewers: number }[]
+  slidePopularity: { slideIndex: number; totalViews: number; uniqueViewers: number }[]
+  recentSessions: {
+    id: string
+    viewerId: string
+    startedAt: number
+    endedAt: number | null
+    lastActivityAt: number
+    slidesViewed: number
+    totalSlides: number
+    maxSlideIndex: number
+    durationMs: number
+  }[]
+}
+
+export async function getPresentationAnalytics(id: string): Promise<PresentationAnalytics> {
+  return request(`/presentations/${id}/analytics`)
+}
+
+export interface DashboardMetrics {
+  summary: {
+    totalPresentations: number
+    totalViews: number
+    totalUniqueViewers: number
+    totalSessions: number
+    sharedPresentations: number
+  }
+  presentations: {
+    id: string
+    title: string
+    createdAt: number
+    updatedAt: number
+    totalViews: number
+    uniqueViewers: number
+    totalSessions: number
+    avgTimePerSlideSec: number
+    lastViewedAt: number | null
+  }[]
+  topPresentations: {
+    id: string
+    title: string
+    totalViews: number
+    uniqueViewers: number
+    totalSessions: number
+    avgTimePerSlideSec: number
+    lastViewedAt: number | null
+  }[]
+  viewsOverTime: { day: string; views: number; uniqueViewers: number }[]
+}
+
+export async function getAnalyticsDashboard(): Promise<DashboardMetrics> {
+  return request('/analytics/dashboard')
+}
+
+// ─── Embed API ─────────────────────────────────────────────────
+
+export interface EmbedSnippetResponse {
+  html: string
+  url: string
+  title: string
+  slides: number | null
+  options: {
+    bgColor: string | null
+    accentColor: string | null
+    fontFamily: string | null
+    logoUrl: string | null
+    showTitle: boolean
+  }
+}
+
+export interface EmbedBrandingOptions {
+  bgColor?: string
+  accentColor?: string
+  fontFamily?: string
+  logoUrl?: string
+  showTitle?: boolean
+}
+
+export async function getEmbedSnippet(token: string, options?: EmbedBrandingOptions): Promise<EmbedSnippetResponse> {
+  const params = new URLSearchParams()
+  if (options?.bgColor) params.set('bg_color', options.bgColor)
+  if (options?.accentColor) params.set('accent_color', options.accentColor)
+  if (options?.fontFamily) params.set('font_family', options.fontFamily)
+  if (options?.logoUrl) params.set('logo_url', options.logoUrl)
+  if (options?.showTitle === false) params.set('show_title', 'false')
+  const qs = params.toString()
+  return fetch(qs ? `/api/embed/${token}/snippet?${qs}` : `/api/embed/${token}/snippet`).then(r => {
+    if (!r.ok) throw new Error('Failed to get embed snippet')
+    return r.json()
+  })
+}
+
 export async function listThemes(): Promise<ThemePalette[]> {
   return request('/themes')
 }
@@ -194,4 +322,57 @@ export async function saveTheme(palette: ThemePalette): Promise<{ id: string }> 
     method: 'POST',
     body: JSON.stringify(palette),
   })
+}
+
+export async function exportPdf(markdown: string, css: string): Promise<void> {
+  const res = await fetch(`${BASE}/export/`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ markdown, css }),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(err || res.statusText)
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition')
+  let filename = 'presentation.pdf'
+  if (disposition) {
+    const match = disposition.match(/filename="?(.+?)"?$/)
+    if (match) filename = match[1]
+  }
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// --- Templates API ---
+
+export interface TemplateInfo {
+  id: string
+  name: string
+  description: string
+  category: string
+  slideCount: number
+  tags: string[]
+}
+
+export interface TemplateContent extends TemplateInfo {
+  markdown: string
+}
+
+export async function listTemplates(): Promise<TemplateInfo[]> {
+  return request('/templates')
+}
+
+export async function getTemplate(id: string): Promise<TemplateContent> {
+  return request(`/templates/${id}`)
 }

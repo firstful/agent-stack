@@ -9,10 +9,14 @@ import { auth, toNodeHandler } from './auth.js'
 // Routes
 import chatRouter from './routes/chat.js'
 import presRouter from './routes/pres.js'
-
 import themeRouter from './routes/theme.js'
 import shareRouter from './routes/share.js'
 import creditsRouter from './routes/credits.js'
+import analyticsRouter from './routes/analytics.js'
+import templatesRouter from './routes/templates.js'
+import exportRouter from './routes/export.js'
+import embedRouter from './routes/embed.js'
+import generateRouter from './routes/generate.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -32,9 +36,14 @@ app.use(express.json({ limit: '5mb' }))
 // API Routes
 app.use('/api/chat', chatRouter)
 app.use('/api/presentations', presRouter)
+app.use('/api/generate', generateRouter)
 app.use('/api', themeRouter)
 app.use('/api', shareRouter)
 app.use('/api', creditsRouter)
+app.use('/api/templates', templatesRouter)
+app.use('/api/export', exportRouter)
+app.use('/', embedRouter)
+app.use('/api', analyticsRouter)
 
 // Test mode routes — configure deterministic LLM responses
 if (process.env.TEST_MODE === '1') {

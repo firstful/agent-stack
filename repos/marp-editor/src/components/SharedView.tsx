@@ -1,11 +1,23 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { renderSlides, renderSlideToHtml } from '../lib/marp'
+import { recordView, endViewSession } from '../lib/api'
 
 interface SharedData {
   title: string
   markdown: string
   css: string
+}
+
+const HEARTBEAT_INTERVAL = 15000 // 15 seconds
+
+function getViewerId(): string {
+  let vid = localStorage.getItem('techdeck_viewer_id')
+  if (!vid) {
+    vid = crypto.randomUUID()
+    localStorage.setItem('techdeck_viewer_id', vid)
+  }
+  return vid
 }
 
 export function SharedView() {
@@ -17,7 +29,31 @@ export function SharedView() {
   const [slideHtml, setSlideHtml] = useState<string[]>([])
   const [renderedCss, setRenderedCss] = useState('')
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const sessionIdRef = useRef<string>('')
+  const viewerIdRef = useRef<string>(getViewerId())
+  const lastSlideRef = useRef<number>(0)
+  const slideStartRef = useRef<number>(Date.now())
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Track initial view load and set up heartbeats
+  const sendViewEvent = useCallback(async (slideIndex: number, eventType: 'view' | 'slide_change' | 'heartbeat') => {
+    if (!token) return
+    try {
+      const result = await recordView(token, {
+        viewerId: viewerIdRef.current,
+        slideIndex,
+        eventType,
+        sessionId: sessionIdRef.current || undefined,
+      })
+      if (result.sessionId && !sessionIdRef.current) {
+        sessionIdRef.current = result.sessionId
+      }
+    } catch {
+      // silently fail — tracking is non-critical
+    }
+  }, [token])
+
+  // Load shared presentation data
   useEffect(() => {
     if (!token) return
     fetch(`/api/share/${token}`)
@@ -30,10 +66,50 @@ export function SharedView() {
         const result = renderSlides(d.markdown, d.css)
         setSlideHtml(result.slides)
         setRenderedCss(result.css)
+
+        // Record initial view
+        sendViewEvent(0, 'view')
       })
       .catch((e) => setError(e.message))
+  }, [token, sendViewEvent])
+
+  // Handle slide changes
+  useEffect(() => {
+    if (!slideHtml.length) return
+    const prevSlide = lastSlideRef.current
+    if (prevSlide !== current) {
+      // Track time on previous slide
+      const timeOnSlide = Date.now() - slideStartRef.current
+      lastSlideRef.current = current
+      slideStartRef.current = Date.now()
+      sendViewEvent(current, 'slide_change')
+    }
+  }, [current, slideHtml.length, sendViewEvent])
+
+  // Set up heartbeat
+  useEffect(() => {
+    if (!slideHtml.length) return
+    heartbeatRef.current = setInterval(() => {
+      sendViewEvent(current, 'heartbeat')
+    }, HEARTBEAT_INTERVAL)
+
+    return () => {
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current)
+      }
+    }
+  }, [current, slideHtml.length, sendViewEvent])
+
+  // End session on unmount
+  useEffect(() => {
+    return () => {
+      if (token && sessionIdRef.current && viewerIdRef.current) {
+        endViewSession(token, viewerIdRef.current, sessionIdRef.current).catch(() => {})
+      }
+    }
   }, [token])
 
+  // Update iframe when slides change
   useEffect(() => {
     if (iframeRef.current && slideHtml[current]) {
       iframeRef.current.srcdoc = renderSlideToHtml(slideHtml[current], renderedCss)

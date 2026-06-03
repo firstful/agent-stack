@@ -14,6 +14,25 @@ FROM docker.io/library/node:22
 WORKDIR /app
 RUN npm config set registry https://registry.npmjs.org/
 
+# Puppeteer / Chromium system dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdrm2 \
+    libgbm1 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxshmfence1 \
+    xdg-utils \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 RUN npm ci --omit=dev --legacy-peer-deps
 
@@ -22,6 +41,7 @@ COPY --from=builder /app/dist/ ./dist/
 
 ENV PORT=3001
 ENV NODE_ENV=production
+ENV PUPPETEER_CHROMIUM_REVISION=latest
 
 RUN mkdir -p /app/data
 

@@ -10,11 +10,13 @@ function getMarp(): Marp {
   return marpInstance
 }
 
-export function renderSlides(markdown: string, css?: string): {
+export interface RenderResult {
   html: string
   slides: string[]
   css: string
-|} {
+}
+
+export function renderSlides(markdown: string, css?: string): RenderResult {
   const marp = getMarp()
   // Strip speaker-notes HTML comments from the markdown so they don't
   // appear as visual artifacts in the rendered slide HTML. Notes are
