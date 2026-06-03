@@ -1,0 +1,23 @@
+{
+  "name": "obsidian-livesync",
+  "version": 2,
+  "container": {
+    "port": 5984,
+    "auto_port": true,
+    "volumes": [
+      "obsidian-livesync-data:/opt/couchdb/data"
+    ],
+    "env": {
+      "COUCHDB_USER": "admin",
+      "COUCHDB_PASSWORD": "IFCSp+...OBYF"
+    }
+  },
+  "expose": {
+    "enabled": false
+  },
+  "logo": {
+    "_type": "file",
+    "isRelative": true,
+    "fileName": ".logo.svg"
+  }
+}
