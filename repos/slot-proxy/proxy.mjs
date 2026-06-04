@@ -8,6 +8,41 @@ const CTRL_PORT = process.env.CTRL_PORT || "80";
 const CTRL_BASE = `http://${CTRL_HOST}:${CTRL_PORT}`;
 const DASH_HOSTNAME = process.env.DASH_HOSTNAME || "dash.ffilt.us";
 
+// ── CouchDB Audit Log ──────────────────────────────────────
+// Logs proxied request/response pairs to CouchDB for debugging.
+
+const COUCHDB_HOST = process.env.COUCHDB_HOST || "obsidian-livesync--b";
+const COUCHDB_PORT = parseInt(process.env.COUCHDB_PORT || "5984", 10);
+const COUCHDB_USER = process.env.COUCHDB_USER || "admin";
+const COUCHDB_PASSWORD = process.env.COUCHDB_PASSWORD || "";
+const COUCHDB_AUDIT_DB = process.env.COUCHDB_AUDIT_DB || "traffic-log";
+const AUDIT_ENABLED = process.env.AUDIT_ENABLED === "true";
+const AUDIT_SAMPLE_RATE = parseFloat(process.env.AUDIT_SAMPLE_RATE || "1.0");
+
+// Fire-and-forget: never blocks the proxy, never throws.
+function logToCouch(entry) {
+  if (!AUDIT_ENABLED) return;
+  if (Math.random() > AUDIT_SAMPLE_RATE) return;
+  try {
+    const body = JSON.stringify(entry);
+    const auth = COUCHDB_PASSWORD
+      ? "Basic " + Buffer.from(`${COUCHDB_USER}:${COUCHDB_PASSWORD}`).toString("base64")
+      : "";
+    const opts = {
+      hostname: COUCHDB_HOST,
+      port: COUCHDB_PORT,
+      path: `/${COUCHDB_AUDIT_DB}`,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+    };
+    if (auth) opts.headers["Authorization"] = auth;
+    const req = http.request(opts, (r) => r.resume());
+    req.on("error", () => {});
+    req.write(body);
+    req.end();
+  } catch {}
+}
+
 // ── State ──────────────────────────────────────────────────
 
 let state = {};
@@ -145,6 +180,9 @@ function resolveTarget(url, hostname) {
 const UPSTREAM_TIMEOUT = 30_000; // 30s timeout for upstream requests
 
 function proxyTo(url, port, host, req, res) {
+  const startTime = Date.now();
+  const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
   const opts = {
     hostname: host,
     port,
@@ -154,20 +192,83 @@ function proxyTo(url, port, host, req, res) {
     timeout: UPSTREAM_TIMEOUT,
   };
 
+  let responded = false;
+
   const proxyReq = http.request(opts, (proxyRes) => {
+    if (responded) return;
+    responded = true;
+
+    // Log to CouchDB (fire-and-forget)
+    logToCouch({
+      type: "proxy_log",
+      requestId,
+      timestamp: new Date().toISOString(),
+      service: host,
+      target: { name: null, port, path: url },
+      request: {
+        method: req.method,
+        url,
+        headers: {
+          host: req.headers.host,
+          origin: req.headers.origin,
+          "user-agent": req.headers["user-agent"],
+          "access-control-request-method": req.headers["access-control-request-method"],
+          "access-control-request-headers": req.headers["access-control-request-headers"],
+          "content-type": req.headers["content-type"],
+          "content-length": req.headers["content-length"],
+          hasAuth: !!req.headers.authorization,
+        },
+      },
+      response: {
+        statusCode: proxyRes.statusCode,
+        headers: {
+          "access-control-allow-origin": proxyRes.headers["access-control-allow-origin"],
+          "access-control-allow-headers": proxyRes.headers["access-control-allow-headers"],
+          "access-control-allow-credentials": proxyRes.headers["access-control-allow-credentials"],
+          "access-control-allow-methods": proxyRes.headers["access-control-allow-methods"],
+          "access-control-max-age": proxyRes.headers["access-control-max-age"],
+        },
+      },
+      durationMs: Date.now() - startTime,
+    });
+
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
   });
 
   proxyReq.on("timeout", () => {
-    proxyReq.destroy();
-    res.writeHead(504, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Upstream timeout" }));
+    proxyReq.destroy(new Error("Upstream timeout"));
   });
 
   proxyReq.on("error", (e) => {
-    res.writeHead(502, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: `Proxy error: ${e.message}` }));
+    if (responded) return;
+    responded = true;
+
+    // Log the error
+    logToCouch({
+      type: "proxy_log",
+      requestId,
+      timestamp: new Date().toISOString(),
+      service: host,
+      target: { name: null, port, path: url },
+      request: {
+        method: req.method,
+        url,
+        headers: {
+          host: req.headers.host,
+          origin: req.headers.origin,
+          "user-agent": req.headers["user-agent"],
+          hasAuth: !!req.headers.authorization,
+        },
+      },
+      error: e.message,
+      durationMs: Date.now() - startTime,
+    });
+
+    const status = e.message === "Upstream timeout" ? 504 : 502;
+    const body = JSON.stringify({ error: `Proxy error: ${e.message}` });
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(body);
   });
 
   req.pipe(proxyReq);
