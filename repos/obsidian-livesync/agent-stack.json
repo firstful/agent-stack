@@ -9,7 +9,7 @@
     ],
     "env": {
       "COUCHDB_USER": "admin",
-      "COUCHDB_PASSWORD": "IFCSp+...OBYF",
+      "COUCHDB_PASSWORD": "7cpty2H6TRgrNd1wYTYHipf1",
       "SERVER_DOMAIN": "obsidian.ffilt.us",
       "COUCHDB_DATABASE": "obsidian-vault"
     }
