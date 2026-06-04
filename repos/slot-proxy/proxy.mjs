@@ -726,6 +726,12 @@ function handleRequest(req, res) {
       res.end(JSON.stringify({ error: rl.message }));
       return;
     }
+    // Rewrite CouchDB server-level paths when database prefix is in the URL
+    // The LiveSync plugin appends _node/_local/_config to the base URI,
+    // which includes the database name. Strip it for server-level endpoints.
+    if (target.path.startsWith("/obsidian-vault/_node/")) {
+      target.path = target.path.replace("/obsidian-vault", "");
+    }
     proxyTo(target.path, target.port, "host.containers.internal", req, res);
     return;
   }
