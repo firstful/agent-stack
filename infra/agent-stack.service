@@ -8,6 +8,7 @@ Wants=cloudflared.service
 Environment=MCP_PORT=80
 Environment=VAULT_TOKEN=techdeck-vault-token
 Environment=VAULT_URL=http://localhost:4006
+Environment=WAF_PORT=40060
 Type=simple
 ExecStart=/srv/agent-stack/infra/node_modules/.bin/tsx /srv/agent-stack/infra/controller.ts
 WorkingDirectory=/srv/agent-stack/infra

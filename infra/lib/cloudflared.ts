@@ -33,9 +33,18 @@ function readRuntime(): Record<string, any> {
  * Read runtime/services.json and find the slot-proxy's port, if any.
  * When the slot-proxy is active, all tunnel traffic routes through it
  * rather than generating per-service ingress rules.
+ *
+ * If the WAF_PORT environment variable is set and slot-proxy is active,
+ * the tunnel routes to the WAF port instead of slot-proxy directly,
+ * inserting a Web Application Firewall between Cloudflare and the proxy.
  */
 function getProxyPort(runtime: Record<string, any>): number | null {
-  return runtime["slot-proxy"]?.port || null;
+  const proxyPort = runtime["slot-proxy"]?.port || null;
+  const wafPort = process.env.WAF_PORT;
+  if (wafPort && proxyPort) {
+    return parseInt(wafPort, 10);
+  }
+  return proxyPort;
 }
 
 /**
