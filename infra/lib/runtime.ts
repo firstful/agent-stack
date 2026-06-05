@@ -14,6 +14,8 @@ import {
 
 /**
  * Read the slot marker file for a service, defaulting to "a" if absent.
+ * The slot marker is written by reconcile.ts during slot swaps and lives
+ * at /tmp/stack.<name>.slot.
  * @param name - Service name
  * @returns "a" or "b", depending on which slot marker says is active
  */
@@ -29,8 +31,20 @@ function readSlot(name: string): string {
 
 /**
  * Persist the current state of all services to runtime/services.json.
- * Captures container slot status, port assignments, sidecar status,
- * systemd service running state, and exposure configuration.
+ * This is the single source of truth consumed by the HTTP API
+ * (/api/status, /api/services/:name) and the web dashboard.
+ *
+ * For container services, captures:
+ *   - Slot status (a/b), active slot, port per slot
+ *   - Sidecar running state and ports
+ *   - Exposure & rate-limit configuration
+ *
+ * For systemd services, captures:
+ *   - Systemd unit running state
+ *   - Service port and exposure config
+ *
+ * Side effects: overwrites runtime/services.json atomically via JSON.stringify.
+ * Creates RUNTIME_DIR if it does not exist.
  */
 export function writeRuntimeState(services: Service[]): void {
   const state: Record<string, any> = {};

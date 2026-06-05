@@ -138,9 +138,15 @@ function reconcile(): void {
     const desired = loadDesired();
     const desiredNames = new Set(desired.map((s) => s.name));
 
+    // ── Garbage-collect orphaned containers ──
+    // Walk every managed container on the system.  Containers that are not
+    // in the desired service set AND not a slot/sidecar of a desired service
+    // are removed.  This handles:
+    //   - Services deleted from config
+    //   - Orphaned slot containers from aborted swaps
+    //   - Old-style (non-slotted) containers left after slot migration
     const managedContainers = getManagedContainers();
     const managedContainerSet = new Set(managedContainers);
-    // ── Garbage-collect orphaned containers ──
     for (const name of managedContainers) {
       if (desiredNames.has(name)) continue;
       const baseName = name.replace(/--[ab]$/, '');

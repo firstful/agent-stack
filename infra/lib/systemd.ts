@@ -19,9 +19,6 @@ function sh(cmd: string): string {
  * is read from .sudo-password.txt at startup and piped as stdin.
  */
 function sudoExec(cmd: string, stdin?: string): string {
-  // Run a command via sudo -S (reads password from stdin), piping the
-  // password stored in .sudo-password.txt.  Used for systemctl operations
-  // that require root privileges.
   return execSync(`sudo -S ${cmd}`, {
     input: SUDO_PASSWORD + (stdin || ""),
     stdio: ["pipe", "pipe", "pipe"],
@@ -90,14 +87,18 @@ export function getManaged(): string[] {
 
 // ── Unit Management ──
 
+/**
+ * Generate the complete systemd unit file content for a service.
+ * Maps the SystemdServiceConfig fields to systemd directives:
+ *   - env{} → Environment=KEY=value lines
+ *   - exec_reload → ExecReload=
+ *   - exec_start → ExecStart=
+ *   - restart → Restart=
+ *   - user → User=
+ * Produces a [Unit]/[Service]/[Install] stanza trio suitable
+ * for placing at /etc/systemd/system/agent-stack-<name>.service.
+ */
 function generateUnitContent(service: Service): string {
-  // Generate a systemd unit file from a Service definition.
-  // Maps Service fields to systemd directives:
-  //   - env{} → Environment=KEY=value lines
-  //   - exec_reload → ExecReload=
-  //   - exec_start → ExecStart=
-  //   - restart → Restart=
-  //   - user → User=
   const svc = service.service!;
   const envLines = Object.entries(svc.env || {})
     .map(([k, v]) => `Environment=${k}=${v}`)

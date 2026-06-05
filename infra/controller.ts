@@ -27,12 +27,14 @@ import {
 
 // ── Logger ──
 
+/** Write a timestamped log line to stdout and the persistent controller.log file. */
 function log(level: string, msg: string): void {
   const line = `[${new Date().toISOString()}] [${level}] ${msg}`;
   process.stdout.write(line + "\n");
   fs.appendFileSync(LOG_FILE, line + "\n");
 }
 
+/** Append raw data to the controller.log without timestamp (used by the console monkey-patch). */
 function appendLog(data: string): void {
   try { fs.appendFileSync(LOG_FILE, data); } catch {}
 }
@@ -92,6 +94,7 @@ let runtimeCache: { data: Record<string, unknown> | null; time: number } = {
   time: 0,
 };
 
+/** Run `npm test` in the infra directory. Returns true if all tests pass. */
 function runTests(): boolean {
   try {
     execSync(`npm test`, {
@@ -159,6 +162,7 @@ watchInfraDir();
 
 // ── Runtime State ──
 
+/** Read runtime/services.json from disk. Returns empty object on read failure. */
 function loadRuntimeState(): Record<string, any> {
   try {
     return JSON.parse(fs.readFileSync(RUNTIME_FILE, "utf-8"));
@@ -339,6 +343,7 @@ function deleteService(name: string): string {
 
 // ── Tool Error Tracking ──
 
+/** Record a tool operation failure in the STATUS error list for API reporting. */
 function trackToolError(name: string, args: any, error: Error): void {
   const entry = {
     tool: name,
