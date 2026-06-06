@@ -1,0 +1,9 @@
+[submodule "repos/groupthink"]
+	path = repos/groupthink
+	url = https://github.com/reedsutliff/agst-groupthink.git
+[submodule "repos/engramic"]
+	path = repos/engramic
+	url = https://github.com/reedsutliff/agst-engramic.git
+[submodule "repos/marp-editor"]
+	path = repos/marp-editor
+	url = https://github.com/reedsutliff/agst-techdeck.git
