@@ -3,7 +3,7 @@ import { resolveSecrets } from "./services";
 import type { Service } from "./types";
 import { CONTAINER_LABEL, NETWORK_NAME } from "./config";
 
-// ── Shell Helpers ──
+// ── Basics ──
 
 /**
  * Execute a shell command with inherited stdio.

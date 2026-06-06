@@ -10,12 +10,14 @@ import {
   sidecarContainerName,
 } from "./config";
 
-// ── Helpers ──
+// ── Slot Resolution ──
 
 /**
  * Read the slot marker file for a service, defaulting to "a" if absent.
  * The slot marker is written by reconcile.ts during slot swaps and lives
  * at /tmp/stack.<name>.slot.
+ *
+ * On first deploy (no marker yet), the service starts on slot "a".
  * @param name - Service name
  * @returns "a" or "b", depending on which slot marker says is active
  */

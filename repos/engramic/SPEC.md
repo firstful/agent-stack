@@ -8,7 +8,7 @@ Semantic Context Virtualization Middleware — a stateful middleware server that
 
 - **Completion**: ~22/35 deliverables done (core engine complete, UI/polish items pending)
 - **Phase/Stage**: Phase 2 (rich features) complete; Phase 3 (hierarchical memory) partial; Phase 4 (Profile System) in progress
-- **Last updated**: 2026-05-29
+- **Last updated**: 2026-06-05
 
 ## Specification Index
 
@@ -64,7 +64,7 @@ Semantic Context Virtualization Middleware — a stateful middleware server that
 - [x] Web UI for profile management — **done**
 - [ ] Cloudflared tunnel config for profile-scoped URLs — **pending**
 
-### Active Tools (12/12 implemented)
+### Active Tools (13/13 complete)
 - [x] `remember()` — store memory
 - [x] `search_memory()` — semantic search
 - [x] `compress_memory()` — trigger compression

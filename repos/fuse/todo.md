@@ -8,7 +8,7 @@ All-in-one AI-native communication platform unifying email, instant messaging, v
 
 - **Completion**: 5/44 deliverables done (infrastructure only; all application items actionable)
 - **Phase/Stage**: Pre-implementation — specs complete for v1 (SMTP), v1b (Shared Mailboxes), v2 (Federation), architecture docs for v3-v6
-- **Last updated**: 2026-05-29
+- **Last updated**: 2026-06-05
 
 ## Deliverables
 

@@ -138,7 +138,7 @@ function reconcile(): void {
     const desired = loadDesired();
     const desiredNames = new Set(desired.map((s) => s.name));
 
-    // ── Garbage-collect orphaned containers ──
+    // ── Step 1: Garbage-collect orphaned containers ──
     // Walk every managed container on the system.  Containers that are not
     // in the desired service set AND not a slot/sidecar of a desired service
     // are removed.  This handles:
@@ -166,7 +166,7 @@ function reconcile(): void {
     }
 
     const managedServices = getManagedSystemdServices();
-    // ── Garbage-collect orphaned systemd services ──
+    // ── Step 2: Garbage-collect orphaned systemd services ──
     for (const name of managedServices) {
       if (!desiredNames.has(name)) {
         removeSystemdService(name);
@@ -178,7 +178,7 @@ function reconcile(): void {
       error: string;
       time: string;
     }[] = [];
-    // ── Ensure each desired service is running ──
+    // ── Step 3: Ensure each desired service is running ──
     for (const service of desired) {
       try {
         if (service.service) {
@@ -213,7 +213,7 @@ function reconcile(): void {
     }
 
     let lastCloudflaredError: { error: string; time: string } | null = null;
-    // ── Write Cloudflare Tunnel config ──
+    // ── Step 4: Write Cloudflare Tunnel config ──
     try {
       writeCloudflaredConfig(desired);
     } catch (e: any) {
@@ -229,14 +229,14 @@ function reconcile(): void {
       });
     }
 
-    // ── Persist runtime state ──
+    // ── Step 5: Persist runtime state ──
     try {
       writeRuntimeState(desired);
     } catch (e: any) {
       console.error(`[runtime] failed to write runtime state: ${e.message}`);
     }
 
-    // ── Prune unused images ──
+    // ── Step 6: Prune unused images ──
     try {
       sh(`podman image prune -f`);
     } catch {

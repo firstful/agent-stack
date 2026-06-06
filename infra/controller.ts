@@ -502,7 +502,7 @@ function reconcile(): string {
   return "Reconciliation triggered";
 }
 
-// ── REST API handler functions ──
+// ── REST API Handler Functions ──
 
 type RestHandler = (
   req: IncomingMessage,
@@ -840,12 +840,14 @@ function withBody(req: IncomingMessage, res: ServerResponse, fn: (body: string) 
  */
 function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   if (req.url === "/ping") {
+    // ── Ping / Health Check ──
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok", version: "tsx", timestamp: new Date().toISOString() }));
     return;
   }
 
   if (req.url === "/sudo" && req.method === "POST") {
+    // ── Sudo Command Endpoint ──
     withBody(req, res, (body) => {
       const { password, command } = JSON.parse(body);
       if (!password || !command) {
@@ -872,6 +874,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   if (req.url === "/status") {
+    // ── Legacy Status Endpoint ──
     const runtime = loadRuntimeState();
     const uptime = Math.floor(
       (Date.now() - new Date(STATUS.startTime).getTime()) / 1000
@@ -903,7 +906,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
-  // ── Logo endpoint ──
+  // ── Logo Endpoint ──
   const logoMatch = req.url?.match(/^\/logo\/([a-z][a-z0-9_-]*)$/i);
   if (logoMatch) {
     const name = logoMatch[1];
@@ -939,6 +942,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
+  // ── Proxy Endpoint ──
   const proxyMatch = req.url?.match(/^\/proxy\/([^/]+)(\/.*)?$/);
   if (proxyMatch) {
     const serviceName = proxyMatch[1];
@@ -979,6 +983,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   // --- REST API route dispatcher (declarative, from lib/routes.ts) ---
+  // ── REST API Route Dispatch ──
   const parsed = url.parse(req.url!, true);
   const pathname = parsed.pathname ?? "/";
   const query = (parsed.query as Record<string, string>) || {};

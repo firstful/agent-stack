@@ -17,6 +17,11 @@ function sh(cmd: string): string {
  * Run a command via sudo -S (reads password from stdin).  Used for
  * systemctl operations that require root privileges.  The sudo password
  * is read from .sudo-password.txt at startup and piped as stdin.
+ *
+ * The password is stored in a file readable only by the reeds user,
+ * and passed to sudo -S to avoid running the controller as root.
+ * The -S flag tells sudo to read the password from stdin rather than
+ * prompting on a terminal.
  */
 function sudoExec(cmd: string, stdin?: string): string {
   return execSync(`sudo -S ${cmd}`, {

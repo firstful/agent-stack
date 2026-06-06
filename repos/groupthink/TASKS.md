@@ -8,7 +8,7 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 
 - **Completion**: ~126/205 deliverables done (~61%)
 - **Phase/Stage**: Alpha — core impulse loop automated, group management (create, join, leave, settings, nicknames), voting (cast + tenure-weighted tally), endorsements with rate limiting, search, auth scaffold. Composer modal with full-screen overlay, threaded drafts, adaptive timer, lock transition, LLM summary voting, and broadcast confirmation. Structured logging, health checks, Postgres backup, and rollback procedures deployed. Mobile: search, bottom tab nav, stack navigation, deep linking. Push notifications via Expo with in-app notification center. Mobile web (mdot): single-column layout with bottom tab nav, feed, search, groups, notifications center, profile.
-- **Last updated**: 2026-06-02
+- **Last updated**: 2026-06-05
 
 ## Deliverables
 
@@ -54,19 +54,19 @@ Collaboration platform for impulse-driven group composition with adaptive voting
 - [x] Group creation starts as fringe, auto-promotes via member count
 - [ ] Tier-based interaction filter on incoming impulses
 
-|### 3.3 Impulse Lifecycle (12/16 complete)
-|- [x] Implement state machine: queued → voting → composing → summarizing → approval → broadcast
-|- [x] Auto-advance queued → voting when tenure-weighted queue position reaches top
-|- [x] Adaptive voting timer (start at 4h, shrink by velocity/consensus, collapse on supermajority)
-|- [x] Tenure-weighted vote recording endpoint
-|- [x] Auto-advance voting → composing when threshold met
-|- [x] Composer lock logic (adaptive timer or manual lock)
-|- [x] LLM summary generation trigger on lock
-|- [x] Summary approval phase with voting
-|- [x] Broadcast handler (public message or discard)
-|- [x] Impulse expiry handler (stale queue >7d, voting failure, no composing activity)
-|- [x] Lifecycle engine (8s poll, all phases driven automatically)
-|- [x] Recalculates tenure-weighted queue after each advancement
+### 3.3 Impulse Lifecycle (12/12 complete)
+- [x] Implement state machine: queued → voting → composing → summarizing → approval → broadcast
+- [x] Auto-advance queued → voting when tenure-weighted queue position reaches top
+- [x] Adaptive voting timer (start at 4h, shrink by velocity/consensus, collapse on supermajority)
+- [x] Tenure-weighted vote recording endpoint
+- [x] Auto-advance voting → composing when threshold met
+- [x] Composer lock logic (adaptive timer or manual lock)
+- [x] LLM summary generation trigger on lock
+- [x] Summary approval phase with voting
+- [x] Broadcast handler (public message or discard)
+- [x] Impulse expiry handler (stale queue >7d, voting failure, no composing activity)
+- [x] Lifecycle engine (8s poll, all phases driven automatically)
+- [x] Recalculates tenure-weighted queue after each advancement
 
 ### 3.4 Composer / Drafts (0/3 complete)
 - [ ] Draft submission endpoint (with parent_draft_id for threading)

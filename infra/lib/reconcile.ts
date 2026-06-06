@@ -70,6 +70,8 @@ function clearBuildError(name: string): void {
   delete buildErrors[name];
 }
 
+// ── Port Allocation ──
+
 /**
  * Allocate a fresh port for a slot, excluding the service's current host_port
  * and all other services' host_ports, plus any host ports already bound by
