@@ -1,1 +1,0 @@
-{"root":["./src/domain-resolver.ts","./src/index.ts","./src/shard-router.ts","./src/providers/ai.ts","./src/providers/email.ts","./src/providers/index.ts","./src/providers/kms.ts","./src/providers/queue.ts"],"version":"6.0.3"}

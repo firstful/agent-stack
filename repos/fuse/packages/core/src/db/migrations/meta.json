@@ -1,7 +1,0 @@
-{
-  "migrations": [
-    { "name": "001_initial",
-      "sql_file": "001_initial.sql",
-      "description": "Initial schema: all tables, indices, and LISTEN/NOTIFY triggers" }
-  ]
-}

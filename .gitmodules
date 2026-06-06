@@ -7,3 +7,6 @@
 [submodule "repos/marp-editor"]
 	path = repos/marp-editor
 	url = https://github.com/reedsutliff/agst-techdeck.git
+[submodule "repos/fuse"]
+	path = repos/fuse
+	url = https://github.com/reedsutliff/agst-fuse.git
