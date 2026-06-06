@@ -29,4 +29,3 @@ repos/*/.cache/
 # OS files
 .DS_Store
 Thumbs.db
-repos/personal-blog/

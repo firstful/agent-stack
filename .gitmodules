@@ -10,3 +10,6 @@
 [submodule "repos/fuse"]
 	path = repos/fuse
 	url = https://github.com/reedsutliff/agst-fuse.git
+[submodule "repos/personal-blog"]
+	path = repos/personal-blog
+	url = https://github.com/reedsutliff/personal-blog.git
