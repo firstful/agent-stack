@@ -1,0 +1,25 @@
+{
+  "name": "files",
+  "version": 1,
+  "service": {
+    "type": "simple",
+    "exec_start": "node /srv/agent-stack/repos/files/server.mjs",
+    "port": 3650,
+    "restart": "always",
+    "user": "root",
+    "env": {
+      "PORT": "3650",
+      "FILES_DIR": "/srv/files",
+      "HOST": "0.0.0.0"
+    }
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "file.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  },
+  "logo": {
+    "_type": "url",
+    "url": "https://cdn.jsdelivr.net/npm/heroicons@2/outline/folder-open.svg"
+  }
+}
