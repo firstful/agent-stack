@@ -57,7 +57,17 @@ function currentBranchRef(): string | null {
   }
 }
 
-/** Set up or update the current branch ref watcher */
+/**
+ * Set up or update the current branch ref watcher using stat polling.
+ * On Linux, fs.watch() does NOT support recursive=true, so we watch
+ * individual files: .git/HEAD (branch switch) + the current branch ref
+ * (commit detection).  When HEAD changes we re-resolve and re-watch.
+ *
+ * Uses watchFile (stat polling) instead of watch (inotify) because
+ * ref files may be owned by a different user (root writing the ref,
+ * controller running as reeds).  Polling interval matches the
+ * heartbeat to avoid unnecessary stat calls.
+ */
 function watchCurrentBranch(): void {
   if (branchRefWatcher) {
     branchRefWatcher.stop();
@@ -82,7 +92,12 @@ function watchCurrentBranch(): void {
   }
 }
 
-/** Watch .git/HEAD for branch switches */
+/**
+ * Watch .git/HEAD for branch switches using stat polling.
+ * On detecting a HEAD change, re-resolves and re-watches the
+ * current branch ref file so commit detection continues on
+ * the new branch.
+ */
 function watchHead(): void {
   try {
     fs.watchFile(HEAD_FILE, { interval: 5000 }, (curr, prev) => {
@@ -119,8 +134,6 @@ let reconciling = false;
  * (e.g. during shutdown race conditions).
  */
 function send(msg: any): void {
-  // Post a message back to the parent controller thread.
-  // Errors are silently swallowed when the parent has exited.
   try {
     parentPort!.postMessage(msg);
   } catch {

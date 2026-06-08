@@ -40,6 +40,7 @@ export function shCapture(cmd: string): string {
 
 /**
  * Build a fully qualified image tag for a named service.
+ * Format: stack/<name>:latest
  */
 export function imageTag(name: string): string {
   return `stack/${name}:latest`;
@@ -49,6 +50,7 @@ export function imageTag(name: string): string {
  * Return the podman label used to identify stack-managed containers.
  * All containers created by agent-stack get this label so we can
  * filter and manage them collectively.
+ * @returns The label string used in --filter label=... queries
  */
 export function containerLabel(): string {
   return CONTAINER_LABEL;

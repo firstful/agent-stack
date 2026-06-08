@@ -1,0 +1,33 @@
+{
+  "name": "engramic-cli",
+  "version": "0.1.0",
+  "description": "Engramic CLI — local AI proxy server",
+  "type": "module",
+  "bin": {
+    "engramic": "./bin/engramic.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "prebuild": "mkdir -p src/engramic-provider dist/engramic-provider && cp ../engramic/dist/provider/openai.js src/engramic-provider/ && cp ../engramic/dist/provider/openai.js dist/engramic-provider/",
+    "build": "npm run prebuild && tsc",
+    "prepublishOnly": "npm run build",
+    "start": "node bin/engramic.js"
+  },
+  "keywords": ["engramic", "openai", "proxy", "llm", "cli"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "fastify": "^5.0.0",
+    "@fastify/cors": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

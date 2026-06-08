@@ -1,3 +1,16 @@
+/**
+ * cloudflared.ts — Cloudflare Tunnel config generation for the agent-stack controller.
+ *
+ * Generates /etc/cloudflared/config.yml from the desired service set and
+ * restarts the cloudflared tunnel when the config changes (subject to a
+ * 30-second cooldown to prevent restart storms during batch reconciliation).
+ *
+ * Two tunnel modes:
+ *   Proxy mode (preferred): All ingress routes through a single wildcard
+ *     hostname pointing at the slot-proxy container, which routes by Host header.
+ *   Direct mode: Per-service ingress rules generated for each exposed service,
+ *     used when the slot-proxy is not running.
+ */
 import fs from "fs";
 import path from "path";
 import { sh } from "./podman";

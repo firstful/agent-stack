@@ -43,7 +43,9 @@ function unitPath(name: string): string {
 // ── Query ──
 
 /**
- * Check whether a systemd unit exists.
+ * Check whether a systemd unit file exists on disk.
+ * Uses `systemctl cat` to verify the unit is known to systemd.
+ * @returns true if the unit file exists
  */
 export function exists(name: string): boolean {
   try {
@@ -56,6 +58,7 @@ export function exists(name: string): boolean {
 
 /**
  * Check whether a systemd service is currently active.
+ * @returns true if the unit's is-active status returns "active"
  */
 export function isRunning(name: string): boolean {
   try {
@@ -67,7 +70,10 @@ export function isRunning(name: string): boolean {
 }
 
 /**
- * List all agent-stack-managed systemd units.
+ * List all agent-stack-managed systemd unit names.
+ * Parses `systemctl list-units` output filtering for 'agent-stack-*.service'
+ * and strips the prefix/suffix to return bare service names.
+ * @returns Array of service names (empty if none found or systemctl fails)
  */
 export function getManaged(): string[] {
   try {
@@ -135,11 +141,17 @@ WantedBy=multi-user.target
 /**
  * Ensure a systemd service unit exists and is running.
  * Creates/updates the unit file, reloads systemd, enables, and starts.
+ *
+ * The write pattern uses a temp file + sudo cp to avoid needing
+ * the controller to run as root for writing to /etc/systemd/system.
+ * See sudoExec() for the sudo -S password-pipe mechanism.
  */
 export function ensure(service: Service): void {
   console.log(`[service] ensuring ${service.name}`);
   const content = generateUnitContent(service);
   const dst = unitPath(service.name);
+  // Compare existing unit file content to avoid unnecessary
+  // daemon-reload cycles on every reconciliation tick
   let needsUpdate = true;
   try {
     const existing = fs.readFileSync(dst, "utf-8");
@@ -148,19 +160,24 @@ export function ensure(service: Service): void {
     // file doesn't exist, needs creation
   }
   if (needsUpdate) {
+    // Write to temp file first (accessible by reeds user), then
+    // sudo cp to the protected systemd directory.  This avoids
+    // running the whole process as root.
     const tmp = `/tmp/agent-stack-${service.name}.service`;
     fs.writeFileSync(tmp, content, "utf-8");
     sudoExec(`cp ${tmp} ${dst}`);
     fs.unlinkSync(tmp);
+    // Reload systemd to pick up new unit definitions
     try {
       sudoExec("systemctl daemon-reload");
     } catch {
-      /* ignore */
+      /* ignore — daemon-reload may fail if another reload is in progress */
     }
+    // Enable for persistence across reboots
     try {
       sudoExec(`systemctl enable ${unitName(service.name)}`);
     } catch {
-      /* ignore */
+      /* ignore — enable may fail if unit is already enabled */
     }
   }
   if (!isRunning(service.name)) {

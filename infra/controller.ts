@@ -39,6 +39,8 @@ function appendLog(data: string): void {
   try { fs.appendFileSync(LOG_FILE, data); } catch {}
 }
 
+// ── Console Patch ──
+
 // Patch console so all main-thread console calls also go to the log file
 const origLog = console.log;
 const origError = console.error;
@@ -126,6 +128,8 @@ function watchInfraDir(): void {
     }, 1000);
   });
 }
+
+// ── Graceful Shutdown ──
 
 process.on("exit", () => {
   cleanup();
@@ -982,7 +986,6 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
-  // --- REST API route dispatcher (declarative, from lib/routes.ts) ---
   // ── REST API Route Dispatch ──
   const parsed = url.parse(req.url!, true);
   const pathname = parsed.pathname ?? "/";

@@ -1,3 +1,17 @@
+/**
+ * runtime.ts — Runtime state persistence for the agent-stack controller.
+ *
+ * Reads the active slot markers written by reconcile.ts and writes the
+ * combined service state to runtime/services.json.  This file is the
+ * single source of truth consumed by the HTTP API (/api/status,
+ * /api/services/:name) and the web dashboard.
+ *
+ * On each reconciliation tick, writeRuntimeState() captures:
+ *   - Slot status (a/b), active slot, port per slot
+ *   - Sidecar running state and ports
+ *   - Exposure & rate-limit configuration
+ *   - Systemd unit running state and port
+ */
 import fs from "fs";
 import path from "path";
 import { containerRunning, getContainerPort } from "./podman";

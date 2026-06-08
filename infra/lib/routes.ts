@@ -454,7 +454,10 @@ const routes: RouteDef[] = [
 
 // ── Route Compilation ──
 
-// Converts a pattern like "/api/services/:name" to a RegExp
+/**
+ * Convert an Express-style route pattern (e.g. "/api/services/:name")
+ * to a RegExp for fast matching.  Named parameters become capture groups.
+ */
 function patternToRegex(pattern: string): { regex: RegExp; paramNames: string[] } {
   const paramNames: string[] = [];
   const regexStr = pattern.replace(/:([a-zA-Z_]+)/g, (_: string, name: string) => {
@@ -472,7 +475,11 @@ const compiled: CompiledRoute[] = routes.map((r) => {
 
 // ── Dispatch ──
 
-// Match a (method, pathname) pair against the route table
+/**
+ * Match a (method, pathname) pair against the compiled route table.
+ * Returns the matched handler name, extracted parameters, and OpenAPI
+ * metadata, or null if no route matches.
+ */
 function matchRoute(method: string, pathname: string): RouteMatch | null {
   for (const route of compiled) {
     if (route.method !== method) continue;
@@ -489,7 +496,7 @@ function matchRoute(method: string, pathname: string): RouteMatch | null {
 
 // ── OpenAPI Specification ──
 
-// Build full OpenAPI 3.0 spec from route metadata
+/** OpenAPI 3.0 specification object, generated live from route metadata. */
 export interface OpenApiSpec {
   openapi: string;
   info: { title: string; version: string; description: string };
@@ -497,6 +504,7 @@ export interface OpenApiSpec {
   paths: Record<string, Record<string, OpenApiMeta>>;
 }
 
+/** Build the full OpenAPI 3.0 spec from the route registry — generates paths from each RouteDef. */
 function buildOpenApiSpec(): OpenApiSpec {
   const paths: Record<string, Record<string, OpenApiMeta>> = {};
   for (const route of routes) {
@@ -519,5 +527,7 @@ function buildOpenApiSpec(): OpenApiSpec {
     paths,
   };
 }
+
+// ── Exports ──
 
 export { routes, compiled, matchRoute, buildOpenApiSpec };
