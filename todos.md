@@ -8,7 +8,7 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 - **Completion**: 2/6 deliverables done
 - **Phase/Stage**: Active maintenance — infra refinements and engramic embeddings integration
-- **Last updated**: 2026-06-05
+- **Last updated**: 2026-06-08
 
 ## Deliverables
 
@@ -26,8 +26,8 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 ## Open Questions / Blockers
 
-- Controller.ts suggested split is high-value but not urgent — recommended for next maintenance round
-- No root-level CI/CD pipeline defined beyond the controller reconciliation loop
+- [ ] Controller.ts suggested split is high-value but not urgent — recommended for next maintenance round
+- [ ] No root-level CI/CD pipeline defined beyond the controller reconciliation loop
 
 ## Notes
 

@@ -497,6 +497,8 @@ function rebuildService(name: string): string {
   }
 }
 
+// ── Reconciliation ──
+
 /**
  * Trigger a reconciliation cycle by posting a message to the worker thread.
  * Returns immediately — the worker processes asynchronously.

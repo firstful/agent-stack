@@ -30,6 +30,7 @@ This file helps AI agents (and humans) navigate the agent-stack project efficien
 ├── infra/                 ← Controller code + systemd unit
 │   ├── controller.ts      ← Main HTTP server + reconciliation loop entry point
 │   ├── reconcile-worker.ts← Worker thread that does the actual reconciliation
+│   ├── generate-openapi.ts← Standalone script to emit OpenAPI spec JSON
 │   ├── lib/               ← All helper modules:
 │   │   ├── config.ts      ← Paths, constants, slot helpers
 │   │   ├── services.ts    ← Loading desired state, hashing, git clone management
