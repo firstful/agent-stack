@@ -286,6 +286,36 @@ export function repoContentHashForPath(repoPath: string): string {
 
 // ── Git Cloning ──
 
+/**
+ * Detect if a repo path is a git submodule (not a full git checkout).
+ * Submodules have a `.git` *file* (containing "gitdir: ...") instead of a `.git` *directory*.
+ */
+function isSubmodule(repoPath: string): boolean {
+  const dotGit = path.join(repoPath, ".git");
+  try {
+    return fs.statSync(dotGit).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get the origin URL for a submodule from its working checkout.
+ * Uses the already-configured remote URL (which carries the access token
+ * from the initial clone) rather than the clean URL from .gitmodules.
+ */
+function submoduleUrl(submoduleName: string, repoPath: string): string | null {
+  try {
+    return execSync(`git remote get-url origin`, {
+      cwd: repoPath,
+      encoding: "utf-8",
+      timeout: 5000,
+    }).toString().trim();
+  } catch {
+    return null;
+  }
+}
+
 export function ensureServiceClone(service: Service): string | null {
   const repoPath = service.repo;
   if (!repoPath) return null;
@@ -308,10 +338,33 @@ export function ensureServiceClone(service: Service): string | null {
 
     if (!fs.existsSync(cloneDir)) {
       fs.mkdirSync(cloneDir, { recursive: true });
-      execSync(
-        `git -C ${MONOREPO_ROOT} archive ${commitHash} -- "${relPath}/" | tar -x -C ${cloneDir} --strip-components=2`,
-        { timeout: 30000 }
-      );
+
+      if (isSubmodule(repoPath)) {
+        // ── Submodule clone path ──
+        // `git archive` doesn't expand submodules, so we clone directly
+        // from the submodule's origin at the exact commit recorded in HEAD.
+        const submoduleName = `repos/${service.name}`;
+        const url = submoduleUrl(submoduleName, repoPath);
+        if (!url) throw new Error(`Cannot find submodule URL for "${submoduleName}"`);
+
+        const subCommit = execSync(`git rev-parse HEAD`, {
+          cwd: repoPath,
+          encoding: "utf-8",
+          timeout: 5000,
+        }).toString().trim();
+
+        console.log(`[clone] ${service.name}: submodule from ${url} @ ${subCommit}`);
+        execSync(
+          `git clone --depth 1 "${url}" "${cloneDir}" 2>&1 && git -C "${cloneDir}" fetch --depth 1 origin "${subCommit}" && git -C "${cloneDir}" checkout "${subCommit}"`,
+          { timeout: 60000 }
+        );
+      } else {
+        // ── Monorepo archive path (existing logic) ──
+        execSync(
+          `git -C ${MONOREPO_ROOT} archive ${commitHash} -- "${relPath}/" | tar -x -C ${cloneDir} --strip-components=2`,
+          { timeout: 30000 }
+        );
+      }
     }
 
     // Prune old clones — keep only the 4 most recent based on mtime
