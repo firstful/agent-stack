@@ -175,33 +175,43 @@ function discoverVaultUrl(): string {
   return "http://localhost:4000";
 }
 
-export function resolveSecrets(service: Service): Record<string, string> {
-  if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
+/**
+ * Fetch secrets for a service by name, filtering to the requested keys.
+ * Called by resolveSecrets (main container) and ensureSidecar (sidecars).
+ * Throws if vault is unreachable or a requested key is missing.
+ */
+export function fetchSecrets(serviceName: string, keys: string[]): Record<string, string> {
+  if (keys.length === 0) return {};
   if (!process.env.VAULT_TOKEN) {
-    throw new Error(`[secrets] cannot resolve secrets for "${service.name}": VAULT_TOKEN is not set`);
+    throw new Error(`[secrets] cannot resolve secrets for "${serviceName}": VAULT_TOKEN is not set`);
   }
   const vaultUrl = discoverVaultUrl();
   try {
-    const curl = `curl -sf ${vaultUrl}/api/secrets/plain/${service.name} -H "Authorization: Bearer ${process.env.VAULT_TOKEN}"`;
+    const curl = `curl -sf ${vaultUrl}/api/secrets/plain/${serviceName} -H "Authorization: Bearer ${process.env.VAULT_TOKEN}"`;
     const raw = execSync(curl, { timeout: 5000, encoding: "utf8" });
     const result = JSON.parse(raw);
     if (!result.secrets) {
-      throw new Error(`[secrets] vault returned no secrets object for "${service.name}"`);
+      throw new Error(`[secrets] vault returned no secrets object for "${serviceName}"`);
     }
     const missing: string[] = [];
     const filtered: Record<string, string> = {};
-    for (const key of service.secrets) {
+    for (const key of keys) {
       if (result.secrets[key] !== undefined) filtered[key] = result.secrets[key];
       else missing.push(key);
     }
     if (missing.length > 0) {
-      throw new Error(`[secrets] vault missing keys for "${service.name}": ${missing.join(", ")}`);
+      throw new Error(`[secrets] vault missing keys for "${serviceName}": ${missing.join(", ")}`);
     }
     return filtered;
   } catch (e: any) {
     if (e.message?.startsWith("[secrets]")) throw e;
-    throw new Error(`[secrets] vault unreachable at ${vaultUrl} for "${service.name}": ${e.message}`);
+    throw new Error(`[secrets] vault unreachable at ${vaultUrl} for "${serviceName}": ${e.message}`);
   }
+}
+
+export function resolveSecrets(service: Service): Record<string, string> {
+  if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
+  return fetchSecrets(service.name, service.secrets);
 }
 
 // ── Hashing ──

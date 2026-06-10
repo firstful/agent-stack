@@ -6,6 +6,7 @@ export interface SidecarConfig {
   image: string;
   port?: number;
   env?: Record<string, string>;
+  secrets?: string[];
   volumes?: string[];
   command?: string[];
 }
