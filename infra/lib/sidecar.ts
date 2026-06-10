@@ -8,7 +8,7 @@ import {
   buildDiscoveryEnv,
 } from "./podman";
 import { CONTAINER_LABEL, NETWORK_NAME, sidecarContainerName } from "./config";
-import { fetchSecrets, interpolateSecrets } from "./services";
+import { fetchSecrets, interpolateSecrets, discoverRequiredSecrets } from "./services";
 
 /** Execute a shell command with inherited stdio.  Local copy used for sidecar-specific ops. */
 export function sh(cmd: string): Buffer {
@@ -65,14 +65,17 @@ export function ensureSidecar(
     .join(" ");
   const staticEnv = sidecar.env || {};
 
-  // Resolve vault secrets if the sidecar declares any
+  // Resolve vault secrets: auto-discover from {SECRETS.KEY} patterns in env,
+  // falling back to the explicit secrets array for backward compatibility
   const vaultEnv: Record<string, string> = {};
-  if (sidecar.secrets && sidecar.secrets.length > 0) {
-    Object.assign(vaultEnv, fetchSecrets(service.name, sidecar.secrets));
-    console.log(`[sidecar] ${name}: resolved ${Object.keys(vaultEnv).length} secrets from vault`);
+  const interpolatedKeys = discoverRequiredSecrets(staticEnv);
+  const secretKeys = interpolatedKeys.length > 0 ? interpolatedKeys : (sidecar.secrets || []);
+  if (secretKeys.length > 0) {
+    Object.assign(vaultEnv, fetchSecrets(service.name, secretKeys));
+    console.log(`[sidecar] ${name}: resolved ${Object.keys(vaultEnv).length} secrets from vault (auto-discovered: ${interpolatedKeys.length > 0 ? interpolatedKeys.join(', ') : 'declared array'})`);
   }
 
-  // Interpolate vault secrets into static env values (replaces {KEY} patterns)
+  // Interpolate vault secrets into static env values (replaces {SECRETS.KEY} patterns)
   const interpolated = interpolateSecrets(staticEnv, vaultEnv);
 
   // Merge: vault secrets override interpolated env (so direct vault values win)

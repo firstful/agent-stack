@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { resolveSecrets, interpolateSecrets } from "./services";
+import { resolveSecrets, interpolateSecrets, resolveEnvSecrets } from "./services";
 import type { Service } from "./types";
 import { CONTAINER_LABEL, NETWORK_NAME } from "./config";
 
@@ -272,8 +272,10 @@ export function runContainer(
     PATH: `${containerDefaultPath}:${mappedPath}`,
   };
 
-  const resolvedSecrets = resolveSecrets(service);
-  // Interpolate vault secrets into env var values (replaces {KEY} patterns)
+  // Resolve vault secrets: auto-discover from {SECRETS.KEY} patterns in env,
+  // falling back to the explicit secrets array for backward compatibility
+  const resolvedSecrets = resolveEnvSecrets(service.name, containerEnv, service.secrets);
+  // Interpolate vault secrets into env var values (replaces {SECRETS.KEY} patterns)
   const interpolated = interpolateSecrets(containerEnv, resolvedSecrets);
   const allEnv: Record<string, string> = { ...interpolated, ...resolvedSecrets };
   allEnv.IS_CONTAINER = "true";

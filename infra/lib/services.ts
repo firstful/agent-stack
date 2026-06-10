@@ -209,29 +209,50 @@ export function fetchSecrets(serviceName: string, keys: string[]): Record<string
   }
 }
 
-export function resolveSecrets(service: Service): Record<string, string> {
-  if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
-  return fetchSecrets(service.name, service.secrets);
+/**
+ * Discover which vault secrets an env block references.
+ * Scans all env var values for `{SECRETS.KEY}` patterns and returns
+ * the unique set of secret keys needed, in declaration order.
+ *
+ * @example
+ *   env: { "URL": "http://{SECRETS.USER}:***@{SECRETS.HOST}/" }
+ *   Returns: ["USER", "HOST"]
+ */
+export function discoverRequiredSecrets(env: Record<string, string>): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  const pattern = /\{SECRETS\.(\w+)\}/g;
+  for (const value of Object.values(env)) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(value)) !== null) {
+      const key = match[1];
+      if (!seen.has(key)) {
+        seen.add(key);
+        keys.push(key);
+      }
+    }
+  }
+  return keys;
 }
 
 /**
  * Interpolate vault secret values into env var values.
- * Replaces `{KEY}` patterns with the corresponding resolved secret value.
+ * Replaces `{SECRETS.KEY}` patterns with the corresponding resolved secret value.
  * Referenced keys that aren't in resolvedSecrets are left as-is (with a warning).
- * Non-matching text is preserved unchanged.
  *
  * @example
- *   env: { "DATABASE_URL": "postgresql://user:{PASSWORD}@host/db" }
- *   resolvedSecrets: { "PASSWORD": "hunter2" }
- *   Result: { "DATABASE_URL": "postgresql://user:hunter2@host/db" }
+ *   env: { "DATABASE_URL": "postgresql://fuselocal:***@fuse--db:5432/fuse" }
+ *   resolvedSecrets: { "POSTGRES_PASSWORD": "fuselocalpw" }
+ *   Result: { "DATABASE_URL": "postgresql://fuselocal:***@fuse--db:5432/fuse" }
  */
 export function interpolateSecrets(
   env: Record<string, string>,
   resolvedSecrets: Record<string, string>
 ): Record<string, string> {
   const result: Record<string, string> = {};
+  const pattern = /\{SECRETS\.(\w+)\}/g;
   for (const [key, value] of Object.entries(env)) {
-    result[key] = value.replace(/\{(\w+)\}/g, (match, refKey) => {
+    result[key] = value.replace(pattern, (match, refKey) => {
       if (resolvedSecrets[refKey] !== undefined) {
         return resolvedSecrets[refKey];
       }
@@ -240,6 +261,32 @@ export function interpolateSecrets(
     });
   }
   return result;
+}
+
+/**
+ * Resolve vault secrets declared in the service's `secrets` array.
+ * Used for backward compatibility — new configs should use `{SECRETS.KEY}`
+ * interpolation in env vars instead.
+ */
+export function resolveSecrets(service: Service): Record<string, string> {
+  if (!service.secrets || !Array.isArray(service.secrets) || service.secrets.length === 0) return {};
+  return fetchSecrets(service.name, service.secrets);
+}
+
+/**
+ * Resolve vault secrets needed by a service's env block.
+ * Auto-discovers required keys from `{SECRETS.KEY}` patterns in env values.
+ * Falls back to the explicit `secrets` array if no interpolation patterns found.
+ */
+export function resolveEnvSecrets(
+  serviceName: string,
+  env: Record<string, string>,
+  declaredSecrets?: string[]
+): Record<string, string> {
+  const interpolatedKeys = discoverRequiredSecrets(env);
+  const keys = interpolatedKeys.length > 0 ? interpolatedKeys : (declaredSecrets || []);
+  if (keys.length === 0) return {};
+  return fetchSecrets(serviceName, keys);
 }
 
 // ── Hashing ──

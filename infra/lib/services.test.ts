@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-import { hashDir, resolveSecrets, loadDesired, repoHashForPath, interpolateSecrets } from "./services";
+import { hashDir, resolveSecrets, loadDesired, repoHashForPath, interpolateSecrets, discoverRequiredSecrets } from "./services";
 
 describe("hashDir", () => {
   let tmp: string;
@@ -83,6 +83,32 @@ describe("resolveSecrets", () => {
   });
 });
 
+describe("discoverRequiredSecrets", () => {
+  it("returns empty array when no {SECRETS.KEY} patterns exist", () => {
+    const env = { HOST: "localhost", PORT: "5432" };
+    assert.deepStrictEqual(discoverRequiredSecrets(env), []);
+  });
+
+  it("discovers a single secret key from env values", () => {
+    const env = { DB_URL: "http://{SECRETS.A}:***@host/db" };
+    assert.deepStrictEqual(discoverRequiredSecrets(env), ["A"]);
+  });
+
+  it("discovers multiple unique keys in order", () => {
+    const env = { URL: "http://{SECRETS.USER}:***@{SECRETS.HOST}/" };
+    assert.deepStrictEqual(discoverRequiredSecrets(env), ["USER", "HOST"]);
+  });
+
+  it("returns empty array for empty env", () => {
+    assert.deepStrictEqual(discoverRequiredSecrets({}), []);
+  });
+
+  it("does not match bare {KEY} without SECRETS. prefix", () => {
+    const env = { X: "{FOO}" };
+    assert.deepStrictEqual(discoverRequiredSecrets(env), []);
+  });
+});
+
 describe("interpolateSecrets", () => {
   it("leaves env vars without interpolation markers unchanged", () => {
     const env = { HOST: "localhost", PORT: "5432" };
@@ -91,21 +117,21 @@ describe("interpolateSecrets", () => {
     assert.deepStrictEqual(result, { HOST: "localhost", PORT: "5432" });
   });
 
-  it("replaces {KEY} with the corresponding secret value", () => {
+  it("replaces {SECRETS.KEY} with the corresponding secret value", () => {
     const env = { DATABASE_URL: "postgresql://fuselocal:***@fuse--db:5432/fuse" };
     const secrets = { POSTGRES_PASSWORD: "fuselocalpw" };
     const result = interpolateSecrets(env, secrets);
     assert.strictEqual(result.DATABASE_URL, "postgresql://fuselocal:***@fuse--db:5432/fuse");
   });
 
-  it("replaces multiple {KEY} patterns in a single value", () => {
-    const env = { URL: "http://{USER}:***@{HOST}:{PORT}/path" };
+  it("replaces multiple {SECRETS.KEY} patterns in a single value", () => {
+    const env = { URL: "http://{SECRETS.USER}:***@{SECRETS.HOST}:{SECRETS.PORT}/path" };
     const secrets = { USER: "admin", PASSWORD: "secret", HOST: "db.example.com", PORT: "5432" };
     const result = interpolateSecrets(env, secrets);
     assert.strictEqual(result.URL, "http://admin:***@db.example.com:5432/path");
   });
 
-  it("leaves {KEY} placeholders intact when the secret is not resolved", () => {
+  it("leaves {SECRETS.KEY} intact when secret is not resolved", () => {
     const env = { URL: "postgresql://user:***@host/db" };
     const secrets = {};
     const result = interpolateSecrets(env, secrets);
@@ -113,10 +139,17 @@ describe("interpolateSecrets", () => {
   });
 
   it("does not confuse overlapping key names", () => {
-    const env = { CONN: "{PASS} and {PASSPHRASE}" };
+    const env = { CONN: "{SECRETS.PASS} and {SECRETS.PASSPHRASE}" };
     const secrets = { PASS: "p1", PASSPHRASE: "p2" };
     const result = interpolateSecrets(env, secrets);
     assert.strictEqual(result.CONN, "p1 and p2");
+  });
+
+  it("does not match bare {KEY} without SECRETS. prefix", () => {
+    const env = { X: "{POSTGRES_PASSWORD}" };
+    const secrets = { POSTGRES_PASSWORD: "should-not-match" };
+    const result = interpolateSecrets(env, secrets);
+    assert.strictEqual(result.X, "{POSTGRES_PASSWORD}");
   });
 
   it("handles empty env and empty secrets", () => {
