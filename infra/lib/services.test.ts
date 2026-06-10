@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-import { hashDir, resolveSecrets, loadDesired, repoHashForPath } from "./services";
+import { hashDir, resolveSecrets, loadDesired, repoHashForPath, interpolateSecrets } from "./services";
 
 describe("hashDir", () => {
   let tmp: string;
@@ -80,6 +80,49 @@ describe("resolveSecrets", () => {
     } finally {
       if (old !== undefined) process.env.VAULT_TOKEN = old;
     }
+  });
+});
+
+describe("interpolateSecrets", () => {
+  it("leaves env vars without interpolation markers unchanged", () => {
+    const env = { HOST: "localhost", PORT: "5432" };
+    const secrets = { PASSWORD: "hunter2" };
+    const result = interpolateSecrets(env, secrets);
+    assert.deepStrictEqual(result, { HOST: "localhost", PORT: "5432" });
+  });
+
+  it("replaces {KEY} with the corresponding secret value", () => {
+    const env = { DATABASE_URL: "postgresql://fuselocal:***@fuse--db:5432/fuse" };
+    const secrets = { POSTGRES_PASSWORD: "fuselocalpw" };
+    const result = interpolateSecrets(env, secrets);
+    assert.strictEqual(result.DATABASE_URL, "postgresql://fuselocal:***@fuse--db:5432/fuse");
+  });
+
+  it("replaces multiple {KEY} patterns in a single value", () => {
+    const env = { URL: "http://{USER}:***@{HOST}:{PORT}/path" };
+    const secrets = { USER: "admin", PASSWORD: "secret", HOST: "db.example.com", PORT: "5432" };
+    const result = interpolateSecrets(env, secrets);
+    assert.strictEqual(result.URL, "http://admin:***@db.example.com:5432/path");
+  });
+
+  it("leaves {KEY} placeholders intact when the secret is not resolved", () => {
+    const env = { URL: "postgresql://user:***@host/db" };
+    const secrets = {};
+    const result = interpolateSecrets(env, secrets);
+    assert.strictEqual(result.URL, "postgresql://user:***@host/db");
+  });
+
+  it("does not confuse overlapping key names", () => {
+    const env = { CONN: "{PASS} and {PASSPHRASE}" };
+    const secrets = { PASS: "p1", PASSPHRASE: "p2" };
+    const result = interpolateSecrets(env, secrets);
+    assert.strictEqual(result.CONN, "p1 and p2");
+  });
+
+  it("handles empty env and empty secrets", () => {
+    assert.deepStrictEqual(interpolateSecrets({}, {}), {});
+    assert.deepStrictEqual(interpolateSecrets({ A: "plain" }, {}), { A: "plain" });
+    assert.deepStrictEqual(interpolateSecrets({}, { X: "y" }), {});
   });
 });
 

@@ -1006,8 +1006,9 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   res.end();
 }
 
-// ── Server ──
+// ── HTTP Server ──
 
+/** TCP server for REST API and proxy endpoints (port 80 on host). */
 const httpServer = http.createServer(handleRequest);
 
 
@@ -1015,6 +1016,7 @@ httpServer.listen(MCP_PORT, "0.0.0.0", () => {
   log("INFO", `[mcp] TCP server listening on :${MCP_PORT}`);
 });
 
+/** Unix domain socket server for local-only IPC (used by MCP shim). */
 const unixServer = http.createServer(handleRequest);
 try {
   fs.unlinkSync(SOCKET_PATH);

@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { resolveSecrets } from "./services";
+import { resolveSecrets, interpolateSecrets } from "./services";
 import type { Service } from "./types";
 import { CONTAINER_LABEL, NETWORK_NAME } from "./config";
 
@@ -273,7 +273,9 @@ export function runContainer(
   };
 
   const resolvedSecrets = resolveSecrets(service);
-  const allEnv: Record<string, string> = { ...containerEnv, ...resolvedSecrets };
+  // Interpolate vault secrets into env var values (replaces {KEY} patterns)
+  const interpolated = interpolateSecrets(containerEnv, resolvedSecrets);
+  const allEnv: Record<string, string> = { ...interpolated, ...resolvedSecrets };
   allEnv.IS_CONTAINER = "true";
   const env = Object.entries(allEnv)
     .map(([k, v]) => `-e ${k}=${v}`)

@@ -8,7 +8,7 @@ import {
   buildDiscoveryEnv,
 } from "./podman";
 import { CONTAINER_LABEL, NETWORK_NAME, sidecarContainerName } from "./config";
-import { fetchSecrets } from "./services";
+import { fetchSecrets, interpolateSecrets } from "./services";
 
 /** Execute a shell command with inherited stdio.  Local copy used for sidecar-specific ops. */
 export function sh(cmd: string): Buffer {
@@ -72,8 +72,11 @@ export function ensureSidecar(
     console.log(`[sidecar] ${name}: resolved ${Object.keys(vaultEnv).length} secrets from vault`);
   }
 
-  // Merge: vault secrets override static env (so inline placeholders are replaced)
-  const mergedEnv = { ...staticEnv, ...vaultEnv };
+  // Interpolate vault secrets into static env values (replaces {KEY} patterns)
+  const interpolated = interpolateSecrets(staticEnv, vaultEnv);
+
+  // Merge: vault secrets override interpolated env (so direct vault values win)
+  const mergedEnv = { ...interpolated, ...vaultEnv };
   const env = Object.entries(mergedEnv)
     .map(([k, v]) => `-e ${k}=${v}`)
     .join(" ");

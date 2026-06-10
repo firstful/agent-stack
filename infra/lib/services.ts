@@ -214,6 +214,34 @@ export function resolveSecrets(service: Service): Record<string, string> {
   return fetchSecrets(service.name, service.secrets);
 }
 
+/**
+ * Interpolate vault secret values into env var values.
+ * Replaces `{KEY}` patterns with the corresponding resolved secret value.
+ * Referenced keys that aren't in resolvedSecrets are left as-is (with a warning).
+ * Non-matching text is preserved unchanged.
+ *
+ * @example
+ *   env: { "DATABASE_URL": "postgresql://user:{PASSWORD}@host/db" }
+ *   resolvedSecrets: { "PASSWORD": "hunter2" }
+ *   Result: { "DATABASE_URL": "postgresql://user:hunter2@host/db" }
+ */
+export function interpolateSecrets(
+  env: Record<string, string>,
+  resolvedSecrets: Record<string, string>
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    result[key] = value.replace(/\{(\w+)\}/g, (match, refKey) => {
+      if (resolvedSecrets[refKey] !== undefined) {
+        return resolvedSecrets[refKey];
+      }
+      console.warn(`[secrets] env var "${key}" references secret "${refKey}" but it was not resolved — leaving placeholder`);
+      return match;
+    });
+  }
+  return result;
+}
+
 // ── Hashing ──
 
 /**

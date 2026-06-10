@@ -73,9 +73,16 @@ export function writeRuntimeState(services: Service[]): void {
       const slotB = slotContainerName(s.name, "b");
       const saRunning = containerRunning(slotA);
       const sbRunning = containerRunning(slotB);
+      // Detect an old-style (pre-slot-migration) container: neither slot a
+      // nor slot b exists, but an unqualified container with the service name
+      // is still running.  This transitional state is cleared once both slots
+      // are established.
       const hasOld = !saRunning && !sbRunning && containerRunning(s.name);
 
       let activeSlot = readSlot(s.name);
+      // Slot marker fallback: if the marker says "a" but slot A is dead and
+      // slot B is running, correct to B (and vice versa).  This handles
+      // crash-recovery scenarios where the marker file is stale.
       if (activeSlot === "a" && !saRunning && sbRunning) activeSlot = "b";
       if (activeSlot === "b" && !sbRunning && saRunning) activeSlot = "a";
 

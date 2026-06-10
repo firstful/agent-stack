@@ -1,6 +1,14 @@
-// Declarative route registry — single source of truth for REST API routes.
-// Both the HTTP dispatcher (controller.ts) and the OpenAPI generator
-// consume this table.  Run directly via tsx — no compile step needed.
+/**
+ * routes.ts — Declarative REST API route registry for agent-stack.
+ *
+ * This module is the single source of truth for all REST API routes.
+ * Both the HTTP dispatcher (controller.ts) and the OpenAPI generator
+ * consume this table.  Adding a new endpoint requires only a new entry
+ * in the routes array and a handler function registered in controller.ts.
+ *
+ * Routes are compiled to RegExp at import time for fast dispatch.
+ * Run directly via tsx — no compile step needed.
+ */
 
 export interface OpenApiParam {
   name: string;
