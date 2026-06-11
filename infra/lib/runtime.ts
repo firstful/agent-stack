@@ -71,6 +71,25 @@ export function writeRuntimeState(services: Service[]): void {
     if (isContainer) {
       const slotA = slotContainerName(s.name, "a");
       const slotB = slotContainerName(s.name, "b");
+
+      // Recreate strategy: no slot containers — report a flat container state
+      if (s.strategy === "recreate") {
+        const cRunning = containerRunning(s.name);
+        const actualPort = getContainerPort(s.name) || s.container?.host_port || s.container?.port;
+        state[s.name] = {
+          ...base,
+          container: s.container || null,
+          service: null,
+          expose: s.expose || null,
+          rateLimit: s.rateLimit || null,
+          hostnames: s.expose?.enabled ? s.expose.hostnames : undefined,
+          running: cRunning,
+          port: actualPort,
+          exposed: s.expose?.enabled ? s.expose.hostname : false,
+        };
+        continue;
+      }
+
       const saRunning = containerRunning(slotA);
       const sbRunning = containerRunning(slotB);
       // Detect an old-style (pre-slot-migration) container: neither slot a

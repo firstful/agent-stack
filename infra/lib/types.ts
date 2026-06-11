@@ -71,6 +71,9 @@ export interface RateLimitConfig {
   blockDurationMs?: number;
 }
 
+/** Deploy strategy — how the controller handles container updates on content change. */
+export type DeployStrategy = "blue-green" | "recreate";
+
 /** Container image build configuration. */
 export interface BuildConfig {
   network?: string;
@@ -94,6 +97,8 @@ export interface Service {
   privileged?: boolean;
   /** Per-IP rate limiting, enforced by the slot-proxy. */
   rateLimit?: RateLimitConfig;
+  /** Deploy strategy (default: "blue-green"). Set "recreate" to skip slot swap. */
+  strategy?: DeployStrategy;
   /** Logo configuration — file from repo or absolute URL. */
   logo?: LogoConfig;
   // Internal fields (set by services.ts loader)

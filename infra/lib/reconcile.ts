@@ -163,7 +163,8 @@ function stopAndRemove(containerName: string): void {
 
 /**
  * Ensure a single service's container is running, building and blue-green
- * swapping if the source hash has changed.
+ * swapping if the source hash has changed.  When the service's strategy is
+ * "recreate", skips the slot swap and does a simple stop-start instead.
  */
 export function ensureContainer(
   service: Service,
@@ -256,6 +257,60 @@ export function ensureContainer(
   }
 
   if (!imageExists(name)) return;
+
+  // ── Recreate strategy (no blue-green slot swap) ────────────
+  if (service.strategy === "recreate") {
+    // Content changed — stop the old container and start fresh
+    if (built && containerExists(name)) {
+      console.log(`[recreate] ${name}: stopping and recreating`);
+      stopAndRemove(name);
+      const port = service.container!.host_port ?? allocateFreshPort(service, allServices, "a");
+      service.container!.host_port = port;
+      runContainer(service, allServices, { hostPort: port });
+      if (contentHash) fs.writeFileSync(marker, contentHash);
+      return;
+    }
+
+    // First deploy — no container exists yet
+    if (!containerExists(name)) {
+      console.log(`[deploy] ${name} — first deploy (recreate strategy)`);
+
+      // Clean up any orphaned slot containers from a previous blue-green config
+      const slotA = slotContainerName(name, "a");
+      const slotB = slotContainerName(name, "b");
+      if (containerExists(slotA)) stopAndRemove(slotA);
+      if (containerExists(slotB)) stopAndRemove(slotB);
+
+      const port = allocateFreshPort(service, allServices, "a");
+      service.container!.host_port = port;
+      runContainer(service, allServices, { hostPort: port });
+      if (!contentHash) contentHash = repoContentHashForPath(service.repo!);
+      fs.writeFileSync(marker, contentHash);
+      return;
+    }
+
+    // Ensure running — restart if stopped
+    if (!containerRunning(name)) {
+      console.log(`[start] ${name}`);
+      try {
+        sh(`podman start ${name}`);
+      } catch {
+        console.error(`[start] ${name} failed, recreating`);
+        stopAndRemove(name);
+        const port = service.container!.host_port ?? allocateFreshPort(service, allServices, "a");
+        service.container!.host_port = port;
+        try {
+          runContainer(service, allServices, {
+            hostPort: port,
+          });
+        } catch (e: any) {
+          console.error(`[recreate] ${name} failed: ${e.message}`);
+        }
+      }
+    }
+    // Also update content hash marker on built+recreate (handled above)
+    return;
+  }
 
   // ── Detect existing containers ────────────────────────────
   const slotA = slotContainerName(name, "a");

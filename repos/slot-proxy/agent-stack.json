@@ -1,6 +1,7 @@
 {
   "name": "slot-proxy",
   "version": 2,
+  "strategy": "recreate",
   "container": {
     "port": 80,
     "auto_port": true,
@@ -13,7 +14,7 @@
       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production",
       "AUDIT_ENABLED": "true",
       "COUCHDB_PASSWORD": "IFCSp+...OBYF",
-      "COUCHDB_HOST": "obsidian-livesync--b"
+      "COUCHDB_HOST": "obsidian-livesync"
     }
   },
   "expose": {
