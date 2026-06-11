@@ -17,11 +17,14 @@ import path from "path";
 import { containerRunning, getContainerPort } from "./podman";
 import { isRunning as isSystemdRunning } from "./systemd";
 import type { Service } from "./types";
+import { getStrategyType } from "./types";
 import {
   RUNTIME_DIR,
   slotContainerName,
   slotMarker,
   sidecarContainerName,
+  queueMarker,
+  canaryMarker,
 } from "./config";
 
 // ── Slot Resolution ──
@@ -40,6 +43,27 @@ function readSlot(name: string): string {
     return fs.readFileSync(slotMarker(name), "utf-8").trim();
   } catch {
     return "a";
+  }
+}
+
+/** Read the queue counter for a service (0 if no queue file or queue disabled). */
+function readQueueCount(name: string): number {
+  try {
+    return parseInt(fs.readFileSync(queueMarker(name), "utf-8").trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Read the canary state from the marker file, or null if not active. */
+function readCanaryState(name: string): { slot: string; startTime: number; weight?: number } | null {
+  try {
+    const raw = fs.readFileSync(canaryMarker(name), "utf-8");
+    const state = JSON.parse(raw);
+    if (!state.slot) return null;
+    return { slot: state.slot, startTime: state.startTime, weight: state.weight };
+  } catch {
+    return null;
   }
 }
 
@@ -66,14 +90,14 @@ export function writeRuntimeState(services: Service[]): void {
   const state: Record<string, any> = {};
   for (const s of services) {
     const isContainer = !!s.container;
-    const base = { file: s._file, hash: s._hash, name: s.name, repo: s.repo || null, logo: s.logo || null };
+    const base = { file: s._file, hash: s._hash, name: s.name, repo: s.repo || null, logo: s.logo || null, queue: readQueueCount(s.name) };
 
     if (isContainer) {
       const slotA = slotContainerName(s.name, "a");
       const slotB = slotContainerName(s.name, "b");
 
       // Recreate strategy: no slot containers — report a flat container state
-      if (s.strategy === "recreate") {
+      if (getStrategyType(s.strategy) === "recreate") {
         const cRunning = containerRunning(s.name);
         const actualPort = getContainerPort(s.name) || s.container?.host_port || s.container?.port;
         state[s.name] = {
@@ -134,6 +158,7 @@ export function writeRuntimeState(services: Service[]): void {
         port: slots[activeSlot]?.port || s.container?.host_port || s.container?.port,
         exposed: s.expose?.enabled ? s.expose.hostname : false,
         running: saRunning || sbRunning || hasOld,
+        canary: readCanaryState(s.name) || undefined,
       };
     } else {
       state[s.name] = {

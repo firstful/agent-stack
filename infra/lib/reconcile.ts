@@ -15,6 +15,7 @@ import {
 import { ensureSidecars, removeSidecars } from "./sidecar";
 import { ensureServiceClone, repoContentHashForPath } from "./services";
 import type { Service } from "./types";
+import { getStrategyType, isQueueEnabled, getCanaryConfig } from "./types";
 import {
   AUTO_PORT_START,
   AUTO_PORT_END,
@@ -25,6 +26,9 @@ import {
   oppositeSlot,
   HEALTH_CHECK_TIMEOUT,
   REPOS_DIR,
+  queueMarker,
+  canaryMarker,
+  RUNTIME_DIR,
 } from "./config";
 
 // ── State ──
@@ -135,6 +139,76 @@ function isSkipBuild(repoPath: string): boolean {
   }
 }
 
+// ── Build Queue Helpers ──
+
+/** Read the number of pending builds in the queue for a service. */
+function readQueueCount(name: string): number {
+  try {
+    return parseInt(fs.readFileSync(queueMarker(name), "utf-8").trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Write the pending build count to the queue file.  Removes the file when count reaches zero. */
+function writeQueueCount(name: string, count: number): void {
+  if (count <= 0) {
+    try { fs.unlinkSync(queueMarker(name)); } catch { /* ok */ }
+  } else {
+    fs.writeFileSync(queueMarker(name), String(count));
+  }
+}
+
+// ── Canary Helpers ──
+
+const CANARY_PROXY_METRICS_PATH = path.join(RUNTIME_DIR, "canary-metrics.json");
+
+interface CanaryState {
+  startTime: number;
+  slot: string;
+  weight: number;
+  errors: number;
+  lastCheckMs: number;
+}
+
+function readCanaryState(name: string): CanaryState | null {
+  try {
+    const raw = fs.readFileSync(canaryMarker(name), "utf-8");
+    const state = JSON.parse(raw);
+    // Backward compat: older markers may lack weight
+    if (state.weight === undefined) state.weight = 0.1;
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function writeCanaryState(name: string, state: CanaryState): void {
+  fs.writeFileSync(canaryMarker(name), JSON.stringify(state));
+}
+
+function clearCanaryState(name: string): void {
+  try { fs.unlinkSync(canaryMarker(name)); } catch { /* ok */ }
+}
+
+/**
+ * Read the proxy's canary 5xx error count for a service.
+ * The slot-proxy writes cumulative metrics to canary-metrics.json
+ * based on actual HTTP response codes from live traffic.
+ * Returns the error count, or null if no metrics available yet.
+ */
+function readCanaryProxyErrors(name: string): number | null {
+  try {
+    const raw = fs.readFileSync(CANARY_PROXY_METRICS_PATH, "utf-8");
+    const all = JSON.parse(raw);
+    const entry = all[name];
+    if (!entry || typeof entry.errors5xx !== "number") return null;
+    return entry.errors5xx;
+  } catch {
+    return null;
+  }
+}
+
 /** Read the active slot marker (default "a" if absent). */
 function readSlot(name: string): string {
   try {
@@ -184,12 +258,25 @@ export function ensureContainer(
     !fs.existsSync(commitMarker) ||
     fs.readFileSync(commitMarker, "utf-8") !== commitHash;
 
-  // ── Stage 2: Skip-build deferral ──
+  // ── Stage 2: Queue push (when queue mode enabled) ──
+  // Each new commit increments the queue counter.  The controller processes
+  // one build per reconciliation cycle, so three rapid commits build
+  // linearly instead of overlapping.  Always builds the *latest* code state.
+  if (isQueueEnabled(service.strategy) && commitChanged && service.repo) {
+    const q = readQueueCount(name);
+    writeQueueCount(name, q + 1);
+    fs.writeFileSync(commitMarker, commitHash);
+    console.log(`[queue] ${name}: build #${q + 1} queued (${q} pending)`);
+    if (q > 0) return; // already items ahead — this one is deferred
+    // q was 0 — fall through to build immediately (first in line)
+  }
+
+  // ── Stage 2b: Skip-build deferral (only when queue disabled) ──
   // When the commit message contains [stack skip-build] the agent is
   // making multiple commits and doesn't want each one to trigger a
   // rebuild.  We update the commit marker so the next commit (without
   // the flag) detects the change and evaluates properly.
-  if (commitChanged && service.repo && isSkipBuild(service.repo)) {
+  if (!isQueueEnabled(service.strategy) && commitChanged && service.repo && isSkipBuild(service.repo)) {
     console.log(
       `[skip-build] ${name}: commit flagged with [stack skip-build], deferring rebuild`
     );
@@ -197,15 +284,26 @@ export function ensureContainer(
     return;
   }
 
-  // ── Stage 3: Content eval (only when commit changed) ──
+  // ── Stage 3: Content eval ──
   // Compute the .stackignore-filtered content hash and compare against
   // the last *built* hash.  If only ignored files changed (README, docs,
   // config metadata) the content hash won't differ and no rebuild occurs.
+  //
+  // When queue mode is active, the queue counter drives the build trigger
+  // instead of the content change delta.
   let contentHash: string | null = null;
   let contentChanged = false;
   let needsBuild = !imageExists(name);
 
-  if (commitChanged) {
+  if (isQueueEnabled(service.strategy)) {
+    // Queue mode: build if there are pending items in the queue
+    const q = readQueueCount(name);
+    if (q > 0) {
+      needsBuild = true;
+      if (service.repo) contentHash = repoContentHashForPath(service.repo);
+      console.log(`[queue] ${name}: processing build #${q}`);
+    }
+  } else if (commitChanged) {
     contentHash = repoContentHashForPath(service.repo!);
     contentChanged =
       !fs.existsSync(marker) ||
@@ -238,6 +336,14 @@ export function ensureContainer(
         delete buildBackoffs[name];
         clearBuildError(name);
         built = true;
+        // Decrement the queue counter on successful build
+        if (isQueueEnabled(service.strategy)) {
+          const q = readQueueCount(name);
+          if (q > 0) {
+            writeQueueCount(name, q - 1);
+            console.log(`[queue] ${name}: build succeeded, ${q - 1} remaining`);
+          }
+        }
       } catch (e: any) {
         const failures = (backoff?.failures || 0) + 1;
         const wait = 5 * Math.pow(2, failures - 1);
@@ -259,7 +365,7 @@ export function ensureContainer(
   if (!imageExists(name)) return;
 
   // ── Recreate strategy (no blue-green slot swap) ────────────
-  if (service.strategy === "recreate") {
+  if (getStrategyType(service.strategy) === "recreate") {
     // Content changed — stop the old container and start fresh
     if (built && containerExists(name)) {
       console.log(`[recreate] ${name}: stopping and recreating`);
@@ -357,27 +463,98 @@ export function ensureContainer(
 
     const healthCheckPath = service.container?.healthCheck?.path;
     if (waitForHealthy(idleName, idlePort, HEALTH_CHECK_TIMEOUT, healthCheckPath)) {
-      console.log(
-        `[swap] ${name}: slot ${idleSlot} healthy, swapping (${activeSlot} → ${idleSlot})`
-      );
-
-      // Update service port to point at the new active slot
-      service.container!.host_port = idlePort;
-      writeSlot(name, idleSlot);
-      fs.writeFileSync(marker, contentHash!);
-
-      // Remove old active container
-      if (hasOldContainer) {
-        stopAndRemove(name);
+      const canary = getCanaryConfig(service.strategy);
+      if (canary) {
+        const weight = canary.weight ?? 0.1;
+        const canaryState: CanaryState = {
+          startTime: Date.now(),
+          slot: idleSlot,
+          weight,
+          errors: 0,
+          lastCheckMs: Date.now(),
+        };
+        writeCanaryState(name, canaryState);
+        console.log(
+          `[canary] ${name}: slot ${idleSlot} healthy, routing ${(weight * 100).toFixed(0)}% traffic via proxy, observing for ${canary.observationPeriodMs}ms`
+        );
       } else {
-        stopAndRemove(slotContainerName(name, activeSlot));
+        // Normal (non-canary) swap — promote immediately
+        console.log(
+          `[swap] ${name}: slot ${idleSlot} healthy, swapping (${activeSlot} → ${idleSlot})`
+        );
+        service.container!.host_port = idlePort;
+        writeSlot(name, idleSlot);
+        fs.writeFileSync(marker, contentHash!);
+        if (hasOldContainer) {
+          stopAndRemove(name);
+        } else {
+          stopAndRemove(slotContainerName(name, activeSlot));
+        }
       }
     } else {
       console.error(
         `[swap] ${name}: slot ${idleSlot} failed health check, rolling back`
       );
       stopAndRemove(idleName);
-      // Reset port allocation so next tick reattempts
+    }
+    return;
+  }
+
+  // ── Canary check (promote or roll back an observed slot) ──
+  const canaryState = readCanaryState(name);
+  if (canaryState) {
+    const canary = getCanaryConfig(service.strategy);
+    if (!canary) {
+      console.log(`[canary] ${name}: canary config removed, cleaning up`);
+      clearCanaryState(name);
+      stopAndRemove(slotContainerName(name, canaryState.slot));
+      return;
+    }
+    const cSlot = canaryState.slot;
+    const cName = slotContainerName(name, cSlot);
+
+    if (!containerRunning(cName)) {
+      console.error(`[canary] ${name}: slot ${cSlot} died during observation, rolling back`);
+      clearCanaryState(name);
+      stopAndRemove(cName);
+      return;
+    }
+
+    // Read proxy 5xx error count from live traffic
+    const proxyErrors = readCanaryProxyErrors(name);
+    if (proxyErrors !== null) {
+      canaryState.errors = proxyErrors;
+    }
+    canaryState.lastCheckMs = Date.now();
+
+    if (canary.maxErrorCount !== undefined && canaryState.errors > canary.maxErrorCount) {
+      console.error(
+        `[canary] ${name}: slot ${cSlot} exceeded error threshold (${canaryState.errors}/${canary.maxErrorCount}), rolling back`
+      );
+      clearCanaryState(name);
+      stopAndRemove(cName);
+      return;
+    }
+
+    const elapsed = Date.now() - canaryState.startTime;
+    if (elapsed >= canary.observationPeriodMs) {
+      const actualPort = getContainerPort(cName) || service.container?.host_port || 0;
+      console.log(
+        `[canary] ${name}: slot ${cSlot} passed (${elapsed}ms, ${canaryState.errors} 5xx errors via proxy), promoting on port ${actualPort}`
+      );
+      if (actualPort) service.container!.host_port = actualPort;
+      writeSlot(name, cSlot);
+      if (service.repo) {
+        const ch = repoContentHashForPath(service.repo);
+        fs.writeFileSync(marker, ch);
+      }
+      stopAndRemove(slotContainerName(name, oppositeSlot(cSlot)));
+      clearCanaryState(name);
+    } else {
+      writeCanaryState(name, canaryState);
+      console.log(
+        `[canary] ${name}: slot ${cSlot} observing (${Math.round(elapsed / 1000)}s/${canary.observationPeriodMs / 1000}s, ${canaryState.errors} errors)`
+      );
     }
     return;
   }
@@ -439,6 +616,10 @@ export function removeContainer(name: string, sidecarNames?: string[]): void {
   if (fs.existsSync(cm)) fs.unlinkSync(cm);
   const sm = slotMarker(name);
   if (fs.existsSync(sm)) fs.unlinkSync(sm);
+  const qm = queueMarker(name);
+  if (fs.existsSync(qm)) fs.unlinkSync(qm);
+  const canaryFile = canaryMarker(name);
+  if (fs.existsSync(canaryFile)) fs.unlinkSync(canaryFile);
   delete buildBackoffs[name];
   delete buildErrors[name];
 }

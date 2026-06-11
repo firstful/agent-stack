@@ -55,19 +55,60 @@ function loadState() {
   }
 }
 
-loadState();
+// ── Canary Metrics ──────────────────────────────────────────
+
+const CANARY_METRICS_FILE = "/runtime/canary-metrics.json";
+let canaryMetrics = {};
+
+function initCanaryMetricsFromState() {
+  const next = {};
+  for (const [name, svc] of Object.entries(state)) {
+    if (svc.canary && svc.canary.slot) {
+      const existing = canaryMetrics[name];
+      next[name] = {
+        slot: svc.canary.slot,
+        startTime: svc.canary.startTime || Date.now(),
+        requests: existing ? existing.requests : 0,
+        errors5xx: existing ? existing.errors5xx : 0,
+        lastActivity: existing ? existing.lastActivity : Date.now(),
+      };
+    }
+  }
+  canaryMetrics = next;
+}
+
+function persistCanaryMetrics() {
+  const data = JSON.stringify(canaryMetrics, null, 2);
+  try {
+    fs.writeFileSync(CANARY_METRICS_FILE, data);
+  } catch {
+    // best effort — proxy must never block on metrics IO
+  }
+}
+
+// Reload state and re-initialize canary metrics from the updated runtime
+function loadStateAndInit() {
+  loadState();
+  initCanaryMetricsFromState();
+}
+
+// Initial load — after canaryMetrics is declared
+loadStateAndInit();
 
 try {
   fs.watch(RUNTIME_FILE, (event) => {
-    if (event === "change") loadState();
+    if (event === "change") loadStateAndInit();
   });
 } catch {
   try {
     fs.watch("/runtime", (event, filename) => {
-      if (filename === "services.json") loadState();
+      if (filename === "services.json") loadStateAndInit();
     });
   } catch {}
 }
+
+// Persist canary metrics every 5 seconds so the controller can read them
+setInterval(persistCanaryMetrics, 5000);
 
 // ── Rate Limiter ───────────────────────────────────────────
 
@@ -179,13 +220,29 @@ function resolveTarget(url, hostname) {
 
 const UPSTREAM_TIMEOUT = 30_000; // 30s timeout for upstream requests
 
-function proxyTo(url, port, host, req, res) {
+function proxyTo(url, port, host, req, res, serviceName) {
   const startTime = Date.now();
   const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
+  // ── Canary weighted routing ──
+  // If the target service has an active canary in the runtime state, randomly
+  // route a fraction (weight) of requests to the canary slot's port.
+  let backendPort = port;
+  let isCanary = false;
+  if (serviceName && state[serviceName] && state[serviceName].canary) {
+    const svc = state[serviceName];
+    const w = svc.canary.weight || 0.1;
+    const canarySlot = svc.canary.slot;
+    const canaryPort = svc.slots?.[canarySlot]?.port;
+    if (canaryPort && Math.random() < w) {
+      backendPort = canaryPort;
+      isCanary = true;
+    }
+  }
+
   const opts = {
     hostname: host,
-    port,
+    port: backendPort,
     path: url,
     method: req.method,
     headers: { ...req.headers },
@@ -197,6 +254,23 @@ function proxyTo(url, port, host, req, res) {
   const proxyReq = http.request(opts, (proxyRes) => {
     if (responded) return;
     responded = true;
+
+    // ── Track canary 5xx errors ──
+    if (isCanary && serviceName) {
+      const svcState = state[serviceName];
+      if (!canaryMetrics[serviceName]) {
+        canaryMetrics[serviceName] = {
+          slot: svcState?.canary?.slot || "?",
+          startTime: svcState?.canary?.startTime || Date.now(),
+          requests: 0,
+          errors5xx: 0,
+          lastActivity: Date.now(),
+        };
+      }
+      canaryMetrics[serviceName].requests++;
+      if (proxyRes.statusCode >= 500) canaryMetrics[serviceName].errors5xx++;
+      canaryMetrics[serviceName].lastActivity = Date.now();
+    }
 
     // Log to CouchDB (fire-and-forget)
     logToCouch({
@@ -833,7 +907,7 @@ function handleRequest(req, res) {
     if (target.path.startsWith("/obsidian-vault/_node/")) {
       target.path = target.path.replace("/obsidian-vault", "");
     }
-    proxyTo(target.path, target.port, "host.containers.internal", req, res);
+    proxyTo(target.path, target.port, "host.containers.internal", req, res, target.name);
     return;
   }
 

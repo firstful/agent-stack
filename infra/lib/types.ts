@@ -71,8 +71,88 @@ export interface RateLimitConfig {
   blockDurationMs?: number;
 }
 
+/**
+ * Canary deploy configuration.
+ *
+ * After building a new image on the idle slot, the controller adds a `canary`
+ * field to the runtime state (services.json).  The slot-proxy detects this and
+ * routes a weighted fraction of **live traffic** to the canary slot while
+ * counting HTTP 5xx responses.  If the error count stays below `maxErrorCount`
+ * for `observationPeriodMs`, the canary is promoted to active (100% traffic).
+ * If errors exceed the threshold, the canary is rolled back and removed.
+ *
+ * @example
+ * ```json
+ * "canary": {
+ *   "observationPeriodMs": 300000,
+ *   "maxErrorCount": 5,
+ *   "weight": 0.1
+ * }
+ * ```
+ */
+export interface CanaryConfig {
+  /** Observation window in milliseconds before promoting the canary (default: 300000 / 5 min). */
+  observationPeriodMs: number;
+  /** Maximum cumulative 5xx HTTP responses tolerated during the canary window. */
+  maxErrorCount?: number;
+  /**
+   * Fraction of live traffic routed to the canary slot (0.0 – 1.0).
+   * Default: 0.1 (10%).  Example: 0.25 = 25%.
+   */
+  weight?: number;
+}
+
 /** Deploy strategy — how the controller handles container updates on content change. */
 export type DeployStrategy = "blue-green" | "recreate";
+
+/**
+ * Extended strategy configuration.  When the `strategy` field on a service is
+ * a plain string (backward compatible), it behaves as before.  When it's an
+ * object, you get additional controls:
+ *
+ *   ```json
+ *   "strategy": { "type": "blue-green", "queue": true, "canary": { "observationPeriodMs": 300000, "maxErrorCount": 5, "weight": 0.1 } }
+ *   ```
+ *
+ * - `type` — the deploy strategy (default: "blue-green")
+ * - `queue` — when true, commits are queued and processed one at a time per
+ *   reconciliation cycle, so three rapid commits build linearly instead of
+ *   triggering three concurrent rebuilds.  Each entry in the queue represents
+ *   a pending rebuild of the *latest* code state; the queue simply paces builds.
+ * - `canary` — when set, the slot-proxy routes `weight` of live traffic to the
+ *   newly built slot and observes HTTP 5xx error rates before promoting.
+ */
+export interface StrategyConfig {
+  type: DeployStrategy;
+  queue?: boolean;
+  canary?: CanaryConfig;
+}
+
+/** Extract the deploy strategy type, normalising string ↔ object forms. */
+export function getStrategyType(
+  strategy?: DeployStrategy | StrategyConfig,
+): DeployStrategy {
+  if (!strategy) return "blue-green";
+  if (typeof strategy === "string") return strategy;
+  return strategy.type;
+}
+
+/** Check whether the queue feature is enabled for a given strategy. */
+export function isQueueEnabled(
+  strategy?: DeployStrategy | StrategyConfig,
+): boolean {
+  if (!strategy) return false;
+  if (typeof strategy === "string") return false;
+  return strategy.queue === true;
+}
+
+/** Extract the canary config from a strategy, or null if not configured. */
+export function getCanaryConfig(
+  strategy?: DeployStrategy | StrategyConfig,
+): CanaryConfig | null {
+  if (!strategy || typeof strategy === "string") return null;
+  return strategy.canary || null;
+}
 
 /** Container image build configuration. */
 export interface BuildConfig {
@@ -97,8 +177,11 @@ export interface Service {
   privileged?: boolean;
   /** Per-IP rate limiting, enforced by the slot-proxy. */
   rateLimit?: RateLimitConfig;
-  /** Deploy strategy (default: "blue-green"). Set "recreate" to skip slot swap. */
-  strategy?: DeployStrategy;
+  /**
+   * Deploy strategy (default: "blue-green").  Set "recreate" to skip slot swap.
+   * For advanced configuration, use an object: `{ "type": "blue-green", "queue": true }`.
+   */
+  strategy?: DeployStrategy | StrategyConfig;
   /** Logo configuration — file from repo or absolute URL. */
   logo?: LogoConfig;
   // Internal fields (set by services.ts loader)

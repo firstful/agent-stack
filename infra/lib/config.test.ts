@@ -11,6 +11,8 @@ import {
   baseServiceName,
   SLOTS,
   HEALTH_CHECK_TIMEOUT,
+  queueMarker,
+  canaryMarker,
 } from "./config";
 
 describe("slotContainerName", () => {
@@ -58,6 +60,32 @@ describe("hashMarker", () => {
 describe("slotMarker", () => {
   it("returns path with slot marker", () => {
     assert.strictEqual(slotMarker("opencode"), "/tmp/stack.opencode.slot");
+  });
+});
+
+describe("queueMarker", () => {
+  it("returns path with queue marker", () => {
+    assert.strictEqual(queueMarker("opencode"), "/tmp/stack.opencode.queue");
+  });
+
+  it("handles names with dashes", () => {
+    assert.strictEqual(
+      queueMarker("kilocode-web"),
+      "/tmp/stack.kilocode-web.queue"
+    );
+  });
+});
+
+describe("canaryMarker", () => {
+  it("returns path with canary marker", () => {
+    assert.strictEqual(canaryMarker("opencode"), "/tmp/stack.opencode.canary");
+  });
+
+  it("handles names with dashes", () => {
+    assert.strictEqual(
+      canaryMarker("kilocode-web"),
+      "/tmp/stack.kilocode-web.canary"
+    );
   });
 });
 

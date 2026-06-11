@@ -39,6 +39,16 @@ export const SYSTEMD_UNIT_PREFIX = "agent-stack-";
 // ── Slot Management ──
 
 /**
+ * Path to the queue marker file for a service.  The queue stores the
+ * number of pending builds as an integer string.  When `strategy.queue`
+ * is enabled, each commit increments the counter and the controller
+ * processes one build per reconciliation cycle.
+ */
+export function queueMarker(name: string): string {
+  return `/tmp/stack.${name}.queue`;
+}
+
+/**
  * Path to the hash marker file for a service.  The hash marker stores
  * the content hash of the last *built* image so the controller can
  * skip rebuilds when source hasn't changed.
@@ -63,6 +73,17 @@ export function commitHashMarker(name: string): string {
 export function slotMarker(name: string): string {
   return `/tmp/stack.${name}.slot`;
 }
+
+/**
+ * Path to the canary marker file.  Stores JSON with the canary start time,
+ * which slot is being observed, and the cumulative 5xx error count from the
+ * slot-proxy.  The slot-proxy writes the error metrics here; the controller
+ * reads them to decide promotion or rollback.
+ */
+export function canaryMarker(name: string): string {
+  return `/tmp/stack.${name}.canary`;
+}
+
 export const SLOTS = ["a", "b"] as const;
 export type Slot = (typeof SLOTS)[number];
 
