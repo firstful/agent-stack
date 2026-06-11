@@ -139,6 +139,28 @@ function isSkipBuild(repoPath: string): boolean {
   }
 }
 
+/**
+ * Check if the latest commit in the service's own repo contains
+ * `[stack hard-swap]` in its message.  When set, the controller
+ * promotes the newly built slot immediately, skipping the canary
+ * observation window — useful for emergency rollouts, config-only
+ * changes, or deploys already validated elsewhere.
+ *
+ * Works with both monorepo subdirectory repos and standalone repos.
+ */
+function isHardSwap(repoPath: string): boolean {
+  if (!repoPath) return false;
+  try {
+    const msg = execSync(
+      `git -C "${repoPath}" log -1 --format=%s`,
+      { encoding: "utf-8", timeout: 5000 }
+    ).toString().trim();
+    return msg.includes("[stack hard-swap]");
+  } catch {
+    return false;
+  }
+}
+
 // ── Build Queue Helpers ──
 
 /** Read the number of pending builds in the queue for a service. */
@@ -464,7 +486,8 @@ export function ensureContainer(
     const healthCheckPath = service.container?.healthCheck?.path;
     if (waitForHealthy(idleName, idlePort, HEALTH_CHECK_TIMEOUT, healthCheckPath)) {
       const canary = getCanaryConfig(service.strategy);
-      if (canary && isCanarySafe(service)) {
+      const hardSwap = canary && isHardSwap(service.repo);
+      if (canary && isCanarySafe(service) && !hardSwap) {
         const weight = canary.weight ?? 0.1;
         const canaryState: CanaryState = {
           startTime: Date.now(),
@@ -481,6 +504,11 @@ export function ensureContainer(
         if (canary && !isCanarySafe(service)) {
           console.warn(
             `[canary] ${name}: skipped — sidecar(s) not marked canarySafe, promoting immediately`
+          );
+        }
+        if (hardSwap) {
+          console.log(
+            `[canary] ${name}: skipped — commit flagged [stack hard-swap], promoting immediately`
           );
         }
         // Normal (non-canary) swap — promote immediately
