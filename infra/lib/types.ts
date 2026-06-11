@@ -9,6 +9,23 @@ export interface SidecarConfig {
   secrets?: string[];
   volumes?: string[];
   command?: string[];
+  /**
+   * When true, declares this sidecar is safe to share between the active slot
+   * and a canary slot under weighted traffic.  Canary deployments will be
+   * skipped (falling back to immediate slot swap) if any sidecar is not
+   * explicitly marked canary-safe, because the canary and active slots would
+   * share mutable state (database, cache) and a rollback would be impossible.
+   *
+   * Default: false.  Set to true only for read-replicas, cache-only Redis,
+   * search indexes, or other sidecars where concurrent access from two app
+   * versions causes no side effects.
+   *
+   * @example
+   * ```json
+   * { "name": "redis", "image": "redis:7-alpine", "canarySafe": true }
+   * ```
+   */
+  canarySafe?: boolean;
 }
 
 /** Health check probe configuration for container slot swaps. */
@@ -152,6 +169,25 @@ export function getCanaryConfig(
 ): CanaryConfig | null {
   if (!strategy || typeof strategy === "string") return null;
   return strategy.canary || null;
+}
+
+/**
+ * Check whether a service is safe for canary deployment.
+ *
+ * A service is canary-safe when either:
+ *   - It has no sidecars (no shared mutable state)
+ *   - ALL sidecars are explicitly marked `canarySafe: true`
+ *
+ * If any sidecar is not marked canary-safe (or the field is absent), the
+ * controller falls back to immediate slot promotion instead of running
+ * a weighted canary, because both active and canary slots would share
+ * that sidecar and a rollback would be impossible if the canary mutates it.
+ */
+export function isCanarySafe(service: Service): boolean {
+  if (!service.container?.sidecars || service.container.sidecars.length === 0) {
+    return true;
+  }
+  return service.container.sidecars.every((sc) => sc.canarySafe === true);
 }
 
 /** Container image build configuration. */

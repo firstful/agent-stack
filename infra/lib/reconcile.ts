@@ -15,7 +15,7 @@ import {
 import { ensureSidecars, removeSidecars } from "./sidecar";
 import { ensureServiceClone, repoContentHashForPath } from "./services";
 import type { Service } from "./types";
-import { getStrategyType, isQueueEnabled, getCanaryConfig } from "./types";
+import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe } from "./types";
 import {
   AUTO_PORT_START,
   AUTO_PORT_END,
@@ -464,7 +464,7 @@ export function ensureContainer(
     const healthCheckPath = service.container?.healthCheck?.path;
     if (waitForHealthy(idleName, idlePort, HEALTH_CHECK_TIMEOUT, healthCheckPath)) {
       const canary = getCanaryConfig(service.strategy);
-      if (canary) {
+      if (canary && isCanarySafe(service)) {
         const weight = canary.weight ?? 0.1;
         const canaryState: CanaryState = {
           startTime: Date.now(),
@@ -478,6 +478,11 @@ export function ensureContainer(
           `[canary] ${name}: slot ${idleSlot} healthy, routing ${(weight * 100).toFixed(0)}% traffic via proxy, observing for ${canary.observationPeriodMs}ms`
         );
       } else {
+        if (canary && !isCanarySafe(service)) {
+          console.warn(
+            `[canary] ${name}: skipped — sidecar(s) not marked canarySafe, promoting immediately`
+          );
+        }
         // Normal (non-canary) swap — promote immediately
         console.log(
           `[swap] ${name}: slot ${idleSlot} healthy, swapping (${activeSlot} → ${idleSlot})`
