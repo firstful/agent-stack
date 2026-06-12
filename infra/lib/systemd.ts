@@ -8,7 +8,13 @@ const SUDO_PASSWORD = fs.readFileSync(SUDO_PASSWORD_FILE, "utf-8").trim() + "\n"
 
 // ── Helpers ──
 
-/** Execute a shell command, returning stdout as a string. */
+/**
+ * Execute a shell command, capturing stdout as a string.
+ * Used internally for systemctl queries (is-active, cat, list-units)
+ * where only the textual output matters, not the exit code.
+ * Unlike execSync with inherit stdio, this captures the output
+ * so callers can parse it.
+ */
 function sh(cmd: string): string {
   return execSync(cmd, { stdio: "pipe" }).toString();
 }

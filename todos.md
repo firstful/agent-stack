@@ -20,7 +20,7 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 - [ ] Add tests in `repos/engramic/test/`
 - [ ] `npm install` in engramic, run typecheck + tests
 
-### Infra Refinement (from doc-refinement report)
+### Infra Refinement (1/2 complete)
 - [x] JSDoc and section comments added to 12 infra files
 - [ ] Split `infra/controller.ts` (931 lines) — extract MCP tools into `lib/mcp-tools.ts` and handler registrations into `lib/handlers.ts`
 

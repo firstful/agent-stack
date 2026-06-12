@@ -124,6 +124,10 @@ process.on("unhandledRejection", (err) => {
   process.exit(1);
 });
 
+/** Re-entrancy guard: prevents overlapping reconcile() calls when Git
+ * watchers and heartbeat timer fire simultaneously.  The guard is set
+ * at the start of reconcile() and cleared in the finally block so
+ * errors don't deadlock the loop. */
 let reconciling = false;
 
 // ── Message bridge ──

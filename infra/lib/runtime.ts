@@ -46,7 +46,14 @@ function readSlot(name: string): string {
   }
 }
 
-/** Read the queue counter for a service (0 if no queue file or queue disabled). */
+/**
+ * Read the queue counter for a service.
+ * Queued builds increment a marker file; the controller processes
+ * one build per reconciliation cycle.  Returns 0 if no queue file
+ * exists or queue mode is disabled.
+ * @param name - Service name
+ * @returns Number of pending builds (0 if queue disabled or file missing)
+ */
 function readQueueCount(name: string): number {
   try {
     return parseInt(fs.readFileSync(queueMarker(name), "utf-8").trim(), 10) || 0;
@@ -55,7 +62,14 @@ function readQueueCount(name: string): number {
   }
 }
 
-/** Read the canary state from the marker file, or null if not active. */
+/**
+ * Read the canary deployment state from the marker file.
+ * The slot-proxy writes weighted-traffic metrics here; the controller
+ * reads them to decide promotion or rollback of a canary slot.
+ * Returns null when no canary is active (no marker file).
+ * @param name - Service name
+ * @returns Canary state object (slot, startTime, weight) or null
+ */
 function readCanaryState(name: string): { slot: string; startTime: number; weight?: number } | null {
   try {
     const raw = fs.readFileSync(canaryMarker(name), "utf-8");

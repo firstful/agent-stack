@@ -1,3 +1,5 @@
+// ── Imports ──
+
 import { execSync } from "child_process";
 import type { Service, SidecarConfig } from "./types";
 import {
@@ -10,7 +12,13 @@ import {
 import { CONTAINER_LABEL, NETWORK_NAME, sidecarContainerName } from "./config";
 import { fetchSecrets, interpolateSecrets, discoverRequiredSecrets } from "./services";
 
-/** Execute a shell command with inherited stdio.  Local copy used for sidecar-specific ops. */
+/**
+ * Execute a shell command with inherited stdio.
+ * Local copy of podman.ts's `sh` for sidecar-specific operations
+ * (pull, start, run, stop, rm).  This avoids a cross-module dependency
+ * on podman.ts for these basic operations while keeping the interface
+ * consistent.
+ */
 export function sh(cmd: string): Buffer {
   return execSync(cmd, { stdio: "inherit" }) as unknown as Buffer;
 }
