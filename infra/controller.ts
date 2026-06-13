@@ -260,18 +260,58 @@ function getServiceStatus(name: string): any {
   return runtime[name] || null;
 }
 
-/** Find the filesystem path to a service's config file (repo or desired). */
+/** Find the filesystem path to a service's config file (repo or desired).
+ *  With multi-file support, the service name may differ from the directory
+ *  name (e.g. "fuse-worker" lives in repos/fuse/agent-stack.worker.json),
+ *  so we scan agent-stack*.json files when the simple path fails. */
 function serviceFilePath(name: string): string | null {
-  const repoPath = path.join(REPOS_DIR, name, "agent-stack.json");
-  if (fs.existsSync(repoPath)) return repoPath;
+  // Check desired/ first (systemd services)
   const desiredPath = path.join(DESIRED_DIR, `${name}.json`);
   if (fs.existsSync(desiredPath)) return desiredPath;
+
+  // Fast path: check repos/<name>/ for an agent-stack*.json defining this service
+  const nameDir = path.join(REPOS_DIR, name);
+  if (fs.existsSync(nameDir)) {
+    try {
+      const files = fs.readdirSync(nameDir)
+        .filter(f => f.startsWith("agent-stack") && f.endsWith(".json"));
+      for (const f of files) {
+        try {
+          const raw = fs.readFileSync(path.join(nameDir, f), "utf-8");
+          if (JSON.parse(raw).name === name) return path.join(nameDir, f);
+        } catch { /* parse error, skip */ }
+      }
+    } catch { /* unreadable dir, skip */ }
+  }
+
+  // Full scan: service name might differ from directory name
+  // (e.g. "fuse-worker" defined in repos/fuse/agent-stack.worker.json)
+  try {
+    for (const entry of fs.readdirSync(REPOS_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      if (entry.name === name) continue; // already checked above
+      const repoDir = path.join(REPOS_DIR, entry.name);
+      const configFiles = fs.readdirSync(repoDir)
+        .filter(f => f.startsWith("agent-stack") && f.endsWith(".json"));
+      for (const configFile of configFiles) {
+        try {
+          const raw = fs.readFileSync(path.join(repoDir, configFile), "utf-8");
+          if (JSON.parse(raw).name === name) return path.join(repoDir, configFile);
+        } catch { /* parse error, skip */ }
+      }
+    }
+  } catch { /* REPOS_DIR unreadable */ }
+
   return null;
 }
 
 /**
  * Create a new service by writing an agent-stack.json into the repo directory.
  * Required: name, repo. Optional: port, host_port, auto_port, env, volumes, expose.
+ *
+ * The filename follows the multi-file convention:
+ *   - If name matches the directory basename → agent-stack.json (primary)
+ *   - Otherwise → agent-stack.<name>.json (secondary service)
  */
 function createService(args: any): string {
   const {
@@ -300,11 +340,18 @@ function createService(args: any): string {
   if (auto_port !== undefined) service.container.auto_port = auto_port;
   if (env) service.container.env = env;
   if (volumes) service.container.volumes = volumes;
+
+  // Determine filename by convention
+  const repoDir = path.basename(repo);
+  const filename = name === repoDir
+    ? "agent-stack.json"
+    : `agent-stack.${name}.json`;
+
   fs.writeFileSync(
-    path.join(repo, "agent-stack.json"),
+    path.join(repo, filename),
     JSON.stringify(service, null, 2)
   );
-  return `Created service ${name}`;
+  return `Created service ${name} in ${filename}`;
 }
 
 /**

@@ -195,6 +195,19 @@ export interface BuildConfig {
   network?: string;
   no_cache?: boolean;
   podman_args?: string;
+  /**
+   * Relative path to the Containerfile/Dockerfile within the service's repo.
+   * When absent, defaults to "Containerfile" (or Dockerfile, podman's default
+   * resolution).  Useful when a single repo directory defines multiple services
+   * via separate agent-stack*.json files, each building from a different
+   * Containerfile variant.
+   *
+   * @example
+   * ```json
+   * "build": { "containerfile": "Containerfile.worker" }
+   * ```
+   */
+  containerfile?: string;
 }
 
 /**

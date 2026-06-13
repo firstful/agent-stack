@@ -489,24 +489,38 @@ function scanRepoAgentConfigs(): Service[] {
   }
   for (const entry of repos) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-    const agentPath = path.join(REPOS_DIR, entry.name, "agent-stack.json");
-    if (!fs.existsSync(agentPath)) continue;
+    const repoDir = path.join(REPOS_DIR, entry.name);
+
+    // Scan all agent-stack*.json files in the repo directory.
+    // Convention:
+    //   agent-stack.json          → primary service (backwards compatible)
+    //   agent-stack.<variant>.json → additional services sharing the same repo
+    let configFiles: string[];
     try {
-      const raw = fs.readFileSync(agentPath, "utf-8");
-      const service = JSON.parse(raw) as Service;
-      if (!service.name) {
-        console.error(`[services] ${agentPath} has no "name" field — skipping`);
-        continue;
+      configFiles = fs.readdirSync(repoDir)
+        .filter(f => f.startsWith("agent-stack") && f.endsWith(".json"));
+    } catch {
+      continue;
+    }
+    if (configFiles.length === 0) continue;
+
+    for (const configFile of configFiles) {
+      const agentPath = path.join(repoDir, configFile);
+      try {
+        const raw = fs.readFileSync(agentPath, "utf-8");
+        const service = JSON.parse(raw) as Service;
+        if (!service.name) {
+          console.error(`[services] ${agentPath} has no "name" field — skipping`);
+          continue;
+        }
+        service.repo = repoDir;
+        service._file = configFile;
+        service._fromRepo = true;
+        service._hash = repoHashForPath(repoDir);
+        results.push(service);
+      } catch (e: any) {
+        console.error(`[services] failed to load ${agentPath}: ${e.message} — skipping`);
       }
-      service.repo = path.join(REPOS_DIR, entry.name);
-      service._file = `${service.name}.json`;
-      service._fromRepo = true;
-
-      service._hash = repoHashForPath(service.repo!);
-
-      results.push(service);
-    } catch (e: any) {
-      console.error(`[services] failed to load ${agentPath}: ${e.message} — skipping`);
     }
   }
   return results;
