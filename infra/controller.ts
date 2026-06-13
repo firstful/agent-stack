@@ -517,6 +517,10 @@ type RestHandler = (
   query: Record<string, string>
 ) => void;
 
+/**
+ * GET /api/status — Return controller health + all service states.
+ * Includes uptime, error lists, and runtime state snapshot.
+ */
 function handleApiStatus(
   req: IncomingMessage,
   res: ServerResponse,
@@ -553,6 +557,9 @@ function handleApiStatus(
   );
 }
 
+/**
+ * GET /api/services — List all services with basic status info.
+ */
 function handleApiServicesList(
   req: IncomingMessage,
   res: ServerResponse
@@ -561,6 +568,9 @@ function handleApiServicesList(
   res.end(JSON.stringify(listServices(), null, 2));
 }
 
+/**
+ * POST /api/services — Create a new service by writing agent-stack.json.
+ */
 function handleApiServicesCreate(
   req: IncomingMessage,
   res: ServerResponse
@@ -580,6 +590,9 @@ function handleApiServicesCreate(
   });
 }
 
+/**
+ * GET /api/services/:name — Get runtime state for a single service.
+ */
 function handleApiServiceGet(
   req: IncomingMessage,
   res: ServerResponse,
@@ -596,6 +609,9 @@ function handleApiServiceGet(
   res.end(JSON.stringify(result, null, 2));
 }
 
+/**
+ * PUT /api/services/:name — Update an existing service's agent-stack.json.
+ */
 function handleApiServiceUpdate(
   req: IncomingMessage,
   res: ServerResponse,
@@ -618,6 +634,9 @@ function handleApiServiceUpdate(
   });
 }
 
+/**
+ * DELETE /api/services/:name — Remove a service's config (GC handles cleanup).
+ */
 function handleApiServiceDelete(
   req: IncomingMessage,
   res: ServerResponse,
@@ -634,6 +653,9 @@ function handleApiServiceDelete(
   }
 }
 
+/**
+ * POST /api/services/:name/start — Start a stopped container.
+ */
 function handleApiServiceStart(
   req: IncomingMessage,
   res: ServerResponse,
@@ -649,6 +671,9 @@ function handleApiServiceStart(
   }
 }
 
+/**
+ * POST /api/services/:name/stop — Stop a running container.
+ */
 function handleApiServiceStop(
   req: IncomingMessage,
   res: ServerResponse,
@@ -664,6 +689,9 @@ function handleApiServiceStop(
   }
 }
 
+/**
+ * POST /api/services/:name/restart — Restart a container.
+ */
 function handleApiServiceRestart(
   req: IncomingMessage,
   res: ServerResponse,
@@ -679,6 +707,9 @@ function handleApiServiceRestart(
   }
 }
 
+/**
+ * POST /api/services/:name/rebuild — Force rebuild by deleting hash marker.
+ */
 function handleApiServiceRebuild(
   req: IncomingMessage,
   res: ServerResponse,
@@ -694,6 +725,9 @@ function handleApiServiceRebuild(
   }
 }
 
+/**
+ * POST /api/reconcile — Trigger an immediate reconciliation cycle.
+ */
 function handleApiReconcile(
   req: IncomingMessage,
   res: ServerResponse
@@ -703,6 +737,9 @@ function handleApiReconcile(
   res.end(JSON.stringify({ message: result }));
 }
 
+/**
+ * GET /api/logs/:name — Get container logs for a service.
+ */
 function handleApiLogsGet(
   req: IncomingMessage,
   res: ServerResponse,
@@ -721,6 +758,9 @@ function handleApiLogsGet(
   }
 }
 
+/**
+ * POST /api/logs/analytics — Aggregated logs from multiple sources.
+ */
 function handleApiLogsAnalytics(
   req: IncomingMessage,
   res: ServerResponse
@@ -740,6 +780,9 @@ function handleApiLogsAnalytics(
   });
 }
 
+/**
+ * GET /api/openapi.json — Generate and return the OpenAPI 3.0 spec live.
+ */
 function handleApiOpenApi(
   req: IncomingMessage,
   res: ServerResponse
@@ -750,6 +793,9 @@ function handleApiOpenApi(
   res.end(JSON.stringify(spec, null, 2));
 }
 
+/**
+ * GET /api/perf — Return full performance history.
+ */
 function handleApiPerf(
   req: IncomingMessage,
   res: ServerResponse
@@ -759,6 +805,9 @@ function handleApiPerf(
   res.end(JSON.stringify(history, null, 2));
 }
 
+/**
+ * POST /api/perf/collect — Trigger an immediate performance snapshot.
+ */
 function handleApiPerfCollect(
   req: IncomingMessage,
   res: ServerResponse
