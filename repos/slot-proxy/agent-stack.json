@@ -12,9 +12,7 @@
       "OTEL_EXPORTER_OTLP_ENDPOINT": "http://observability--otel-collector:4318",
       "OTEL_SERVICE_NAME": "slot-proxy",
       "OTEL_RESOURCE_ATTRIBUTES": "deployment.environment=production",
-      "AUDIT_ENABLED": "true",
-      "COUCHDB_PASSWORD": "IFCSp+...OBYF",
-      "COUCHDB_HOST": "obsidian-livesync"
+      "AUDIT_ENABLED": "true"
     }
   },
   "expose": {

@@ -1,3 +1,0 @@
-FROM docker.io/oleduc/docker-obsidian-livesync-couchdb:latest
-
-EXPOSE 5984

@@ -1,15 +1,15 @@
 [submodule "repos/groupthink"]
 	path = repos/groupthink
-	url = https://github.com/reedsutliff/agst-groupthink.git
+	url = git@github.com:reedsutliff/agst-groupthink.git
 [submodule "repos/engramic"]
 	path = repos/engramic
-	url = https://github.com/reedsutliff/agst-engramic.git
+	url = git@github.com:reedsutliff/agst-engramic.git
 [submodule "repos/marp-editor"]
 	path = repos/marp-editor
-	url = https://github.com/reedsutliff/agst-techdeck.git
+	url = git@github.com:reedsutliff/agst-techdeck.git
 [submodule "repos/fuse"]
 	path = repos/fuse
-	url = https://github.com/reedsutliff/agst-fuse.git
+	url = git@github.com:reedsutliff/agst-fuse.git
 [submodule "repos/personal-blog"]
 	path = repos/personal-blog
-	url = https://github.com/reedsutliff/personal-blog.git
+	url = git@github.com:reedsutliff/personal-blog.git

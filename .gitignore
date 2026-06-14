@@ -22,6 +22,15 @@ repos/*/build/
 repos/*/.next/
 repos/*/.cache/
 
+# Package manager cache
+.pnpm-store/
+
+# Infrastructure node_modules
+infra/node_modules/
+
+# Backups
+backups/
+
 # Environment files
 .env
 .env.local
