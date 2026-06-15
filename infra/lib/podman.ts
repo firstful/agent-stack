@@ -1,3 +1,17 @@
+/**
+ * podman.ts — Podman CLI wrappers for the agent-stack controller.
+ *
+ * Provides a pure-function abstraction over the podman command line:
+ *   - Build / inspect / tag images
+ *   - Create, run, stop, remove containers
+ *   - Manage the shared stack-net podman network
+ *   - Discover peer services via injected env vars
+ *   - Health-check containers after deployment
+ *
+ * All functions are synchronous and throw on podman failures
+ * (callers like reconcile.ts handle retry/backoff).
+ */
+
 import { execSync } from "child_process";
 import path from "path";
 import { resolveSecrets, interpolateSecrets, resolveEnvSecrets } from "./services";

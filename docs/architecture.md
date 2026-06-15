@@ -17,3 +17,13 @@ Services are defined in `repos/<name>/agent-stack.json` (container services) or 
 ## Slot Swap (Zero-Downtime Deployment)
 
 Each container service gets two slots (`--a` and `--b`). On a new build, the idle slot receives the new image, health checks pass, then traffic swaps. See [slot-swap-plan.md](../config/wiki/slot-swap-plan.md) for details.
+
+## See Also
+
+| Document | Description |
+|----------|-------------|
+| [Change Detection](change-detection.md) | How the controller detects source changes and triggers rebuilds |
+| [Service Discovery](service-discovery.md) | Environment-variable-based peer discovery on stack-net |
+| [Observability](observability.md) | Grafana, Tempo, OTEL — performance snapshots and tracing |
+| [Cloudflare Access](cloudflare-access.md) | Service tokens for programmatic access to *.ffilt.us |
+| [Infra README](../infra/README.md) | Developer guide: tests, adding modules, auto-restart behaviour |

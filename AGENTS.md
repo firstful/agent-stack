@@ -16,6 +16,7 @@ This file helps AI agents (and humans) navigate the agent-stack project efficien
 | Controller source | [infra/controller.ts](infra/controller.ts) |
 | Reconcile worker | [infra/reconcile-worker.ts](infra/reconcile-worker.ts) |
 | Library modules | [infra/lib/](infra/lib/) |
+| Infra developer guide | [infra/README.md](infra/README.md) |
 | Controller test suite | `npm test` in [infra/](infra/) |
 | Runtime state (auto-generated) | [runtime/services.json](runtime/services.json) |
 | Personal blog (standalone repo) | [/srv/personal-blog](https://github.com/reedsutliff/personal-blog) |
@@ -53,7 +54,8 @@ This file helps AI agents (and humans) navigate the agent-stack project efficien
 │   └── hermes-gateway.json→ Hermes gateway
 ├── repos/                 ← Git repos for **container-managed** services
 │   ├── <service-name>/    ← Each subdirectory has its own code
-│   │   ├── agent-stack.json  ← Service config (port, env, volumes, sidecars, expose)
+│   │   ├── agent-stack.json       ← Primary service config (port, env, volumes, sidecars, expose)
+│   │   ├── agent-stack.*.json     ← Additional services sharing the same repo (e.g. agent-stack.worker.json)
 │   │   ├── Dockerfile / Containerfile ← Container build definition
 │   │   └── ... source code ...
 │   └── names.md           ← Repo name → display name mapping
@@ -99,8 +101,17 @@ This file helps AI agents (and humans) navigate the agent-stack project efficien
 ### Change Detection & Rebuild Triggers
 - **Config hash**: MD5 of `agent-stack.json` contents. **Any edit triggers a rebuild immediately.**
 - **Repo hash**: For repos inside the monorepo, uses `git log -1 --format=%H` for the subdirectory. **Only triggers a rebuild after `git commit`.** Uncommitted changes are ignored.
+- **Skip-build**: Commit messages containing `[stack skip-build]` defer the rebuild so the agent can make multiple commits without triggering a build per commit.
+- **.stackignore**: Files matching gitignore-style patterns are excluded from the content hash, so trivial changes (docs, config metadata) don't trigger rebuilds.
 - **Fallback**: If git isn't available, uses recursive MD5 of all files in the repo directory.
 - Combined hash: `md5(configHash + repoHash)` → stored in `/tmp/stack.<name>.hash`
+
+### Deploy Strategies
+- **blue-green** (default): Two slots (`--a`, `--b`) for zero-downtime swaps. On content change, the idle slot gets the new image, health-checked, then traffic swaps.
+- **recreate**: Single container stopped and recreated. Simpler but incurs downtime during the swap. Good for non-critical or stateful services.
+- **Queue mode** (`strategy: { type: "blue-green", queue: true }`): Commits are queued and processed one per reconciliation cycle, preventing build storms from rapid commits.
+- **Canary** (`strategy: { type: "blue-green", canary: { ... } }`): After a successful build, routes a fraction of live traffic to the new slot and observes 5xx error rates before promoting. Requires all sidecars to be marked `canarySafe: true`.
+- **Hard swap** (`[stack hard-swap]` commit message): Skips the canary observation window, promoting immediately. Useful for emergency rollouts or changes already validated elsewhere.
 
 ## How to Search This Repo
 
