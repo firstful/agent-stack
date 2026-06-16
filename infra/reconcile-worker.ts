@@ -46,7 +46,16 @@ const HEARTBEAT_MS = 300_000; // 5-minute safety-net interval
 
 let branchRefWatcher: fs.StatWatcher | null = null;
 
-/** Resolve the current branch's ref file path from .git/HEAD */
+/**
+ * Resolve the current branch's ref file path from .git/HEAD.
+ * Parses the HEAD file (e.g. "ref: refs/heads/main") and returns
+ * the absolute path to the branch ref file.  Returns null if HEAD
+ * is detached or unreadable.
+ *
+ * The returned file path is used by watchCurrentBranch() to stat-poll
+ * for new commits.  When the ref file's mtime changes, a commit
+ * has landed.
+ */
 function currentBranchRef(): string | null {
   try {
     const head = fs.readFileSync(HEAD_FILE, "utf-8").trim();
@@ -147,6 +156,28 @@ function send(msg: any): void {
 
 // ── Main reconciliation loop ──
 
+/**
+ * Ensure all services match the desired state.
+ *
+ * Called on the heartbeat timer, on git push (via fs stat polling),
+ * on parent-thread request, and during the initial startup delay.
+ *
+ * The loop is guarded against re-entry by the `reconciling` flag:
+ * if a git event fires while a tick is in progress, the second
+ * call is silently dropped.  The guard is cleared in a finally
+ * block so errors never deadlock the loop.
+ *
+ * Steps (in order):
+ *   1. Advance the cycle counter (for build backoff tracking)
+ *   2. Load desired service set from repo + config files
+ *   3. Garbage-collect orphaned containers (not in desired set)
+ *   4. Garbage-collect orphaned systemd services
+ *   5. Ensure each desired service is running (container or systemd)
+ *   6. Write cloudflared tunnel config
+ *   7. Persist runtime state to services.json
+ *   8. Prune unused podman images
+ *   9. Send status_update message back to the parent thread
+ */
 function reconcile(): void {
   if (reconciling) return;
   reconciling = true;

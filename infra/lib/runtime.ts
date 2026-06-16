@@ -140,6 +140,9 @@ export function writeRuntimeState(services: Service[]): void {
       // Slot marker fallback: if the marker says "a" but slot A is dead and
       // slot B is running, correct to B (and vice versa).  This handles
       // crash-recovery scenarios where the marker file is stale.
+      // The fallback applies in both directions: "a→b" and "b→a".
+      // If both slots are running the marker is authoritative;
+      // if both are dead the service is simply down.
       if (activeSlot === "a" && !saRunning && sbRunning) activeSlot = "b";
       if (activeSlot === "b" && !sbRunning && saRunning) activeSlot = "a";
 

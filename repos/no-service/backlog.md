@@ -8,7 +8,7 @@ No-Service placeholder repo — minimal scaffold for a service that has no activ
 
 - **Completion**: 0/0 deliverables (placeholder repo, no backlog tracked)
 - **Phase/Stage**: Not deployed
-- **Last updated**: 2026-05-28
+- **Last updated**: 2026-06-15
 
 ## Deliverables
 

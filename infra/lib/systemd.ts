@@ -36,12 +36,14 @@ function sudoExec(cmd: string, stdin?: string): string {
   }).toString();
 }
 
-/** Return the full systemd unit name for a service: agent-stack-<name>.service. */
+/** Return the full systemd unit name for a service: agent-stack-<name>.service.
+ * This is the unit identifier used in all systemctl commands. */
 function unitName(name: string): string {
   return `agent-stack-${name}.service`;
 }
 
-/** Return the full filesystem path for a service's systemd unit file. */
+/** Return the full filesystem path for a service's systemd unit file
+ * at /etc/systemd/system/agent-stack-<name>.service. */
 function unitPath(name: string): string {
   return `/etc/systemd/system/${unitName(name)}`;
 }

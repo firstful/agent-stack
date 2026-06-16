@@ -8,7 +8,7 @@ Gitea self-hosted Git service. Repo directory is currently empty — not yet dep
 
 - **Completion**: 0/0 deliverables (not deployed, no backlog tracked)
 - **Phase/Stage**: Not deployed
-- **Last updated**: 2026-05-29
+- **Last updated**: 2026-06-15
 
 ## Deliverables
 

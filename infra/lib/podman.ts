@@ -142,6 +142,10 @@ export function buildImage(service: Service): void {
     ? `-f ${path.join(service.repo!, cfg.containerfile)}`
     : "";
   try {
+    // Build the container image with resource limits (4GB memory, CPU quota).
+    // Uses podman's built-in caching unless no_cache is set in config.
+    // The --label stack.commit=... tag enables traceability back to the
+    // exact git commit that produced this image.
     sh(
       `podman build ${containerfile} ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}`
     );
@@ -230,6 +234,13 @@ export function ensureNetwork(): void {
 /**
  * Build -e CONTAINERS_* environment variables for all services
  * so containers can discover each other by name.
+ *
+ * For each discovered service, injects TWO env vars:
+ *   CONTAINERS_<NAME>_HOST=<hostname>      — the host to reach the service
+ *   CONTAINERS_<NAME>_PRIMARY_PORT=<port>  — the port the service listens on
+ *
+ * Container services are reachable by their service name as DNS on stack-net.
+ * Systemd services (no container block) are reachable via host.containers.internal.
  */
 export function buildDiscoveryEnv(allServices: Service[] | undefined): string {
   if (!allServices || allServices.length === 0) return "";
@@ -281,6 +292,9 @@ export function runContainer(
     .map((v) => `-v ${v}`)
     .join(" ");
 
+  // Build PATH: expose the host's PATH at /host<path> so tools like
+  // curl and git are available inside the container even when the base
+  // image is minimal.
   const hostPath = process.env.PATH || "";
   const mappedPath = hostPath.split(":").map((p) => `/host${p}`).join(":");
   const containerDefaultPath =
