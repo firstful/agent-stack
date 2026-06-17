@@ -158,13 +158,11 @@ ${[...ingressLines, { service: "http_status:404" }]
     // (30s) between tunnel restarts.  When many services reconcile at once, only
     // the first config change triggers an immediate restart; subsequent changes
     // within the window log a deferred message instead.
-    // Note: this means a batch of N service changes only produces 1 tunnel
-    // restart at most every 30s, which is safe because the tunnel just needs
-    // the final state — intermediate states are skipped.
+    //
+    // This means a batch of N service changes only produces at most 1 tunnel
+    // restart every 30s, which is safe because the tunnel just needs the final
+    // state — intermediate states are skipped entirely.
     const now = Date.now();
-    // Threshold check: if enough time has elapsed since the last restart,
-    // apply immediately.  Otherwise defer — the next config change or the
-    // next reconcile tick's timeout expiration will trigger it.
     if (now - lastRestart > RESTART_COOLDOWN) {
       lastRestart = now;
       console.log("[cloudflared] config changed, restarting tunnel");

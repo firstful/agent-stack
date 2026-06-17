@@ -61,6 +61,7 @@ export function ensureSidecar(
   ensureImage(sidecar.image);
 
   if (containerExists(name)) {
+    // Container already exists — ensure it's running, no further action needed
     if (!containerRunning(name)) {
       console.log(`[sidecar] starting ${name}`);
       sh(`podman start ${name}`);

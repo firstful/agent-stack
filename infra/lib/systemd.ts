@@ -175,13 +175,13 @@ export function ensure(service: Service): void {
     fs.writeFileSync(tmp, content, "utf-8");
     sudoExec(`cp ${tmp} ${dst}`);
     fs.unlinkSync(tmp);
-    // Reload systemd to pick up new unit definitions
+    // Reload systemd to pick up new unit definitions (required after file write to /etc/systemd/system)
     try {
       sudoExec("systemctl daemon-reload");
     } catch {
       /* ignore — daemon-reload may fail if another reload is in progress */
     }
-    // Enable for persistence across reboots
+    // Enable for persistence across reboots (creates symlinks in /etc/systemd/system/multi-user.target.wants/)
     try {
       sudoExec(`systemctl enable ${unitName(service.name)}`);
     } catch {

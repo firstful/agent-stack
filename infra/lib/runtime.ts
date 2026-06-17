@@ -103,10 +103,14 @@ function readCanaryState(name: string): { slot: string; startTime: number; weigh
 export function writeRuntimeState(services: Service[]): void {
   const state: Record<string, any> = {};
   for (const s of services) {
+    // Determine service type: container-based (has container block) vs systemd
     const isContainer = !!s.container;
     const base = { file: s._file, hash: s._hash, name: s.name, repo: s.repo || null, logo: s.logo || null, queue: readQueueCount(s.name) };
 
     if (isContainer) {
+      // ── Container service state ──
+      // Collect slot status, sidecar state, and exposure config.
+      // For recreate-strategy services, report a flat container without slot semantics.
       const slotA = slotContainerName(s.name, "a");
       const slotB = slotContainerName(s.name, "b");
 

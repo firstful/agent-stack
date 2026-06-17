@@ -1,5 +1,7 @@
 # files
 
+## About
+
 Simple file hosting service for `file.ffilt.us`.
 
 Serves files from `/srv/files/` with proper Content-Type headers.

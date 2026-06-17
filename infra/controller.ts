@@ -1012,6 +1012,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   const logoMatch = req.url?.match(/^\/logo\/([a-z][a-z0-9_-]*)$/i);
   if (logoMatch) {
     const name = logoMatch[1];
+    // Two strategies: prefer config-defined logo in service repo, then fall back to logos/<name>.svg
     const desired = loadDesired();
     const svc = desired.find((s) => s.name === name);
     let svg: string | null = null;
@@ -1049,6 +1050,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   if (proxyMatch) {
     const serviceName = proxyMatch[1];
     const targetPath = proxyMatch[2] || "/";
+    // Resolve the target service port from runtime state (most current port including slot state)
     const runtime = getCachedRuntimeState();
     const svc = runtime[serviceName];
     if (!svc || !svc.port) {

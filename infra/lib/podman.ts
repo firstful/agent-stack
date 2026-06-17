@@ -135,6 +135,7 @@ export function buildImage(service: Service): void {
   const net = cfg.network ? `--network ${cfg.network}` : "";
   const cache = cfg.no_cache ? "--no-cache" : "";
   const extra = cfg.podman_args || "";
+  // Tag the image with the git commit hash for traceability back to source
   const commitLabel = service._commitHash
     ? `--label stack.commit=${service._commitHash}`
     : "";
@@ -142,10 +143,8 @@ export function buildImage(service: Service): void {
     ? `-f ${path.join(service.repo!, cfg.containerfile)}`
     : "";
   try {
-    // Build the container image with resource limits (4GB memory, CPU quota).
-    // Uses podman's built-in caching unless no_cache is set in config.
-    // The --label stack.commit=... tag enables traceability back to the
-    // exact git commit that produced this image.
+    // Resource limits: 4GB memory, 200ms CPU period quota (2 cores).
+    // podman's caching layer only rebuilds Dockerfile steps whose inputs changed.
     sh(
       `podman build ${containerfile} ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}`
     );
@@ -250,14 +249,18 @@ export function buildDiscoveryEnv(allServices: Service[] | undefined): string {
     let host: string | null = null;
 
     if (s.container?.port) {
+      // Container service: reachable by its own name as DNS on stack-net
       port = s.container.port;
       host = s.name;
     } else if (s.service?.port) {
+      // Systemd service: reachable via host.containers.internal gateway
       port = s.service.port;
       host = "host.containers.internal";
     }
 
     if (port && host) {
+      // Sanitise service name for env var syntax: uppercase, non-alphanum → underscore
+      // e.g. "fuse-worker" → "FUSE_WORKER"
       const key = s.name.toUpperCase().replace(/[^A-Z0-9]/g, "_");
       pairs.push(`-e CONTAINERS_${key}_HOST=${host}`);
       pairs.push(`-e CONTAINERS_${key}_PRIMARY_PORT=${port}`);
@@ -292,9 +295,8 @@ export function runContainer(
     .map((v) => `-v ${v}`)
     .join(" ");
 
-  // Build PATH: expose the host's PATH at /host<path> so tools like
-  // curl and git are available inside the container even when the base
-  // image is minimal.
+  // Map host PATH into container at /host<path> so tools like
+  // curl and git are available even from minimal base images.
   const hostPath = process.env.PATH || "";
   const mappedPath = hostPath.split(":").map((p) => `/host${p}`).join(":");
   const containerDefaultPath =
@@ -320,6 +322,9 @@ export function runContainer(
 
   ensureNetwork();
 
+  // Warn if the requested host port is already claimed by another container
+  // or by a peer service's configured host_port.  Not a hard error because
+  // podman will fail the run itself if the port is truly in use.
   try {
     const usedPorts = shCapture(`podman ps -a --format "{{.Ports}}"`)
       .split("\n")
@@ -335,14 +340,17 @@ export function runContainer(
       console.warn(`[warn] host port ${hostPort} already claimed by another container`);
     }
   } catch {
-    // can't check ports
+    // can't check ports — e.g. podman not installed yet
   }
 
   console.log(
     `[run] starting ${name} on host port ${hostPort} → container port ${port}`
   );
   try {
+    // Full command line: detached mode, stack-managed label, port mapping, network,
+    // host gateway entries, volumes, discovery env vars, vault secrets, and command.
     const cmdline = `podman run -d --label ${containerLabel()} --name ${name} -p ${hostPort}:${port} --network ${NETWORK_NAME} --add-host host.containers.internal:host-gateway --add-host runtime:host-gateway --add-host agent-stack:host-gateway ${vol} ${discovery} ${env} ${priv} ${tag} ${cmd}`;
+    // Use shWithStderr so we capture podman's stderr for error diagnosis
     const { stderr } = shWithStderr(cmdline);
     if (stderr) {
       console.error(`[run] ${name} stderr: ${stderr.slice(0, 500)}`);

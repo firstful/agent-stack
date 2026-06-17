@@ -513,9 +513,11 @@ function scanRepoAgentConfigs(): Service[] {
           console.error(`[services] ${agentPath} has no "name" field — skipping`);
           continue;
         }
+        // Set internal metadata: repo path, source tracking, and content hash
         service.repo = repoDir;
         service._file = configFile;
         service._fromRepo = true;
+        // Compute hash from the repo's git history (or filesystem fallback)
         service._hash = repoHashForPath(repoDir);
         results.push(service);
       } catch (e: any) {

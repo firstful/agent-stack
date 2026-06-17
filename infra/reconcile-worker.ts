@@ -301,7 +301,7 @@ function reconcile(): void {
       },
     });
   } finally {
-    reconciling = false;
+    reconciling = false; // always release the re-entrancy guard, even on error
   }
 }
 
