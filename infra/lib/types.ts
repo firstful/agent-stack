@@ -1,4 +1,15 @@
-// Shared types for agent-stack infrastructure.
+/**
+ * types.ts — Shared type definitions for the agent-stack infrastructure.
+ *
+ * Defines the core interfaces used across all infra modules: Service definitions,
+ * container/sidecar configurations, deploy strategies (blue-green, recreate, canary),
+ * rate-limiting, exposure (Cloudflare Tunnel), and build config.
+ *
+ * All types are consumed by the services loader (services.ts), the reconciler
+ * (reconcile.ts), and the runtime state writer (runtime.ts).  Internal fields
+ * prefixed with _ are set by the services loader and should not appear in
+ * user-written agent-stack.json files.
+ */
 
 /** Configuration for a single sidecar container attached to a service. */
 export interface SidecarConfig {
