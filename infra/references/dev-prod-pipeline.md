@@ -274,34 +274,29 @@ curl https://fuse.ffilt.us/
 
 ## Unsolved Questions
 
-### 1. Systemd services (appflowy, files)
+### 1. Systemd services (appflowy, files) — RESOLVED
 
-Services defined with `"service": { "type": "simple" }` run as systemd units on
-the host machine, not as podman containers. These services include `appflowy`
-(Docker Compose) and `files` (Node.js server).
+**Decision:** These stay on dev only. The prod machine runs only
+container-based services. No systemd units, no Docker Compose, no Node.js file
+server.
 
-**Question:** How should these run on the prod machine?
+Services defined with `"service": { "type": "simple" }` (`appflowy`, `files`)
+are excluded from the prod Terraform workspace — their templates either don't
+exist or produce `agent-stack.json` with `"expose": { "enabled": false }`.
 
-- Option A: Containerise them (add Containerfile, switch to container mode)
-- Option B: Create equivalent systemd units manually on the prod machine
-- Option C: Run them on dev only, omit from prod
+### 2. LLM endpoints and provider URLs — DEFERRED
 
-### 2. LLM endpoints and provider URLs
-
-Several services reference `host.containers.internal` for LLM inference:
+**Decision:** Ignored for now. The `host.containers.internal:8080` references
+stay as-is in both environments. On prod, those service features will simply
+not function until a production LLM endpoint is wired in.
 
 ```json
-"LLM_ENDPOINT": "http://host.containers.internal:8080/v1/chat/completions"  // groupthink
+"LLM_ENDPOINT": "http://host.containers.internal:8080/v1/chat/completions"
 ```
 
-On dev this points to the local Hermes provider. On prod, this would need to
-point to a production LLM endpoint — almost certainly a different machine or
-service.
-
-**Question:** Should these point to:
-- A production LLM server on the prod machine's network?
-- A remote API (OpenAI, Anthropic)?
-- A dedicated inference container running on the prod stack?
+When prod needs LLM access, the endpoint will be updated in the prod
+`terraform.tfvars` to point at whatever serves it (dedicated inference
+container, remote API, etc.).
 
 ### 3. Vault on the prod machine
 
