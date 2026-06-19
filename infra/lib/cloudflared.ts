@@ -88,7 +88,7 @@ export function writeCloudflaredConfig(services: Service[]): void {
   const runtime = readRuntime();
   const proxyPort = getProxyPort(runtime);
 
-  const tunnel = enabled[0].expose!.tunnel || "agent";
+  const tunnel = process.env.TUNNEL_ID || enabled[0].expose!.tunnel || "agent";
 
   // ── Two tunnel modes ──
   //
@@ -107,7 +107,8 @@ export function writeCloudflaredConfig(services: Service[]): void {
   let yaml: string;
   if (proxyPort) {
     // All services route through slot-proxy by Host header
-    const wildcard = enabled.find((s) => s.expose?.no_proxy)?.expose?.hostname || "*.ffilt.us";
+    const defaultWildcard = process.env.TUNNEL_DOMAIN || "*.ffilt.us";
+    const wildcard = enabled.find((s) => s.expose?.no_proxy)?.expose?.hostname || defaultWildcard;
     yaml = `tunnel: ${tunnel}
 ingress:
   - hostname: ${fmtHostname(wildcard)}

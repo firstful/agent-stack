@@ -122,6 +122,67 @@ function watchHead(): void {
   }
 }
 
+// ── Config drift check ──
+
+/**
+ * Check that per-service terraform tfvars files define the same variables
+ * in both environments. For each service with a terraform/ directory,
+ * compares env/dev.tfvars against env/prod.tfvars.
+ * Pushes any missing vars into the provided reconcileErrors array.
+ */
+function checkTerraformVars(
+  desired: { name: string; repo?: string }[],
+  errors: { service: string; error: string; time: string }[]
+): void {
+  const now = new Date().toISOString();
+
+  for (const service of desired) {
+    if (!service.repo) continue;
+    const tfDir = path.join(service.repo, "terraform", "env");
+    if (!fs.existsSync(tfDir)) continue;
+
+    const devVars = path.join(tfDir, "dev.tfvars");
+    const prodVars = path.join(tfDir, "prod.tfvars");
+
+    // Parse a tfvars file into a set of defined keys
+    function definedKeys(file: string): Set<string> {
+      const keys = new Set<string>();
+      try {
+        const content = fs.readFileSync(file, "utf-8");
+        for (const line of content.split("\n")) {
+          const m = line.match(/^(\w+)\s*=/);
+          if (m) keys.add(m[1]);
+        }
+      } catch {
+        // file doesn't exist yet — no keys defined
+      }
+      return keys;
+    }
+
+    const devKeys = definedKeys(devVars);
+    const prodKeys = definedKeys(prodVars);
+
+    for (const v of devKeys) {
+      if (!prodKeys.has(v)) {
+        errors.push({
+          service: `terraform/${service.name}`,
+          error: `var "${v}" defined in dev.tfvars but missing in prod.tfvars`,
+          time: now,
+        });
+      }
+    }
+    for (const v of prodKeys) {
+      if (!devKeys.has(v)) {
+        errors.push({
+          service: `terraform/${service.name}`,
+          error: `var "${v}" defined in prod.tfvars but missing in dev.tfvars`,
+          time: now,
+        });
+      }
+    }
+  }
+}
+
 // ── Fatal error handling ──
 
 process.on("uncaughtException", (err) => {
@@ -226,6 +287,9 @@ function reconcile(): void {
       error: string;
       time: string;
     }[] = [];
+    // ── Config drift check: per-service tfvars parity ──
+    checkTerraformVars(desired, reconcileErrors);
+
     // ── Step 3: Ensure each desired service is running ──
     for (const service of desired) {
       try {
