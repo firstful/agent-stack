@@ -627,6 +627,8 @@ export function ensureContainer(
   }
 }
 
+// ── Container Cleanup ──
+
 /**
  * Remove a service's containers (both slots), sidecars, and marker files.
  */

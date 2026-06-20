@@ -38,6 +38,11 @@ import path from "path";
 // On Linux, fs.watch() does NOT support recursive=true, so we watch
 // individual files: .git/HEAD (branch switch) + the current branch ref
 // (commit detection).  When HEAD changes we re-resolve and re-watch.
+//
+// We use watchFile (stat polling) instead of watch (inotify) because
+// ref files may be owned by a different user (root writing the ref,
+// controller running as reeds).  Polling interval matches the
+// heartbeat to avoid unnecessary stat calls.
 
 const REPO_DIR = "/srv/agent-stack";
 const GIT_DIR = path.join(REPO_DIR, ".git");

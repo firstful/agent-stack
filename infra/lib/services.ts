@@ -479,6 +479,16 @@ export function ensureServiceClone(service: Service): string | null {
 
 // ── Service Loading ──
 
+/**
+ * Scan all repo directories for agent-stack*.json config files.
+ * Each repo may contain one or more service definitions:
+ *   - agent-stack.json          → primary service (backwards compatible)
+ *   - agent-stack.<variant>.json → additional services sharing the same repo
+ *
+ * For each config found, sets internal metadata (_file, _fromRepo, _hash, repo).
+ * Repo-based services take precedence over desired/*.json entries with the same name.
+ * @returns Array of parsed and hydrated Service objects
+ */
 function scanRepoAgentConfigs(): Service[] {
   const results: Service[] = [];
   let repos: fs.Dirent[];
