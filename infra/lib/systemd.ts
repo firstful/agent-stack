@@ -171,6 +171,12 @@ export function ensure(service: Service): void {
     // Write to temp file first (accessible by reeds user), then
     // sudo cp to the protected systemd directory.  This avoids
     // running the whole process as root.
+    //
+    // The temp file approach is deliberate: the controller process
+    // (running as user `reeds`) cannot write directly to /etc/systemd/system.
+    // By writing to /tmp first and then using sudo cp, we only need
+    // sudo for the copy, not for the content generation or file I/O.
+    // This minimises the sudo surface area to a single cp command.
     const tmp = `/tmp/agent-stack-${service.name}.service`;
     fs.writeFileSync(tmp, content, "utf-8");
     sudoExec(`cp ${tmp} ${dst}`);

@@ -143,7 +143,11 @@ export function buildImage(service: Service): void {
     ? `-f ${path.join(service.repo!, cfg.containerfile)}`
     : "";
   try {
-    // Resource limits: 4GB memory, 200ms CPU period quota (2 cores).
+    // Resource limits: 4GB memory, 200ms CPU period quota (2 cores at 100%).
+    // --cpu-quota=200000 --cpu-period=100000 means the container gets up to
+    // 200ms of CPU time per 100ms period, i.e. 2 full cores.  These prevent
+    // a single build from starving the host of memory or CPU during parallel
+    // builds or under load.
     // podman's caching layer only rebuilds Dockerfile steps whose inputs changed.
     sh(
       `podman build ${containerfile} ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}`

@@ -1127,7 +1127,12 @@ unixServer.listen(SOCKET_PATH, () => {
 
 // ── Performance Collection ──
 
-// Collect performance snapshot every 5 minutes
+/**
+ * Collect a performance snapshot and schedule the next collection (5-minute interval).
+ * Uses recursive setTimeout rather than setInterval so that slow collection runs
+ * (e.g. under load) don't overlap with the next scheduled run.
+ * First collection is delayed 30 seconds after startup to let the system settle.
+ */
 function schedulePerfCollection(): void {
   try {
     collectSnapshot();
