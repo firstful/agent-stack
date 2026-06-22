@@ -8,7 +8,7 @@ Simple file hosting service for `file.ffilt.us`. Serves files from `/srv/files/`
 
 - **Completion**: 6/8 deliverables done
 - **Phase/Stage**: Active — deployed, initial release complete, features pending
-- **Last updated**: 2026-06-15
+- **Last updated**: 2026-06-2115
 
 ## Deliverables
 
