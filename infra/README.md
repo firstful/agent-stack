@@ -148,5 +148,4 @@ the `sidecars` key.
 4. Import and wire it into `controller.ts` or `reconcile-worker.ts` as needed
 5. If the module needs path/constant configuration, add defaults to `config.ts`
 
-See `lib/runtime.ts` (82 lines) for a minimal module example, or `lib/sidecar.ts`
-(127 lines) for a medium-complexity module with lifecycle, cleanup, and tests.
+See `lib/runtime.ts` (~202 lines) for a minimal module example, or `lib/sidecar.ts` (~159 lines) for a medium-complexity module with lifecycle, cleanup, and tests.

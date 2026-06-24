@@ -11,6 +11,8 @@
  * user-written agent-stack.json files.
  */
 
+// ── Sidecar Configuration ──
+
 /** Configuration for a single sidecar container attached to a service. */
 export interface SidecarConfig {
   name: string;
@@ -44,6 +46,8 @@ export interface HealthCheckConfig {
   path?: string;
   timeout?: number;
 }
+
+// ── Container Configuration ──
 
 /** Container runtime configuration for a service. */
 export interface ContainerConfig {
@@ -80,6 +84,8 @@ export interface ExposeConfig {
   no_proxy?: boolean;
 }
 
+// ── Logo Configuration ──
+
 /** Logo configuration — either a file relative to the service repo or an absolute URL. */
 export interface LogoConfig {
   _type: "file" | "url";
@@ -98,6 +104,8 @@ export interface RateLimitConfig {
   /** How long (ms) to block after exceeding the limit. Default: 600000 (10 min). */
   blockDurationMs?: number;
 }
+
+// ── Canary Configuration ──
 
 /**
  * Canary deploy configuration.
@@ -129,6 +137,8 @@ export interface CanaryConfig {
    */
   weight?: number;
 }
+
+// ── Deploy Strategy ──
 
 /** Deploy strategy — how the controller handles container updates on content change. */
 export type DeployStrategy = "blue-green" | "recreate";
@@ -200,6 +210,8 @@ export function isCanarySafe(service: Service): boolean {
   }
   return service.container.sidecars.every((sc) => sc.canarySafe === true);
 }
+
+// ── Build Configuration ──
 
 /** Container image build configuration. */
 export interface BuildConfig {
