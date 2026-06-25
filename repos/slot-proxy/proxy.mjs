@@ -974,6 +974,16 @@ function handleUpgrade(req, socket, head) {
 
   const proxyReq = http.request(opts);
   proxyReq.on("upgrade", (proxyRes, proxySocket) => {
+    // Write the 101 Switching Protocols response headers back to the
+    // downstream client so cloudflared knows the WebSocket upgrade succeeded.
+    // Without this, cloudflared sees raw WebSocket frames ("85 00" = PING)
+    // and errors with "malformed HTTP response".
+    const statusLine = "HTTP/1.1 101 Switching Protocols\r\n";
+    const rawHeaders = Object.entries(proxyRes.headers)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\r\n");
+    socket.write(statusLine + rawHeaders + "\r\n\r\n");
+
     proxySocket.write(head);
     proxySocket.pipe(socket);
     socket.pipe(proxySocket);
