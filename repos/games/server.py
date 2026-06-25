@@ -223,8 +223,8 @@ async def root():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
-@app.get("/tv/{code}")
-async def tv_view(code: str):
+@app.get("/receiver")
+async def receiver_view(id: str = ""):
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 

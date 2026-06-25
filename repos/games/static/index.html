@@ -457,7 +457,7 @@
       <button class="btn btn-primary mt-8" id="btnJoinLobby">Join</button>
     </div>
 
-    <p class="subtitle">Open on your phone to join. Cast the TV view to play.</p>
+    <p class="subtitle">Join from your phone. Open /receiver?id=CODE to cast.</p>
   </div>
 
   <!-- ═══ LOBBY ═══ -->
@@ -546,9 +546,9 @@
 // games.ffilt.us — Client
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Detect if this is the TV view ──
-const IS_TV = window.location.pathname.startsWith("/tv/");
-const TV_CODE = IS_TV ? window.location.pathname.split("/tv/")[1]?.toUpperCase() || "" : null;
+// ── Detect if this is the TV / receiver view ──
+const IS_TV = window.location.pathname === "/receiver";
+const TV_CODE = IS_TV ? new URLSearchParams(window.location.search).get("id")?.toUpperCase() || "" : null;
 
 const WS_URL = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`;
 
@@ -913,7 +913,7 @@ function bindEvents() {
   });
 
   el.btnOpenTV.addEventListener("click", () => {
-    const url = `${location.origin}/tv/${lobbyCode}`;
+    const url = `${location.origin}/receiver?id=${lobbyCode}`;
     window.open(url, "_blank");
   });
 
