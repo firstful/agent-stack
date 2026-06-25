@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>games.ffilt.us</title>
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --surface: #1a1a2e;
+    --surface2: #25254a;
+    --border: #3a3a6e;
+    --text: #e0e0f0;
+    --text2: #8888bb;
+    --accent: #6a6aff;
+    --accent2: #4a4add;
+    --success: #2ecc71;
+    --warn: #f39c12;
+    --danger: #e74c3c;
+    --radius: 10px;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  /* ── Views ── */
+  .view { display: none; flex-direction: column; flex: 1; }
+  .view.active { display: flex; }
+
+  /* ── Landing ── */
+  .landing {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+  .landing h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #6a6aff, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .landing p { color: var(--text2); font-size: 0.95rem; margin-bottom: 8px; }
+  .landing .subtitle { font-size: 0.8rem; color: #555; margin-top: 20px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border-radius: var(--radius);
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    font-family: var(--font);
+    width: 100%;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-success { background: var(--success); color: #0f0f1a; }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-sm { padding: 8px 16px; font-size: 0.85rem; width: auto; }
+
+  .input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1rem;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s;
+    text-align: center;
+  }
+  .input:focus { border-color: var(--accent); }
+  .input::placeholder { color: var(--text2); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .code-display {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: 8px;
+    text-align: center;
+    color: var(--accent);
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin: 10px 0;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ── Lobby ── */
+  .lobby-header { text-align: center; margin-bottom: 16px; }
+  .lobby-header h2 { font-size: 1.1rem; color: var(--text2); margin-bottom: 4px; }
+  .lobby-header .code-label { font-size: 0.8rem; color: var(--text2); }
+
+  .player-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .player-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .player-item .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: white;
+    flex-shrink: 0;
+  }
+  .player-item .name { flex: 1; font-weight: 500; }
+  .player-item .badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: white;
+  }
+  .player-item .badge-host { background: var(--warn); color: #0f0f1a; }
+
+  .lobby-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 16px; }
+  .tv-note { text-align: center; color: var(--text2); font-size: 0.8rem; margin-top: 8px; }
+
+  /* ── Game / Phone Controls ── */
+  .game-status { text-align: center; margin: 20px 0; }
+  .game-status .round { font-size: 0.9rem; color: var(--text2); }
+  .game-status .waiting { font-size: 1.3rem; color: var(--warn); font-weight: 600; margin-top: 8px; }
+  .game-status .active-turn { font-size: 1.6rem; color: var(--success); font-weight: 700; margin-top: 8px; }
+
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    max-width: 360px;
+    margin: 20px auto;
+  }
+  .num-btn {
+    aspect-ratio: 1;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 1.6rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.1s;
+    font-family: var(--font);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .num-btn:active { transform: scale(0.9); background: var(--accent); }
+  .num-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .entries-history {
+    margin-top: auto;
+    padding-top: 16px;
+  }
+  .entries-history h3 { font-size: 0.85rem; color: var(--text2); margin-bottom: 8px; }
+  .entry-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 0.9rem;
+    border-bottom: 1px solid var(--surface2);
+  }
+  .entry-row:last-child { border-bottom: none; }
+  .entry-row .player { color: var(--text2); }
+  .entry-row .value { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+
+  /* ── Game Over ── */
+  .results { margin: 16px 0; }
+  .result-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .result-item .rank {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .rank-1 { background: #ffd700; color: #0f0f1a; }
+  .rank-2 { background: #c0c0c0; color: #0f0f1a; }
+  .rank-3 { background: #cd7f32; color: white; }
+  .rank-other { background: var(--surface2); color: var(--text2); }
+  .result-item .r-name { flex: 1; font-weight: 500; }
+  .result-item .r-score { font-weight: 700; color: var(--accent); font-size: 1.1rem; }
+
+  .game-over-actions { margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+
+  /* ── TV View ── */
+  .tv-view {
+    max-width: 100%;
+    min-height: 100dvh;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: var(--bg);
+    padding: 20px;
+  }
+  .tv-view .tv-title {
+    font-size: 1.2rem;
+    color: var(--text2);
+    margin-bottom: 4px;
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .tv-view .tv-code {
+    font-size: 0.9rem;
+    color: var(--accent);
+    position: fixed;
+    top: 12px;
+    right: 16px;
+  }
+  .tv-board {
+    width: 100%;
+    max-width: 900px;
+  }
+  .tv-players {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .tv-player {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-width: 120px;
+    transition: all 0.3s;
+  }
+  .tv-player.active {
+    border-color: var(--success);
+    box-shadow: 0 0 20px rgba(46, 204, 113, 0.3);
+    transform: scale(1.05);
+  }
+  .tv-player .tv-p-name { font-weight: 600; font-size: 1rem; margin-bottom: 8px; }
+  .tv-player .tv-p-num {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--accent);
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tv-player .tv-p-rounds {
+    font-size: 0.7rem;
+    color: var(--text2);
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .tv-player .tv-p-rounds span {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: var(--surface2);
+    line-height: 20px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .tv-player .tv-p-rounds span.filled {
+    background: var(--accent);
+    color: white;
+  }
+
+  .tv-waiting {
+    font-size: 2rem;
+    color: var(--text2);
+    margin-top: 40px;
+  }
+  .tv-waiting .dot {
+    animation: blink 1.4s infinite;
+    opacity: 0.3;
+  }
+  .tv-waiting .dot:nth-child(2) { animation-delay: 0.2s; }
+  .tv-waiting .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  .tv-results {
+    margin-top: 20px;
+  }
+  .tv-results h2 { font-size: 1.5rem; margin-bottom: 16px; color: var(--success); }
+  .tv-result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    margin-bottom: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 1.1rem;
+  }
+  .tv-result-row .tr-rank { font-weight: 800; color: var(--warn); }
+  .tv-result-row .tr-name { flex: 1; margin-left: 12px; text-align: left; }
+  .tv-result-row .tr-score { font-weight: 700; color: var(--accent); font-size: 1.3rem; }
+
+  .tv-qr {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text2);
+  }
+
+  /* ── Toast / Status ── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 100;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Connection indicator ── */
+  .conn-status {
+    position: fixed;
+    top: 12px;
+    left: 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: var(--text2);
+    z-index: 50;
+  }
+  .conn-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    transition: background 0.3s;
+  }
+  .conn-dot.connected { background: var(--success); }
+
+  /* ── Misc ── */
+  .flex-1 { flex: 1; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .gap-8 { gap: 8px; }
+  .text-center { text-align: center; }
+  .text-2 { color: var(--text2); }
+  .hidden { display: none !important; }
+
+  @media (min-width: 768px) {
+    .container { max-width: 560px; padding: 40px 20px; }
+    .tv-view .container { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="conn-status" id="connStatus">
+  <span class="conn-dot" id="connDot"></span>
+  <span id="connLabel">connecting...</span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="container">
+
+  <!-- ═══ LANDING ═══ -->
+  <div class="view landing active" id="viewLanding">
+    <h1>games.ffilt.us</h1>
+    <p>Multiplayer party games for phone + TV</p>
+
+    <div class="card mt-16" style="width:100%;">
+      <label style="display:block;text-align:left;font-size:0.85rem;color:var(--text2);margin-bottom:6px;">Your name</label>
+      <input class="input" id="inputName" placeholder="Enter your name" maxlength="20" autocomplete="off">
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;width:100%;margin-top:12px;">
+      <button class="btn btn-primary" id="btnCreateLobby">Create Game</button>
+      <button class="btn btn-secondary" id="btnShowJoin">Join Game</button>
+    </div>
+
+    <div id="joinSection" class="hidden" style="width:100%;margin-top:12px;">
+      <input class="input" id="inputCode" placeholder="Enter 6-digit code" maxlength="6" style="text-transform:uppercase;letter-spacing:4px;font-weight:700;">
+      <button class="btn btn-primary mt-8" id="btnJoinLobby">Join</button>
+    </div>
+
+    <p class="subtitle">Open on your phone to join. Cast the TV view to play.</p>
+  </div>
+
+  <!-- ═══ LOBBY ═══ -->
+  <div class="view" id="viewLobby">
+    <div class="lobby-header">
+      <h2>Game Lobby</h2>
+      <div class="code-label">Share code</div>
+      <div class="code-display" id="lobbyCode">------</div>
+    </div>
+
+    <div class="player-list" id="playerList"></div>
+
+    <div class="lobby-actions">
+      <button class="btn btn-success hidden" id="btnStartGame">Start Game</button>
+      <button class="btn btn-secondary" id="btnCopyCode">📋 Copy Code</button>
+      <button class="btn btn-secondary" id="btnOpenTV">📺 Open TV View</button>
+      <button class="btn btn-secondary btn-sm" id="btnLeaveLobby" style="width:auto;align-self:center;">Leave</button>
+    </div>
+    <p class="tv-note">Open TV view on your Chromecast-connected computer and cast the tab.</p>
+  </div>
+
+  <!-- ═══ GAME / PHONE CONTROLS ═══ -->
+  <div class="view" id="viewGame">
+    <div class="game-status">
+      <div class="round" id="gameRound">Round 1 of 5</div>
+      <div class="waiting hidden" id="waitingMsg">Waiting for <span id="currentPlayerName">...</span></div>
+      <div class="active-turn hidden" id="yourTurnMsg">🎯 Your Turn!</div>
+    </div>
+
+    <div class="numpad" id="numpad">
+      <button class="num-btn" data-value="1">1</button>
+      <button class="num-btn" data-value="2">2</button>
+      <button class="num-btn" data-value="3">3</button>
+      <button class="num-btn" data-value="4">4</button>
+      <button class="num-btn" data-value="5">5</button>
+      <button class="num-btn" data-value="6">6</button>
+      <button class="num-btn" data-value="7">7</button>
+      <button class="num-btn" data-value="8">8</button>
+      <button class="num-btn" data-value="9">9</button>
+      <button class="num-btn" data-value="0">0</button>
+    </div>
+
+    <div class="entries-history" id="entriesHistory">
+      <h3>Entries</h3>
+      <div id="entriesList"></div>
+    </div>
+
+    <div id="gameOverSection" class="hidden" style="margin-top:16px;">
+      <h3 style="text-align:center;color:var(--success);margin-bottom:12px;">🏆 Game Over</h3>
+      <div class="results" id="resultsList"></div>
+      <div class="game-over-actions">
+        <button class="btn btn-primary" id="btnPlayAgain">Play Again</button>
+        <button class="btn btn-secondary btn-sm" id="btnLeaveGame" style="width:auto;align-self:center;">Leave</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ TV VIEW ═══ (renders outside .container) -->
+<div class="view tv-view" id="viewTV">
+  <div class="tv-title">games.ffilt.us</div>
+  <div class="tv-code" id="tvCode">------</div>
+
+  <div class="tv-board">
+    <div id="tvLobbyWait" class="tv-waiting">
+      <div style="font-size:1.2rem;margin-bottom:8px;">Waiting for players</div>
+      <span class="dot">•</span><span class="dot">•</span><span class="dot">•</span>
+    </div>
+
+    <div id="tvGameArea" class="hidden">
+      <div class="tv-players" id="tvPlayers"></div>
+    </div>
+
+    <div id="tvResultsArea" class="hidden tv-results">
+      <h2>🏆 Final Scores</h2>
+      <div id="tvResultsList"></div>
+    </div>
+  </div>
+
+  <div class="tv-qr" id="tvQR">Open games.ffilt.us on your phone & enter the code above</div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// games.ffilt.us — Client
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Detect if this is the TV view ──
+const IS_TV = window.location.pathname.startsWith("/tv/");
+const TV_CODE = IS_TV ? window.location.pathname.split("/tv/")[1]?.toUpperCase() || "" : null;
+
+const WS_URL = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/ws`;
+
+// ── State ──
+let ws = null;
+let playerId = null;
+let lobbyCode = null;
+let myName = "";
+let players = [];
+let hostId = null;
+let gameActive = false;
+let isMyTurn = false;
+let isGameOver = false;
+let reconnectTimer = null;
+
+// ── DOM refs ──
+const $ = (s) => document.querySelector(s);
+const el = {};
+
+function cacheEls() {
+  el.connDot = $("#connDot");
+  el.connLabel = $("#connLabel");
+  el.toast = $("#toast");
+  el.viewLanding = $("#viewLanding");
+  el.viewLobby = $("#viewLobby");
+  el.viewGame = $("#viewGame");
+  el.viewTV = $("#viewTV");
+  el.inputName = $("#inputName");
+  el.inputCode = $("#inputCode");
+  el.btnCreateLobby = $("#btnCreateLobby");
+  el.btnShowJoin = $("#btnShowJoin");
+  el.btnJoinLobby = $("#btnJoinLobby");
+  el.joinSection = $("#joinSection");
+  el.lobbyCode = $("#lobbyCode");
+  el.playerList = $("#playerList");
+  el.btnStartGame = $("#btnStartGame");
+  el.btnCopyCode = $("#btnCopyCode");
+  el.btnOpenTV = $("#btnOpenTV");
+  el.btnLeaveLobby = $("#btnLeaveLobby");
+  el.btnLeaveGame = $("#btnLeaveGame");
+  el.btnPlayAgain = $("#btnPlayAgain");
+  el.gameRound = $("#gameRound");
+  el.waitingMsg = $("#waitingMsg");
+  el.yourTurnMsg = $("#yourTurnMsg");
+  el.currentPlayerName = $("#currentPlayerName");
+  el.numpad = $("#numpad");
+  el.entriesList = $("#entriesList");
+  el.gameOverSection = $("#gameOverSection");
+  el.resultsList = $("#resultsList");
+  el.tvCode = $("#tvCode");
+  el.tvLobbyWait = $("#tvLobbyWait");
+  el.tvGameArea = $("#tvGameArea");
+  el.tvPlayers = $("#tvPlayers");
+  el.tvResultsArea = $("#tvResultsArea");
+  el.tvResultsList = $("#tvResultsList");
+  el.entriesHistory = $("#entriesHistory");
+}
+
+// ── View switching ──
+function showView(id) {
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  const el = document.getElementById("view" + id);
+  if (el) el.classList.add("active");
+}
+
+// ── Toast ──
+let toastTimer = null;
+function toast(msg) {
+  el.toast.textContent = msg;
+  el.toast.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.remove("visible"), 3000);
+}
+
+// ── WebSocket ──
+function connect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  ws = new WebSocket(WS_URL);
+  el.connDot.classList.remove("connected");
+  el.connLabel.textContent = "connecting...";
+
+  ws.onopen = () => {
+    el.connDot.classList.add("connected");
+    el.connLabel.textContent = "connected";
+    clearTimeout(reconnectTimer);
+
+    if (IS_TV && TV_CODE) {
+      send({ type: "tv_connect", code: TV_CODE });
+    } else if (lobbyCode && playerId) {
+      // Reconnect to lobby
+    }
+  };
+
+  ws.onclose = () => {
+    el.connDot.classList.remove("connected");
+    el.connLabel.textContent = "disconnected";
+    reconnectTimer = setTimeout(connect, 2000);
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    handleMessage(msg);
+  };
+
+  ws.onerror = () => {};
+}
+
+function send(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
+  }
+}
+
+// ── Message handler ──
+function handleMessage(msg) {
+  switch (msg.type) {
+
+    case "lobby_created":
+      playerId = msg.player_id;
+      lobbyCode = msg.code;
+      showView("Lobby");
+      renderLobby();
+      break;
+
+    case "lobby_joined":
+      playerId = msg.player_id;
+      lobbyCode = msg.code;
+      players = msg.players || [];
+      hostId = msg.host;
+      showView("Lobby");
+      renderLobby();
+      break;
+
+    case "tv_connected":
+      lobbyCode = msg.code;
+      players = msg.players || [];
+      hostId = msg.host;
+      el.tvCode.textContent = lobbyCode;
+      renderTVLobby();
+      break;
+
+    case "player_joined":
+      toast(`${msg.player.name} joined`);
+      renderLobby();
+      renderTVLobby();
+      break;
+
+    case "player_left":
+      if (msg.new_host) hostId = msg.new_host;
+      toast("A player left");
+      renderLobby();
+      renderTVLobby();
+      if (IS_TV) renderTVLobby();
+      break;
+
+    case "players_update":
+      players = msg.players || [];
+      hostId = msg.host;
+      renderLobby();
+      renderTVLobby();
+      break;
+
+    case "player_renamed":
+      renderLobby();
+      renderTVLobby();
+      break;
+
+    case "game_started":
+      gameActive = true;
+      players = msg.players || [];
+      showView("Game");
+      el.gameRound.textContent = `Round 1 of ${msg.max_rounds}`;
+      el.numpad.querySelectorAll("button").forEach(b => b.disabled = true);
+      el.waitingMsg.classList.remove("hidden");
+      el.yourTurnMsg.classList.add("hidden");
+      el.gameOverSection.classList.add("hidden");
+      el.entriesHistory.classList.remove("hidden");
+      isGameOver = false;
+      el.entriesList.innerHTML = "";
+      break;
+
+    case "your_turn":
+      isMyTurn = true;
+      el.waitingMsg.classList.add("hidden");
+      el.yourTurnMsg.classList.remove("hidden");
+      el.numpad.querySelectorAll("button").forEach(b => b.disabled = false);
+      break;
+
+    case "turn_changed":
+      if (!IS_TV) {
+        if (msg.player && msg.player.id !== playerId) {
+          isMyTurn = false;
+          el.waitingMsg.classList.remove("hidden");
+          el.yourTurnMsg.classList.add("hidden");
+          el.currentPlayerName.textContent = msg.player.name;
+          el.numpad.querySelectorAll("button").forEach(b => b.disabled = true);
+        }
+        el.gameRound.textContent = `Round ${msg.round + 1} of 5`;
+      }
+      if (IS_TV) {
+        renderTVGame(msg.player, msg.round);
+      }
+      break;
+
+    case "number_received":
+      toast(`${msg.player_name} entered ${msg.value}`);
+      el.entriesList.innerHTML = msg.entries.map(e =>
+        `<div class="entry-row"><span class="player">${e.player_name}</span><span class="value">${e.value}</span></div>`
+      ).join("");
+      if (IS_TV) renderTVGame(null, msg.round);
+      break;
+
+    case "game_state":
+      if (IS_TV && msg.state) {
+        const s = msg.state;
+        gameActive = true;
+        renderTVGame(s.current_player, s.round);
+      }
+      break;
+
+    case "game_over":
+      isGameOver = true;
+      el.gameOverSection.classList.remove("hidden");
+      el.entriesHistory.classList.add("hidden");
+      el.numpad.style.display = "none";
+      renderResults(msg.results);
+      if (IS_TV) {
+        renderTVResults(msg.results);
+      }
+      break;
+
+    case "error":
+      toast("⚠️ " + msg.message);
+      break;
+  }
+}
+
+// ── Lobby UI ──
+function renderLobby() {
+  el.lobbyCode.textContent = lobbyCode;
+  const isHost = playerId === hostId;
+
+  el.playerList.innerHTML = players.map(p => {
+    const initial = p.name.charAt(0).toUpperCase();
+    const isHostPlayer = p.id === hostId;
+    return `
+      <div class="player-item">
+        <div class="avatar">${initial}</div>
+        <span class="name">${p.name}${p.id === playerId ? " <span style='color:var(--text2);font-size:0.75rem;'>(you)</span>" : ""}</span>
+        ${isHostPlayer ? '<span class="badge badge-host">HOST</span>' : ''}
+      </div>
+    `;
+  }).join("");
+
+  el.btnStartGame.classList.toggle("hidden", !isHost || players.length < 2 || gameActive);
+}
+
+function renderTVLobby() {
+  el.tvCode.textContent = lobbyCode || TV_CODE;
+  if (gameActive) return;
+
+  el.tvLobbyWait.classList.remove("hidden");
+  el.tvGameArea.classList.add("hidden");
+  el.tvResultsArea.classList.add("hidden");
+
+  const connectedCount = players.length;
+  el.tvLobbyWait.innerHTML = `
+    <div style="font-size:1.5rem;margin-bottom:12px;">🎮 ${lobbyCode || TV_CODE}</div>
+    <div style="font-size:1rem;color:var(--text2);margin-bottom:8px;">${connectedCount} player${connectedCount !== 1 ? 's' : ''} connected</div>
+    <div style="font-size:0.9rem;color:var(--text2);">${players.map(p => p.name).join(' · ')}</div>
+    <div style="margin-top:24px;"><span class="dot">•</span><span class="dot">•</span><span class="dot">•</span></div>
+  `;
+}
+
+// ── TV Game UI ──
+function renderTVGame(currentPlayer, round) {
+  el.tvLobbyWait.classList.add("hidden");
+  el.tvGameArea.classList.remove("hidden");
+  el.tvResultsArea.classList.add("hidden");
+
+  if (!gameActive) return;
+
+  el.tvPlayers.innerHTML = (window.__tvPlayers || players).map(p => {
+    const isActive = currentPlayer && p.id === currentPlayer.id;
+    return `
+      <div class="tv-player ${isActive ? 'active' : ''}">
+        <div class="tv-p-name">${p.name}</div>
+        <div class="tv-p-num">${isActive ? '🤔' : '—'}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── Results ──
+function renderResults(results) {
+  if (!results) return;
+  el.resultsList.innerHTML = results.map((r, i) => {
+    const rankClass = i === 0 ? "rank-1" : i === 1 ? "rank-2" : i === 2 ? "rank-3" : "rank-other";
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+    return `
+      <div class="result-item">
+        <div class="rank ${rankClass}">${medal}</div>
+        <span class="r-name">${r.player.name}</span>
+        <span class="r-score">${r.total} pts</span>
+      </div>
+    `;
+  }).join("");
+
+  if (IS_TV) renderTVResults(results);
+}
+
+function renderTVResults(results) {
+  el.tvGameArea.classList.add("hidden");
+  el.tvResultsArea.classList.remove("hidden");
+  el.tvResultsList.innerHTML = results.map((r, i) => {
+    const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+    return `
+      <div class="tv-result-row">
+        <span class="tr-rank">${medal}</span>
+        <span class="tr-name">${r.player.name}</span>
+        <span class="tr-score">${r.total}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── Events ──
+function bindEvents() {
+  el.btnCreateLobby.addEventListener("click", () => {
+    const name = el.inputName.value.trim() || `Player_${Math.random().toString(36).slice(2, 6)}`;
+    myName = name;
+    send({ type: "create_lobby", player_name: name });
+  });
+
+  el.btnShowJoin.addEventListener("click", () => {
+    el.joinSection.classList.toggle("hidden");
+  });
+
+  el.btnJoinLobby.addEventListener("click", () => {
+    const code = el.inputCode.value.trim().toUpperCase();
+    const name = el.inputName.value.trim() || `Player_${Math.random().toString(36).slice(2, 6)}`;
+    if (code.length < 4) { toast("Enter a valid code"); return; }
+    myName = name;
+    send({ type: "join_lobby", code, player_name: name });
+  });
+
+  el.inputCode.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") el.btnJoinLobby.click();
+  });
+
+  el.inputName.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") el.btnCreateLobby.click();
+  });
+
+  el.btnStartGame.addEventListener("click", () => {
+    send({ type: "start_game" });
+  });
+
+  el.btnCopyCode.addEventListener("click", () => {
+    navigator.clipboard.writeText(lobbyCode).then(() => toast("Copied!")).catch(() => toast(lobbyCode));
+  });
+
+  el.btnOpenTV.addEventListener("click", () => {
+    const url = `${location.origin}/tv/${lobbyCode}`;
+    window.open(url, "_blank");
+  });
+
+  el.btnLeaveLobby.addEventListener("click", () => {
+    send({ type: "leave" });
+    lobbyCode = null;
+    playerId = null;
+    gameActive = false;
+    showView("Landing");
+  });
+
+  el.btnLeaveGame.addEventListener("click", () => {
+    send({ type: "leave" });
+    lobbyCode = null;
+    playerId = null;
+    gameActive = false;
+    showView("Landing");
+  });
+
+  el.btnPlayAgain.addEventListener("click", () => {
+    toast("Create a new lobby to play again");
+    send({ type: "leave" });
+    lobbyCode = null;
+    playerId = null;
+    gameActive = false;
+    showView("Landing");
+  });
+
+  // Numpad
+  el.numpad.addEventListener("click", (e) => {
+    const btn = e.target.closest(".num-btn");
+    if (!btn || btn.disabled) return;
+    const value = parseInt(btn.dataset.value);
+    if (isMyTurn && !isGameOver) {
+      send({ type: "submit_number", value });
+      isMyTurn = false;
+      el.numpad.querySelectorAll("button").forEach(b => b.disabled = true);
+      el.yourTurnMsg.classList.add("hidden");
+      el.waitingMsg.classList.remove("hidden");
+      el.waitingMsg.textContent = "Waiting for next turn...";
+    }
+  });
+}
+
+// ── Init ──
+function init() {
+  cacheEls();
+  bindEvents();
+  connect();
+
+  if (IS_TV) {
+    showView("TV");
+    el.tvCode.textContent = TV_CODE || "------";
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

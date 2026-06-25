@@ -1,0 +1,22 @@
+{
+  "name": "games",
+  "version": 1,
+  "container": {
+    "port": 8000,
+    "auto_port": true,
+    "env": {
+      "HOST": "0.0.0.0",
+      "PORT": "8000",
+      "GAMES_DOMAIN": "games.ffilt.us"
+    }
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "games.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  },
+  "strategy": { "type": "blue-green", "queue": true },
+  "build": {
+    "podman_args": "--memory 256m"
+  }
+}
