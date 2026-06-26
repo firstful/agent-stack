@@ -8,7 +8,7 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 - **Completion**: 2/6 deliverables done
 - **Phase/Stage**: Active maintenance — infra refinements and engramic embeddings integration
-- **Last updated**: 2026-06-2119
+- **Last updated**: 2026-06-24
 
 ## Deliverables
 
