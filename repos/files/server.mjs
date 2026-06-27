@@ -56,98 +56,6 @@ if (!fs.existsSync(FILES_DIR)) {
   console.log(`[files] Created ${FILES_DIR}`);
 }
 
-// ── Update endpoint version tracking ──
-const APK_DIR = path.join(FILES_DIR, 'apk');
-
-function readVersionJson() {
-  const vp = path.join(APK_DIR, 'version.json');
-  try {
-    return JSON.parse(fs.readFileSync(vp, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Serve the OTA update endpoint.
- * GET /apk/update?app=<package>&ver=<current-version>
- *
- * If the client's version matches the published version → 202 (up to date).
- * If the client is behind → 200 with the APK bytes.
- */
-function handleUpdateEndpoint(req, res) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const app = url.searchParams.get('app');
-  const ver = url.searchParams.get('ver');
-
-  if (!app || !ver) {
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Missing app or ver parameter' }));
-    return;
-  }
-
-  const vi = readVersionJson();
-  if (!vi) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Version manifest not found' }));
-    return;
-  }
-
-  // Check if this app is known
-  if (vi.app !== app) {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: `Unknown app: ${app}` }));
-    return;
-  }
-
-  // Version check
-  if (ver === vi.version) {
-    res.writeHead(202, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'current', version: vi.version, app: vi.app }));
-    return;
-  }
-
-  // Serve the APK
-  const apkPath = path.join(APK_DIR, vi.apk);
-
-  try {
-    const stat = fs.statSync(apkPath);
-    const headers = {
-      'Content-Type': 'application/vnd.android.package-archive',
-      'Content-Length': stat.size,
-      'Content-Disposition': `attachment; filename="${vi.apk}"`,
-      'X-Update-Version': vi.version,
-      'Cache-Control': 'no-cache',
-    };
-    res.writeHead(200, headers);
-    fs.createReadStream(apkPath).pipe(res);
-  } catch {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'APK file not found on server' }));
-  }
-}
-
-// ── Stable → versioned APK redirects ──
-// Cloudflare caches by URL, so stable filenames like red-thread.apk
-// serve stale content between releases. We redirect to the versioned
-// filename (red-thread-1.0.27.apk) so each release gets a unique URL.
-
-const APK_REDIRECTS = ['/red-thread.apk', '/apk/red-thread.apk'];
-
-function tryRedirectApk(res, urlPath) {
-  if (!APK_REDIRECTS.includes(urlPath)) return false;
-  const vi = readVersionJson();
-  if (!vi || !vi.apk) return false;
-  // All versioned APKs live under /apk/ — redirect accordingly
-  const target = `/apk/${vi.apk}`;
-  res.writeHead(302, {
-    Location: target,
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-  });
-  res.end();
-  return true;
-}
-
 // ── File serving ──
 
 function serveFile(res, filePath, stat) {
@@ -160,7 +68,7 @@ function serveFile(res, filePath, stat) {
     'Content-Type': mime,
     'Content-Length': stat.size,
     'Accept-Ranges': 'bytes',
-    'Cache-Control': ['.apk', '.json'].includes(ext) ? 'no-cache' : 'public, max-age=3600',
+    'Cache-Control': 'public, max-age=3600',
   };
 
   if (isDownload) {
@@ -246,17 +154,6 @@ function getSafePath(rawPath) {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-
-  // ── Route: OTA Update endpoint ──
-  if (url.pathname === '/apk/update' || url.pathname === '/apk/update/') {
-    handleUpdateEndpoint(req, res);
-    return;
-  }
-
-  // ── Route: Stable APK → versioned redirect ──
-  if (tryRedirectApk(res, url.pathname)) {
-    return;
-  }
 
   // ── Default: file serving ──
   let filePath = getSafePath(url.pathname);
