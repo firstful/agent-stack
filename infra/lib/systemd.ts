@@ -1,3 +1,16 @@
+/**
+ * systemd.ts — Systemd unit management for the agent-stack controller.
+ *
+ * Manages the lifecycle of systemd services that run outside podman containers:
+ *   - Generate unit files from Service config (env, exec_start, restart policy, etc.)
+ *   - Create/update unit files in /etc/systemd/system/ via sudo cp
+ *   - Start, stop, enable, disable, and remove services via systemctl
+ *   - Query service running state and list managed units
+ *
+ * All privilege-escalated operations (writing to /etc, running systemctl)
+ * use sudo -S with a pre-loaded password file to avoid running the
+ * controller process as root. See sudoExec() for the mechanism.
+ */
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";

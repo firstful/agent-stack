@@ -894,13 +894,16 @@ const restHandlers: Record<string, RestHandler> = {
 
 // ── Request Helpers ──
 
-// Validate that all routes have registered handlers
+// ── Route Validation ──
+// Verify that every route declared in the registry has a matching handler function.
+// This catches typos and refactoring gaps at startup rather than at request time.
 for (const route of routes) {
   if (!restHandlers[route.handlerName]) {
-    log("ERROR", `Missing handler for route: ${route.pattern} \u2192 ${route.handlerName}`);
+    log("ERROR", `Missing handler for route: ${route.pattern} → ${route.handlerName}`);
   }
 }
 
+// ── Body Reader ──
 // Read request body with size limit
 function readBody(req: IncomingMessage, cb: (body: string) => void, onError: (e: Error) => void): void {
   let body = "";
