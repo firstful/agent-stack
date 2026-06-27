@@ -39,6 +39,9 @@ import {
  * @returns "a" or "b", depending on which slot marker says is active
  */
 function readSlot(name: string): string {
+  // Reads the slot marker file at /tmp/stack.<name>.slot, written by
+  // reconcile.ts during blue-green slot swaps.  Defaults to "a" when
+  // the file does not exist (e.g. first deploy or marker cleaned up).
   try {
     return fs.readFileSync(slotMarker(name), "utf-8").trim();
   } catch {
@@ -55,6 +58,9 @@ function readSlot(name: string): string {
  * @returns Number of pending builds (0 if queue disabled or file missing)
  */
 function readQueueCount(name: string): number {
+  // Reads the integer counter at /tmp/stack.<name>.queue, written by
+  // reconcile.ts when queue mode is active.  Each commit increments,
+  // each build decrements.  Absent file = 0 pending.
   try {
     return parseInt(fs.readFileSync(queueMarker(name), "utf-8").trim(), 10) || 0;
   } catch {
@@ -71,6 +77,9 @@ function readQueueCount(name: string): number {
  * @returns Canary state object (slot, startTime, weight) or null
  */
 function readCanaryState(name: string): { slot: string; startTime: number; weight?: number } | null {
+  // Reads the JSON state at /tmp/stack.<name>.canary, written by
+  // reconcile.ts when a canary deploy is in progress.  The slot-proxy
+  // appends 5xx error counts here for the controller to evaluate.
   try {
     const raw = fs.readFileSync(canaryMarker(name), "utf-8");
     const state = JSON.parse(raw);
@@ -115,6 +124,8 @@ export function writeRuntimeState(services: Service[]): void {
       const slotB = slotContainerName(s.name, "b");
 
       // Recreate strategy: no slot containers — report a flat container state
+      // without the slot/sidecar hierarchy.  The single container uses the
+      // service's bare name (e.g. "myapp"), not a --a/--b suffix.
       if (getStrategyType(s.strategy) === "recreate") {
         const cRunning = containerRunning(s.name);
         const actualPort = getContainerPort(s.name) || s.container?.host_port || s.container?.port;
@@ -147,6 +158,8 @@ export function writeRuntimeState(services: Service[]): void {
       // The fallback applies in both directions: "a→b" and "b→a".
       // If both slots are running the marker is authoritative;
       // if both are dead the service is simply down.
+      // This does NOT write the corrected marker — only the next reconcile
+      // cycle will persist the correction via writeSlot().
       if (activeSlot === "a" && !saRunning && sbRunning) activeSlot = "b";
       if (activeSlot === "b" && !sbRunning && saRunning) activeSlot = "a";
 

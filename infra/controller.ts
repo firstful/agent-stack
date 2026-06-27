@@ -1012,6 +1012,10 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   // ── Logo Endpoint ──
+  // Serves service logos as SVG at /logo/<name>.  Two resolution strategies:
+  //   1. Config-defined logo file in the service repo (logo._type === "file")
+  //   2. Fallback to logos/<name>.svg on disk
+  // Returns 404 if neither strategy produces an SVG.
   const logoMatch = req.url?.match(/^\/logo\/([a-z][a-z0-9_-]*)$/i);
   if (logoMatch) {
     const name = logoMatch[1];
@@ -1049,6 +1053,10 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   // ── Proxy Endpoint ──
+  // Forwards HTTP requests to a running container by service name.
+  // Path format: /proxy/<service-name>/<path>
+  // The target port is resolved from runtime state (which includes slot
+  // awareness), so blue-green swaps are transparent to proxy consumers.
   const proxyMatch = req.url?.match(/^\/proxy\/([^/]+)(\/.*)?$/);
   if (proxyMatch) {
     const serviceName = proxyMatch[1];

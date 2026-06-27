@@ -82,6 +82,8 @@ function getActualPort(svc: Record<string, any>): number | null {
  * the tunnel if the config changed and the cooldown period has elapsed.
  */
 export function writeCloudflaredConfig(services: Service[]): void {
+  // Filter to only services with explicit exposure enabled — services that
+  // don't set expose.enabled: true are excluded from tunnel ingress.
   const enabled = services.filter((s) => s.expose?.enabled);
   if (enabled.length === 0) return;
 

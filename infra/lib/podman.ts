@@ -244,6 +244,9 @@ export function ensureNetwork(): void {
  *
  * Container services are reachable by their service name as DNS on stack-net.
  * Systemd services (no container block) are reachable via host.containers.internal.
+ *
+ * Env var names are sanitised: uppercase, non-alphanumeric characters become
+ * underscores.  Example: "fuse-worker" → "FUSE_WORKER".
  */
 export function buildDiscoveryEnv(allServices: Service[] | undefined): string {
   if (!allServices || allServices.length === 0) return "";
@@ -301,6 +304,9 @@ export function runContainer(
 
   // Map host PATH into container at /host<path> so tools like
   // curl and git are available even from minimal base images.
+  // This is a pragmatic workaround: many service images ship without
+  // basic debugging tools, and this gives containers access to the
+  // host's full toolchain at /host/usr/bin/curl, /host/usr/bin/git, etc.
   const hostPath = process.env.PATH || "";
   const mappedPath = hostPath.split(":").map((p) => `/host${p}`).join(":");
   const containerDefaultPath =
@@ -329,6 +335,8 @@ export function runContainer(
   // Warn if the requested host port is already claimed by another container
   // or by a peer service's configured host_port.  Not a hard error because
   // podman will fail the run itself if the port is truly in use.
+  // This is best-effort detection: it covers running containers and config-
+  // declared host_ports but cannot detect processes bound outside podman.
   try {
     const usedPorts = shCapture(`podman ps -a --format "{{.Ports}}"`)
       .split("\n")

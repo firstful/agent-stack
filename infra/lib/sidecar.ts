@@ -12,6 +12,8 @@ import {
 import { CONTAINER_LABEL, NETWORK_NAME, sidecarContainerName } from "./config";
 import { fetchSecrets, interpolateSecrets, discoverRequiredSecrets } from "./services";
 
+// ── Shell Wrapper ──
+
 /**
  * Execute a shell command with inherited stdio.
  * Local copy of podman.ts's `sh` for sidecar-specific operations

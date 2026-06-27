@@ -10,6 +10,13 @@
  *   6. Persist runtime state for the controller's /api/status endpoint
  *   7. Prune unused podman images
  *   8. Send a status_update message back to the parent thread
+ *
+ * The reconciliation loop runs on three triggers:
+ *   - Heartbeat (5-minute safety-net interval)
+ *   - Git commit detected (stat polling on branch ref)
+ *   - Explicit request from the parent controller thread
+ *
+ * A re-entrancy guard (reconciling flag) prevents concurrent runs.
  */
 
 import {
@@ -50,6 +57,8 @@ const HEAD_FILE = path.join(GIT_DIR, "HEAD");
 const HEARTBEAT_MS = 300_000; // 5-minute safety-net interval
 
 let branchRefWatcher: fs.StatWatcher | null = null;
+
+// ── Git Ref Watching ──
 
 /**
  * Resolve the current branch's ref file path from .git/HEAD.
@@ -105,6 +114,8 @@ function watchCurrentBranch(): void {
     console.error(`[git-watch] failed to watch ${refFile}: ${e.message}`);
   }
 }
+
+// ── HEAD Watcher (Branch Switch Detection) ──
 
 /**
  * Watch .git/HEAD for branch switches using stat polling.
@@ -243,6 +254,17 @@ function send(msg: any): void {
  *   7. Persist runtime state to services.json
  *   8. Prune unused podman images
  *   9. Send status_update message back to the parent thread
+ *
+ * Edge cases handled:
+ *   - Container ↔ systemd service type migration: if a service changes
+ *     from container to systemd (or vice versa), the old instance is
+ *     cleaned up before the new type is ensured.
+ *   - Slot leakage: if the managed container set includes slot containers
+ *     (--a/--b) or sidecars for a service that no longer exists, they are
+ *     removed.
+ *   - Config drift detection: checks per-service terraform tfvars for
+ *     dev/prod parity.  Mismatches are reported as reconcile errors but
+ *     do not block the reconciliation loop.
  */
 function reconcile(): void {
   if (reconciling) return;
@@ -385,7 +407,9 @@ parentPort!.on("message", (msg) => {
 
 // ── Schedule ──
 
-// First reconcile: run immediately on startup
+// Startup: first reconcile runs 100ms after worker starts, giving the
+// parent controller thread time to initialise its HTTP listener before
+// services are reported as running.
 setTimeout(reconcile, 100);
 
 // Git ref watcher: detect commits (branch ref change) and branch switches
@@ -394,6 +418,9 @@ setTimeout(reconcile, 100);
 watchCurrentBranch();
 watchHead();
 
-// Safety-net heartbeat: catch runtime failures (crashed containers,
-// sidecar exits) that aren't triggered by git changes
+// Safety-net heartbeat: the 5-minute interval catches runtime failures
+// (crashed containers, sidecar exits) that aren't triggered by git changes.
+// In normal operation, most reconciliation is driven by git stat polling;
+// the heartbeat is a backstop so no failure goes un-reconciled for more
+// than 5 minutes.
 setInterval(reconcile, HEARTBEAT_MS);
