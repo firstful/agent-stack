@@ -155,6 +155,56 @@ function getSafePath(rawPath) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  // ── GameVersion OTA Update Endpoint ──
+  if (url.pathname === '/apk/update') {
+    const appId = url.searchParams.get('app');
+    const ver = url.searchParams.get('ver');
+    if (!appId || !ver) {
+      res.writeHead(400);
+      res.end('Missing app or ver parameter');
+      return;
+    }
+    try {
+      const metaPath = path.join(FILES_DIR, 'apk', 'version.json');
+      const metaRaw = fs.readFileSync(metaPath, 'utf-8');
+      const meta = JSON.parse(metaRaw);
+      if (meta.app !== appId) {
+        res.writeHead(400);
+        res.end('Unknown app');
+        return;
+      }
+      // Compare versions — simple string comparison works for semver-like v1.0.XX
+      const currentParts = meta.version.split('.').map(Number);
+      const installedParts = ver.split('.').map(Number);
+      let needsUpdate = false;
+      for (let i = 0; i < Math.max(currentParts.length, installedParts.length); i++) {
+        const c = currentParts[i] || 0;
+        const v = installedParts[i] || 0;
+        if (c > v) { needsUpdate = true; break; }
+        if (c < v) { break; }
+      }
+      if (!needsUpdate) {
+        res.writeHead(202);
+        res.end('Up to date');
+        return;
+      }
+      const apkPath = path.join(FILES_DIR, 'apk', meta.apk);
+      const apkStat = fs.statSync(apkPath);
+      res.writeHead(200, {
+        'X-Update-Version': meta.version,
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Length': apkStat.size,
+        'Content-Disposition': `attachment; filename="${meta.apk}"`,
+      });
+      fs.createReadStream(apkPath).pipe(res);
+      return;
+    } catch (e) {
+      res.writeHead(500);
+      res.end('Update service error');
+      return;
+    }
+  }
+
   // ── Default: file serving ──
   let filePath = getSafePath(url.pathname);
 
