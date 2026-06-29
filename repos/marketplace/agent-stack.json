@@ -1,0 +1,27 @@
+{
+  "name": "marketplace",
+  "version": 1,
+  "service": {
+    "type": "simple",
+    "exec_start": "node /srv/agent-stack/repos/marketplace/server.mjs",
+    "port": 3652,
+    "restart": "always",
+    "user": "root",
+    "env": {
+      "PORT": "3652",
+      "HOST": "0.0.0.0",
+      "MODULES_DIR": "/srv/files/modules",
+      "MARKETPLACE_NAME": "Red Thread Marketplace"
+    }
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "red-thread.ffilt.us",
+    "hostnames": ["red-thread.ffilt.us"],
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  },
+  "logo": {
+    "_type": "url",
+    "url": "https://cdn.jsdelivr.net/npm/heroicons@2/outline/shopping-bag.svg"
+  }
+}

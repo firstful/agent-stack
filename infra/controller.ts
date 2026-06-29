@@ -1,3 +1,23 @@
+/**
+ * controller.ts — Main HTTP server and reconciliation orchestrator for agent-stack.
+ *
+ * This module serves as the entry point for the agent-stack controller process.
+ * Responsibilities:
+ *   - HTTP server (port 80) for the REST API, proxy endpoint, and logo serving
+ *   - Unix domain socket server for local-only IPC (used by MCP shim)
+ *   - Worker thread lifecycle (spawn, monitor, restart reconcile-worker.ts)
+ *   - Service CRUD (create, read, update, delete) against agent-stack config files
+ *   - Container lifecycle helpers (start, stop, restart, rebuild)
+ *   - Performance snapshot collection (5-minute interval)
+ *   - Auto-restart on source file changes (with test gate)
+ *   - Log persistence to controller.log
+ *
+ * All orchestration logic (build, deploy, slot swap) lives in lib/ modules;
+ * this file only wires them together via REST handlers and the worker thread.
+ */
+
+// ── Imports ──
+
 import { loadDesired } from "./lib/services";
 import { sh, shCapture } from "./lib/podman";
 import { collectSnapshot, getHistory } from "./lib/perf";

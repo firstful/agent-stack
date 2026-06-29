@@ -1,3 +1,18 @@
+/**
+ * config.ts — Paths, constants, naming helpers, and timeouts for agent-stack.
+ *
+ * Central configuration module consumed by all lib/ modules and controller.ts.
+ * All paths are env-overridable for testing (STACK_* env vars).
+ * Provides:
+ *   - Filesystem paths (DESIRED_DIR, REPOS_DIR, RUNTIME_DIR, etc.)
+ *   - Server/port configuration (MCP_PORT, SOCKET_PATH)
+ *   - Podman network and label constants (NETWORK_NAME, CONTAINER_LABEL)
+ *   - Cloudflare tunnel config and restart cooldown
+ *   - Slot/sidecar container naming helpers
+ *   - Marker file path helpers (hash, slot, queue, canary, commit)
+ *   - Timeouts, secrets paths, and request limits
+ */
+
 import path from "path";
 
 // ── Paths ──

@@ -1,3 +1,17 @@
+/**
+ * services.ts — Desired state loading, hashing, git clone management, and vault secrets.
+ *
+ * This module is the data layer for the agent-stack controller:
+ *   - Loads the desired service set from repo agent-stack.json + desired/*.json
+ *   - Computes content hashes for change detection (git-aware + fallback)
+ *   - Manages git clones for container builds (monorepo archive + submodule support)
+ *   - Resolves vault secrets for container env vars ({SECRETS.KEY} interpolation)
+ *   - Parses .stackignore patterns for content-hash filtering
+ *
+ * All functions are synchronous and stateless (except module-level caches).
+ * Callers (reconcile.ts, controller.ts) handle error reporting and backoff.
+ */
+
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";

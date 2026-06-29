@@ -405,7 +405,7 @@ parentPort!.on("message", (msg) => {
   }
 });
 
-// ── Schedule ──
+// ── Startup & Scheduling ──
 
 // Startup: first reconcile runs 100ms after worker starts, giving the
 // parent controller thread time to initialise its HTTP listener before
