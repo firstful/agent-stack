@@ -3,9 +3,13 @@
   "version": 1,
   "service": {
     "type": "simple",
-    "exec_start": "hermes dashboard --host 0.0.0.0 --port 9119 --insecure --skip-build",
+    "exec_start": "hermes dashboard --host 0.0.0.0 --port 9119 --skip-build",
     "port": 9119,
-    "restart": "always"
+    "restart": "always",
+    "env": {
+      "HERMES_DASHBOARD_BASIC_AUTH_USERNAME": "admin",
+      "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH": "scrypt$16384$8$1$50K0xZXKWKsOQEHli3S/ig==$0A41qxl04rD8agzIqaLluAwqNb8qcxradvlnZEd7Z6o="
+    }
   },
   "expose": {
     "enabled": true,

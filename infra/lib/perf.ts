@@ -86,6 +86,11 @@ interface DiskStat {
 
 // ── Helpers ──
 
+/**
+ * Execute a shell command safely, returning empty string on failure.
+ * Used throughout perf collection so a single flaky command never crashes
+ * the snapshot tick.  All non-public helpers inherit this resilience.
+ */
 function safeExec(cmd: string): string {
   try {
     return execSync(cmd, { timeout: 30000 }).toString().trim();
@@ -94,14 +99,25 @@ function safeExec(cmd: string): string {
   }
 }
 
+/**
+ * Safe exec alias for rootless podman commands.
+ * The controller runs as user `reeds`, so direct podman exec is fine.
+ * This function exists as a readable alias to document intent:
+ * commands routed through safeExecAsReeds() are podman operations
+ * that could fail if the podman socket is missing during startup.
+ */
 function safeExecAsReeds(cmd: string): string {
-  // Controller runs as reeds, so direct exec is fine.
-  // This function exists as a readable alias for rootless podman commands.
   return safeExec(cmd);
 }
 
 // ── CPU ──
 
+/**
+ * Parse per-CPU time counters from /proc/stat.
+ * Returns a CpuStat struct with all tick counters for the aggregate CPU line.
+ * Used as input to calcCpuPercent() to compute a delta-based utilisation
+ * percentage between two successive readings.
+ */
 function parseCpuStat(): CpuStat {
   const line = fs.readFileSync("/proc/stat", "utf-8").split("\n")[0];
   const parts = line.trim().split(/\s+/);
@@ -117,6 +133,12 @@ function parseCpuStat(): CpuStat {
   };
 }
 
+/**
+ * Compute CPU utilisation percentage from two successive /proc/stat snapshots.
+ * Calculates the ratio of active ticks to total ticks between prev and curr,
+ * yielding the fraction of time the CPU(s) spent doing work over the interval.
+ * @returns 0 – 100, clamped to valid range
+ */
 function calcCpuPercent(prev: CpuStat, curr: CpuStat): number {
   const prevActive =
     prev.user +
@@ -142,6 +164,12 @@ function calcCpuPercent(prev: CpuStat, curr: CpuStat): number {
 
 // ── Disk ──
 
+/**
+ * Parse block-device I/O counters from /proc/diskstats.
+ * Filters to whole block devices (those present in /sys/block) so
+ * partition siblings are excluded.  Each entry tracks cumulative
+ * sector reads/writes for delta-based throughput calculation.
+ */
 function parseDiskStats(): Map<string, DiskStat> {
   const map = new Map<string, DiskStat>();
   const lines = fs.readFileSync("/proc/diskstats", "utf-8").split("\n");
@@ -164,6 +192,12 @@ function parseDiskStats(): Map<string, DiskStat> {
   return map;
 }
 
+/**
+ * Compute aggregate disk read/write throughput in KB/s from two
+ * successive /proc/diskstats snapshots.  Sector count is multiplied
+ * by 512 (bytes per sector) and divided by elapsed seconds.
+ * @returns readKBps and writeKBps (aggregated across all block devices)
+ */
 function calcDiskThroughput(
   prev: Map<string, DiskStat>,
   curr: Map<string, DiskStat>,
@@ -186,6 +220,10 @@ function calcDiskThroughput(
 
 // ── System ──
 
+/**
+ * Parse system load average from /proc/loadavg.
+ * @returns [1min, 5min, 15min] load averages, or [0,0,0] on read failure
+ */
 function parseLoadAvg(): [number, number, number] {
   try {
     const line = fs.readFileSync("/proc/loadavg", "utf-8").trim();
@@ -200,6 +238,11 @@ function parseLoadAvg(): [number, number, number] {
   }
 }
 
+/**
+ * Parse memory usage from `free -m` output, falling back to /proc/meminfo.
+ * Returns used/total in megabytes and a percentage.  The fallback path
+ * computes `used = total - available` to match `free` semantics.
+ */
 function parseMemory(): { usedMB: number; totalMB: number; percent: number } {
   try {
     const out = execSync("free -m").toString();
@@ -239,6 +282,11 @@ function parseMemory(): { usedMB: number; totalMB: number; percent: number } {
 
 // ── Parsing Utilities ──
 
+/**
+ * Parse a size string (e.g. "18.6MB", "345.4kB", "1.678GB") to kilobytes.
+ * Handles B, kB, MB, GB, TB units.  Returns 0 for unparseable input.
+ * Used by parsePodmanStats to normalise podman stats output.
+ */
 function parseSizeToKB(value: string): number {
   const trimmed = value.trim();
   const match = trimmed.match(/^([0-9.]+)\s*(B|kB|MB|GB|TB)?$/i);
@@ -261,6 +309,11 @@ function parseSizeToKB(value: string): number {
   }
 }
 
+/**
+ * Parse a percentage string (e.g. "12.5%") to its numeric value.
+ * Strips the trailing '%' character and returns the float.
+ * Returns 0 for unparseable input.
+ */
 function parsePercent(value: string): number {
   const trimmed = value.trim().replace("%", "");
   const n = parseFloat(trimmed);
@@ -269,6 +322,12 @@ function parsePercent(value: string): number {
 
 // ── Container Stats ──
 
+/**
+ * Collect per-container resource usage via `podman stats --no-stream`.
+ * Parses tab-delimited output into structured ContainerSnapshot records.
+ * Each record includes: name, CPU%, memory usage, network I/O, and block I/O.
+ * Returns an empty array if podman is unavailable or no containers exist.
+ */
 function parsePodmanStats(): ContainerSnapshot[] {
   const out = safeExecAsReeds(
     'podman stats --no-stream --format "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}\t{{.BlockIO}}"'
@@ -311,6 +370,13 @@ function parsePodmanStats(): ContainerSnapshot[] {
 
 // ── Process Stats ──
 
+/**
+ * Collect top processes by CPU or memory usage.
+ * Runs `ps aux` sorted by the chosen metric and returns the top 20 entries
+ * as ProcessSnapshot records.  Podman's own stat processes are filtered out
+ * to avoid polluting the results with monitoring noise.
+ * @param sortBy - "cpu" or "mem" — the column to sort by descending
+ */
 function parseProcesses(sortBy: "cpu" | "mem"): ProcessSnapshot[] {
   const sortFlag = sortBy === "cpu" ? "--sort=-%cpu" : "--sort=-%mem";
   const out = safeExec(`ps aux ${sortFlag} | head -21`);
