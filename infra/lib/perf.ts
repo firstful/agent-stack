@@ -9,6 +9,12 @@ export const PERF_HISTORY_FILE = path.join(RUNTIME_DIR, "perf-history.json");
 export const MAX_SNAPSHOTS = 288; // 24 hours at 5-minute intervals
 
 let _historyFile = PERF_HISTORY_FILE;
+
+/**
+ * Override the default performance history file path (used by tests).
+ * Calling this replaces the internal path used by loadHistory/saveHistory.
+ * @param filepath - Absolute path to the perf-history JSON file
+ */
 export function setHistoryFile(filepath: string): void {
   _historyFile = filepath;
 }
