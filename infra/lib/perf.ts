@@ -1,3 +1,20 @@
+/**
+ * perf.ts — Performance metrics collection and history for the agent-stack controller.
+ *
+ * Collects system-level and per-container performance snapshots at 5-minute intervals:
+ *   - System CPU utilisation (delta-based from /proc/stat)
+ *   - Memory usage (from `free -m` or /proc/meminfo fallback)
+ *   - Disk I/O throughput (delta-based from /proc/diskstats)
+ *   - Load average (from /proc/loadavg)
+ *   - Per-container stats from podman stats (CPU, memory, network, block I/O)
+ *   - Top-CPU and top-memory processes from ps aux
+ *
+ * Snapshots are persisted to runtime/perf-history.json (max 288 entries = 24 h).
+ * All parsers are wrapped in try-catch so a single flaky command never crashes
+ * the collection tick.  The module maintains in-memory state for CPU and disk
+ * deltas between successive readings.
+ */
+
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
