@@ -1,0 +1,28 @@
+# agent-stack build exclusions for groceries.ffilt.us
+# Exclude non-production files from content hash
+
+# Documentation
+*.md
+README
+
+# Development / local-only
+.venv/
+__pycache__/
+*.pyc
+profiles/
+data/*.db
+data/*.json
+scripts/
+*.sh
+
+# Browser profiles (local only — not needed in container)
+profiles/
+
+# Tests
+test_*
+
+# Containerfile (already used to build — not source code)
+Containerfile
+agent-stack.json
+.stackignore
+.logo.svg

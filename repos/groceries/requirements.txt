@@ -1,0 +1,8 @@
+playwright>=1.60
+sqlalchemy>=2.0
+aiosqlite>=0.20
+pydantic>=2.0
+fastapi>=0.110
+uvicorn>=0.30
+httpx>=0.27
+python-multipart

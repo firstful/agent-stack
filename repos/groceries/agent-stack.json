@@ -1,0 +1,32 @@
+{
+  "name": "groceries",
+  "version": 2,
+  "container": {
+    "port": 8080,
+    "auto_port": true,
+    "volumes": ["groceries-data:/app/data"],
+    "healthCheck": {
+      "path": "/health",
+      "timeout": 15000
+    }
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "groceries.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  },
+  "strategy": { "type": "blue-green", "queue": true },
+  "build": {
+    "no_cache": true,
+    "podman_args": "--memory 256m"
+  },
+  "logo": {
+    "_type": "file",
+    "isRelative": true,
+    "fileName": ".logo.svg"
+  },
+  "rateLimit": {
+    "requestsPerMinute": 300,
+    "blockDurationMs": 600000
+  }
+}
