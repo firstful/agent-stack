@@ -224,7 +224,7 @@ class KrogerScraper(BaseScraper):
 
     # ─── API Auth (for prices) ─────────────────────────────────────────
 
-    def login(self, username: str = "", password: str = "") -> bool:
+    def _do_login(self, username: str = "", password: str = "") -> bool:
         """Get API token for price scraping."""
         try:
             self._api_token = get_token()

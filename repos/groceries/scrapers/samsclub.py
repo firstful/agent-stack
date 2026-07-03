@@ -17,7 +17,7 @@ class SamsClubScraper(BaseScraper):
     LOGIN_URL = "https://www.samsclub.com/account/login"
     ORDERS_URL = "https://www.samsclub.com/orders"
 
-    def login(self, username: str, password: str) -> bool:
+    def _do_login(self, username: str, password: str) -> bool:
         """Login to Sam's Club."""
         logger.info("Logging into Sam's Club...")
         self.goto(self.LOGIN_URL, wait_until="networkidle")

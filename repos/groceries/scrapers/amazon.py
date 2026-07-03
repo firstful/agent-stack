@@ -25,17 +25,13 @@ class AmazonScraper(BaseScraper):
     LOGIN_URL = "https://www.amazon.com"  # Sign in by clicking homepage link
     ORDERS_URL = "https://www.amazon.com/your-orders"
 
-    def login(self, username: str, password: str, totp_secret: str | None = None) -> bool:
+    def _do_login(self, username: str, password: str, totp_secret: str | None = None) -> bool:
         """Login to Amazon with human-like delays.
 
         If *totp_secret* is provided, the TOTP code is generated and
         auto‑filled when Amazon prompts for a verification code.
         """
         logger.info("Logging into Amazon...")
-
-        # ── Session restore: skip login if cookies still valid ────────────
-        if self.restore_session():
-            return True
 
         # Pre-warm: visit homepage first like a real user
         self.goto("https://www.amazon.com", wait_until="networkidle")
@@ -146,26 +142,10 @@ class AmazonScraper(BaseScraper):
             self._auto_fill_totp(totp_secret)
 
         # Fall back to waiting for manual entry on the real display
+        # (MFA page /ap/mfa is now treated as "still on login" by
+        # _url_past_login, so wait_for_login_complete will keep waiting
+        # until the user completes MFA on the display)
         logged_in = self.wait_for_login_complete(wait_seconds=180)
-
-        # If we got past login but landed on an MFA page, try navigating
-        # to orders directly — Amazon often completes MFA on the way
-        if logged_in and "/ap/mfa" in self.page.url:
-            logger.info("On MFA page after login — navigating to orders to finalize")
-            try:
-                self.goto("https://www.amazon.com/your-orders", wait_until="domcontentloaded")
-                time.sleep(3)
-                # If still on MFA, try _complete_mfa
-                if "/ap/mfa" in self.page.url:
-                    if self._complete_mfa():
-                        self.goto("https://www.amazon.com/your-orders", wait_until="domcontentloaded")
-                        time.sleep(2)
-                # Check if we made it past MFA
-                if "/ap/mfa" not in self.page.url:
-                    self.save_state()
-                    logged_in = True
-            except Exception:
-                pass
 
         return logged_in
 

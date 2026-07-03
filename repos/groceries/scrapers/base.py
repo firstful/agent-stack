@@ -158,9 +158,18 @@ class BaseScraper(ABC):
 
         return False
 
+    def login(self, username: str = "", password: str = "", **kwargs) -> bool:
+        """Template method: try session restore first, then perform login.
+
+        Subclasses implement ``_do_login()`` for their site-specific flow.
+        """
+        if self.restore_session():
+            return True
+        return self._do_login(username, password, **kwargs)
+
     @abstractmethod
-    def login(self, username: str, password: str) -> bool:
-        """Perform login. Returns True if successful."""
+    def _do_login(self, username: str, password: str, **kwargs) -> bool:
+        """Site-specific login logic. Called only when session restore fails."""
         ...
 
     def wait_for_login_complete(self, wait_seconds: int = 120) -> bool:
@@ -208,7 +217,7 @@ class BaseScraper(ABC):
         if orig_host != curr_host:
             return False
         # Path shouldn't be the login path anymore
-        login_paths = ["login", "signin", "sign-in", "log-in", "auth", "ap/signin"]
+        login_paths = ["login", "signin", "sign-in", "log-in", "auth", "ap/signin", "ap/mfa"]
         is_still_login = any(p in curr_path.lower() for p in login_paths)
         return not is_still_login
 

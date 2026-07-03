@@ -18,7 +18,7 @@ class WalmartScraper(BaseScraper):
     LOGIN_URL = "https://www.walmart.com/account/login"
     ORDERS_URL = "https://www.walmart.com/orders"
 
-    def login(self, username: str, password: str) -> bool:
+    def _do_login(self, username: str, password: str) -> bool:
         """Login to Walmart."""
         logger.info("Logging into Walmart...")
         self.goto(self.LOGIN_URL, wait_until="networkidle")

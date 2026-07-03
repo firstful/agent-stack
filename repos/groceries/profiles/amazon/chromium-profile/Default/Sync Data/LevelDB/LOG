@@ -1,3 +1,3 @@
-2026/07/03-14:04:45.417 3a3a8c Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Sync Data/LevelDB/MANIFEST-000001
-2026/07/03-14:04:45.471 3a3a8c Recovering log #3
-2026/07/03-14:04:45.471 3a3a8c Reusing old log /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Sync Data/LevelDB/000003.log 
+2026/07/03-14:23:49.724 3b66ef Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Sync Data/LevelDB/MANIFEST-000001
+2026/07/03-14:23:49.724 3b66ef Recovering log #3
+2026/07/03-14:23:49.725 3b66ef Reusing old log /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Sync Data/LevelDB/000003.log 

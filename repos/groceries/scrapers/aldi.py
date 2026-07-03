@@ -19,7 +19,7 @@ class AldiScraper(BaseScraper):
     LOGIN_URL = "https://www.aldi.us/en/account/login/"
     ORDERS_URL = "https://www.aldi.us/en/account/order-history/"
 
-    def login(self, username: str, password: str) -> bool:
+    def _do_login(self, username: str, password: str) -> bool:
         """
         Aldi may or may not have a traditional online ordering system.
         Their US site primarily serves as an informational site.
