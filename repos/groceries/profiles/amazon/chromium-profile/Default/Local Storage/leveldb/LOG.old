@@ -1,5 +1,3 @@
-2026/07/03-14:21:50.373 3b4530 Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/07/03-14:21:50.378 3b4530 Recovering log #19
-2026/07/03-14:21:50.378 3b4530 Level-0 table #21: started
-2026/07/03-14:21:50.384 3b4530 Level-0 table #21: 25797 bytes OK
-2026/07/03-14:21:50.386 3b4530 Delete type=0 #19
+2026/07/03-14:28:42.275 3bd1af Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/07/03-14:28:42.280 3bd1af Recovering log #22
+2026/07/03-14:28:42.281 3bd1af Reusing old log /srv/agent-stack/repos/groceries/profiles/amazon/chromium-profile/Default/Local Storage/leveldb/000022.log 

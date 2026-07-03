@@ -231,11 +231,12 @@ class AmazonScraper(BaseScraper):
                 logger.info("Amazon OTP challenge detected — waiting for manual entry")
                 return False
 
-            # MFA approval page (after TOTP, before fully logged in)
+            # MFA approval page (after TOTP, before fully logged in) —
+            # just return False and let wait_for_login_complete loop
+            # wait for the user to complete it on the display
             if "/ap/mfa" in self.page.url:
-                logger.info("Amazon MFA page — completing verification")
-                if self._complete_mfa():
-                    return True  # Don't call save_state again here
+                logger.info("Amazon MFA page — waiting for manual completion on display")
+                return False
 
             # Logged-in indicators
             if "Hello, " in body_text or "Your Account" in body_text or "Your Orders" in body_text:
