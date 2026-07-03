@@ -18,6 +18,9 @@ profiles/*/videos/
 data/*.png
 data/*.json
 debug_*.py
+scrapers/login_*.py
+scrapers/*_auth.py
+scrapers/*_fixed.py
 *.png
 *.db
 *.db-shm
