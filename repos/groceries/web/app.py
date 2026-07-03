@@ -13,11 +13,13 @@ Provides:
 Designed to run as an agent-stack service on groceries.ffilt.us
 """
 import os
+import sys
 import json
 import time
 import uuid
 import logging
 import threading
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -178,38 +180,66 @@ class TaskQueue:
             session.close()
 
     def _execute_task(self, task: dict):
-        """Run the actual scrape for a task."""
+        """Run the actual scrape for a task in a subprocess."""
         merchant = task["merchant"]
         task_type = task["task_type"]
         logger.info("Executing task: %s %s", merchant, task_type)
 
-        session = get_db_session()
-        from models import ScrapeTask
-
-        db_task = session.query(ScrapeTask).filter(ScrapeTask.id == task["id"]).first()
-        if not db_task:
-            session.close()
-            return
-
+        runner = PROJECT_DIR / "run_task.py"
         try:
-            if task_type == "orders":
-                result = self._scrape_orders_for(merchant)
-                db_task.result = f"Scraped {len(result)} orders" if result else "No orders found"
-            else:
-                result = self._scrape_prices_for(merchant)
-                db_task.result = f"Scraped {len(result)} prices" if result else "No prices found"
+            proc = subprocess.run(
+                [sys.executable, str(runner), merchant, task_type],
+                capture_output=True, text=True, timeout=600,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError(f"Subprocess exited {proc.returncode}: {proc.stderr[:2000]}")
 
-            db_task.status = "completed"
-            db_task.completed_at = datetime.now()
-            logger.info("✅ Task completed: %s %s — %s", merchant, task_type, db_task.result)
-        except Exception as e:
-            db_task.status = "failed"
-            db_task.error = str(e)[:500]
-            db_task.completed_at = datetime.now()
-            logger.error("❌ Task failed: %s %s — %s", merchant, task_type, e)
-        finally:
+            result = json.loads(proc.stdout)
+
+            session = get_db_session()
+            from models import ScrapeTask
+            db_task = session.query(ScrapeTask).filter(ScrapeTask.id == task["id"]).first()
+            if not db_task:
+                session.close()
+                return
+
+            if result.get("ok"):
+                count = result.get("count", 0)
+                db_task.status = "completed"
+                db_task.result = f"Scraped {count} {'orders' if task_type == 'orders' else 'prices'}"
+                db_task.completed_at = datetime.now()
+                logger.info("✅ Task completed: %s %s — %d items", merchant, task_type, count)
+            else:
+                db_task.status = "failed"
+                db_task.error = result.get("error", "Unknown error")[:2000]
+                db_task.completed_at = datetime.now()
+                logger.error("❌ Task failed: %s %s — %s", merchant, task_type, db_task.error)
+
             session.commit()
             session.close()
+
+        except subprocess.TimeoutExpired:
+            session = get_db_session()
+            from models import ScrapeTask
+            db_task = session.query(ScrapeTask).filter(ScrapeTask.id == task["id"]).first()
+            if db_task:
+                db_task.status = "failed"
+                db_task.error = "Timeout after 600s"
+                db_task.completed_at = datetime.now()
+                session.commit()
+            session.close()
+            logger.error("❌ Task timed out: %s %s", merchant, task_type)
+        except Exception as e:
+            session = get_db_session()
+            from models import ScrapeTask
+            db_task = session.query(ScrapeTask).filter(ScrapeTask.id == task["id"]).first()
+            if db_task:
+                db_task.status = "failed"
+                db_task.error = str(e)[:2000]
+                db_task.completed_at = datetime.now()
+                session.commit()
+            session.close()
+            logger.error("❌ Task failed: %s %s — %s", merchant, task_type, e)
 
     def _scrape_orders_for(self, merchant: str) -> list:
         """Scrape orders for a specific merchant. Returns order count."""
@@ -241,8 +271,16 @@ class TaskQueue:
                 return []
 
             orders = []
-            with scraper_class(headless=True) as scraper:
-                scraper.login(site_creds.get("user", ""), site_creds.get("pass", ""))
+            with scraper_class(headless=False) as scraper:
+                # Amazon gets TOTP from credentials, others just user+pass
+                if merchant == "amazon":
+                    scraper.login(
+                        site_creds.get("user", ""),
+                        site_creds.get("pass", ""),
+                        totp_secret=site_creds.get("totp"),
+                    )
+                else:
+                    scraper.login(site_creds.get("user", ""), site_creds.get("pass", ""))
                 orders = scraper.scrape_orders(max_orders=50)
                 for order_data in orders:
                     from storage import store_order
@@ -265,8 +303,25 @@ class TaskQueue:
             scraper_class = _SCRAPER_MAP.get(merchant)
             if not scraper_class:
                 return []
-            with scraper_class() as scraper:
-                scraper.login()
+
+            # Load credentials
+            creds_file = PROJECT_DIR / "profiles" / "credentials.json"
+            site_creds = {}
+            if creds_file.exists():
+                with open(creds_file) as f:
+                    creds = json.load(f)
+                site_creds = creds.get(merchant, {})
+
+            items = []
+            with scraper_class(headless=False) as scraper:
+                if merchant == "amazon":
+                    scraper.login(
+                        site_creds.get("user", ""),
+                        site_creds.get("pass", ""),
+                        totp_secret=site_creds.get("totp"),
+                    )
+                elif site_creds.get("user"):
+                    scraper.login(site_creds.get("user", ""), site_creds.get("pass", ""))
                 items = scraper.scrape_current_prices(zip_code="43147")
                 if items:
                     output_path = DATA_DIR / "latest_prices.json"

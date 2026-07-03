@@ -142,12 +142,11 @@ def get_launch_kwargs(site: str, headless: bool = False, **extra) -> dict:
     """
     Build Playwright launch kwargs for realistic, undetectable browsing.
 
-    Key anti-detection measures:
-    - Headed mode on the real X display
-    - Persistent user data dir (real profile with cookies, extensions)
-    - Matches Chromium version on this system
-    - Disables automation flags
-    - Realistic viewport
+    NOTE: Playwright 1.61+ does NOT accept ``user_data_dir`` in
+    ``browser_type.launch()``.  Use ``launch_persistent_context()``
+    together with `get_persistent_launch_kwargs()` instead.
+
+    Returns kwargs suitable for ``browser_type.launch(**kwargs)``.
     """
     site_cfg = SITE_CONFIGS[site]
 
@@ -176,13 +175,72 @@ def get_launch_kwargs(site: str, headless: bool = False, **extra) -> dict:
         "executable_path": "/usr/bin/chromium",
         "headless": headless,
         "args": args,
-        # Persistent profile so cookies survive restarts
-        "user_data_dir": str(profile_dir(site)),
         # We are connecting to a real display — no sandbox issues
         "ignore_default_args": ["--enable-automation"],
         "env": detect_display(),
         # Increase timeouts for slow grocery sites
         "timeout": 60_000,
+    }
+    kwargs.update(extra)
+    return kwargs
+
+
+def get_persistent_launch_kwargs(site: str, headless: bool = False, **extra) -> dict:
+    """
+    Build kwargs for ``browser_type.launch_persistent_context()``.
+
+    This is the modern Playwright API for using a persistent user data
+    directory (cookies, localStorage survive restarts).  It combines
+    browser launch *and* context creation into one call.
+
+    Returns kwargs suitable for::
+
+        context = browser_type.launch_persistent_context(
+            user_data_dir=str(profile_dir(site)),
+            **get_persistent_launch_kwargs(site, headless=headless),
+        )
+    """
+    site_cfg = SITE_CONFIGS[site]
+
+    args = [
+        "--disable-blink-features=AutomationControlled",
+        "--disable-software-rasterizer",
+        "--enable-features=NetworkService,NetworkServiceInProcess",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-default-apps",
+        "--disable-translate",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-breakpad",
+    ]
+    args.extend(site_cfg.get("chromium_args", []))
+
+    # Base kwargs match what launch_persistent_context accepts
+    kwargs: dict = {
+        "executable_path": "/usr/bin/chromium",
+        "headless": headless,
+        "args": args,
+        "ignore_default_args": ["--enable-automation"],
+        "env": detect_display(),
+        "timeout": 60_000,
+        # Persistent context also accepts context-level options
+        "viewport": {
+            "width": random.choice([1366, 1440, 1536, 1600, 1920]),
+            "height": random.choice([768, 900, 864, 900, 1080]),
+        },
+        "locale": "en-US",
+        "timezone_id": "America/New_York",
+        "color_scheme": "light",
+        "device_scale_factor": 1.0,
+        "is_mobile": False,
+        "has_touch": False,
+        "user_agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/149.0.0.0 Safari/537.36"
+        ),
+        "accept_downloads": True,
     }
     kwargs.update(extra)
     return kwargs

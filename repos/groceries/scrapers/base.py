@@ -12,9 +12,9 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from core import (
-    get_launch_kwargs, get_context_kwargs, save_storage_state,
+    get_persistent_launch_kwargs, save_storage_state,
     apply_stealth_js, human_delay, random_scroll,
-    session_state_path, screenshot_dir, detect_display,
+    session_state_path, screenshot_dir, detect_display, profile_dir,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,21 +39,28 @@ class BaseScraper(ABC):
     # ─── Lifecycle ────────────────────────────────────────────────────────
 
     def launch(self):
-        """Launch browser and create context + page."""
+        """Launch browser with persistent context (Playwright 1.61+ API)."""
         from playwright.sync_api import sync_playwright
 
         self._pw = sync_playwright().start()
 
-        launch_kwargs = get_launch_kwargs(self.SITE_NAME, headless=self.headless)
-        context_kwargs = get_context_kwargs(self.SITE_NAME)
+        persistent_kwargs = get_persistent_launch_kwargs(
+            self.SITE_NAME, headless=self.headless,
+        )
         if self.record_video:
             vid_dir = screenshot_dir(self.SITE_NAME) / "videos"
-            context_kwargs["record_video_dir"] = str(vid_dir)
+            persistent_kwargs["record_video_dir"] = str(vid_dir)
 
         logger.info(f"Launching {self.SITE_NAME} scraper...")
-        self.browser = self._pw.chromium.launch(**launch_kwargs)
-        self.context = self.browser.new_context(**context_kwargs)
-        self.page = self.context.new_page()
+
+        # launch_persistent_context returns a BrowserContext, not a Browser.
+        # The persistent user data dir is passed as the first positional arg.
+        self.context = self._pw.chromium.launch_persistent_context(
+            str(profile_dir(self.SITE_NAME)),
+            **persistent_kwargs,
+        )
+        # Use the initial about:blank page — don't close it or try new_page()
+        self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
         # Apply stealth patches
         apply_stealth_js(self.page)
@@ -64,7 +71,7 @@ class BaseScraper(ABC):
         logger.info(f"Browser launched for {self.SITE_NAME}")
 
     def close(self):
-        """Teardown browser, context, and Playwright."""
+        """Teardown context and Playwright."""
         if self.page:
             try:
                 self.page.close()
@@ -73,11 +80,6 @@ class BaseScraper(ABC):
         if self.context:
             try:
                 self.context.close()
-            except Exception:
-                pass
-        if self.browser:
-            try:
-                self.browser.close()
             except Exception:
                 pass
         if hasattr(self, '_pw') and self._pw:

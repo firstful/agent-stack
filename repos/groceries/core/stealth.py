@@ -5,6 +5,7 @@ Applies in-memory patches to the page context before navigation.
 These run AFTER the page object is created but BEFORE navigating to the target site.
 """
 import random
+import time
 import logging
 from typing import Optional
 
