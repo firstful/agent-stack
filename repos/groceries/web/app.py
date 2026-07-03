@@ -14,29 +14,297 @@ Designed to run as an agent-stack service on groceries.ffilt.us
 """
 import os
 import json
+import time
+import uuid
 import logging
-from datetime import datetime
+import threading
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 # ─── Setup ───────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("web")
 
-app = FastAPI(
-    title="Groceries FFILT.US",
-    description="Grocery automation — order history, price comparison, outage forecasting",
-    version="0.1.0",
-)
-
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_DIR / "data"
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+
+# ─── Task Queue ──────────────────────────────────────────────────────────
+
+class TaskQueue:
+    """Simple DB-backed task queue for scrape jobs with auto-scheduler."""
+
+    SCRAPE_INTERVAL_HOURS = 2  # Run full scrape every 2 hours
+    POLL_INTERVAL_SECONDS = 15  # Check for new tasks every 15s
+
+    def __init__(self):
+        self._worker_thread: Optional[threading.Thread] = None
+        self._scheduler_thread: Optional[threading.Thread] = None
+        self._running = False
+        self._lock = threading.Lock()
+        self.current_task: Optional[dict] = None
+        self.last_run: Optional[str] = None
+        self.next_run: Optional[str] = None
+        self.merchants_configured: list[str] = []
+
+    # ── Lifecycle ────────────────────────────────────────────────────────
+
+    def start(self):
+        """Start the scheduler and worker background threads."""
+        if self._running:
+            return
+        self._running = True
+        self._scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True, name="scheduler")
+        self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True, name="worker")
+        self._scheduler_thread.start()
+        self._worker_thread.start()
+        logger.info("Task queue started (scrape every %dh)", self.SCRAPE_INTERVAL_HOURS)
+
+    def stop(self):
+        """Signal threads to stop."""
+        self._running = False
+        logger.info("Task queue stopping...")
+
+    # ── Scheduler ────────────────────────────────────────────────────────
+
+    def _scheduler_loop(self):
+        """Check every minute if it's time for a scheduled scrape run."""
+        while self._running:
+            now = datetime.now()
+            next_run = self.next_run
+            if not next_run:
+                # First run — schedule for now
+                self.next_run = now.isoformat()
+                self._schedule_full_scrape()
+            else:
+                next_dt = datetime.fromisoformat(next_run)
+                if now >= next_dt:
+                    self._schedule_full_scrape()
+                    self.next_run = (now + timedelta(hours=self.SCRAPE_INTERVAL_HOURS)).isoformat()
+                    self.last_run = now.isoformat()
+                    logger.info("Scheduled scrape triggered at %s", self.last_run)
+            time.sleep(60)  # Check every minute
+
+    def _schedule_full_scrape(self):
+        """Queue scrape tasks for all configured merchants."""
+        session = get_db_session()
+        from models import ScrapeTask
+        run_id = uuid.uuid4().hex[:12]
+        merchants = self._get_active_merchants()
+        for merchant in merchants:
+            for task_type in ("orders", "prices"):
+                task = ScrapeTask(
+                    merchant=merchant,
+                    task_type=task_type,
+                    status="pending",
+                    priority=1,
+                    run_id=run_id,
+                )
+                session.add(task)
+        session.commit()
+        logger.info("Queued %d tasks (run_id=%s) for %d merchants", len(merchants) * 2, run_id, len(merchants))
+        session.close()
+
+    def _get_active_merchants(self) -> list[str]:
+        """Get merchants with stored credentials."""
+        try:
+            creds_file = PROJECT_DIR / "profiles" / "credentials.json"
+            if not creds_file.exists():
+                return []
+            with open(creds_file) as f:
+                creds = json.load(f)
+            active = []
+            for site in ["amazon", "kroger", "walmart", "samsclub", "aldi"]:
+                sc = creds.get(site, {})
+                if sc.get("user") or sc.get("pass"):
+                    active.append(site)
+            self.merchants_configured = active
+            return active
+        except Exception:
+            return []
+
+    # ── Worker ───────────────────────────────────────────────────────────
+
+    def _worker_loop(self):
+        """Continuously pick up and execute pending tasks."""
+        while self._running:
+            try:
+                task = self._dequeue_task()
+                if task:
+                    self._execute_task(task)
+                else:
+                    time.sleep(self.POLL_INTERVAL_SECONDS)
+            except Exception as e:
+                logger.error("Worker error: %s", e)
+                time.sleep(5)
+
+    def _dequeue_task(self) -> Optional[dict]:
+        """Fetch the highest-priority pending task."""
+        session = get_db_session()
+        from models import ScrapeTask
+        try:
+            task = (
+                session.query(ScrapeTask)
+                .filter(ScrapeTask.status == "pending")
+                .order_by(ScrapeTask.priority.desc(), ScrapeTask.created_at.asc())
+                .first()
+            )
+            if task:
+                task.status = "running"
+                task.started_at = datetime.now()
+                session.commit()
+                result = {
+                    "id": task.id,
+                    "merchant": task.merchant,
+                    "task_type": task.task_type,
+                    "run_id": task.run_id,
+                }
+                self.current_task = result
+                return result
+            self.current_task = None
+            return None
+        except Exception:
+            return None
+        finally:
+            session.close()
+
+    def _execute_task(self, task: dict):
+        """Run the actual scrape for a task."""
+        merchant = task["merchant"]
+        task_type = task["task_type"]
+        logger.info("Executing task: %s %s", merchant, task_type)
+
+        session = get_db_session()
+        from models import ScrapeTask
+
+        db_task = session.query(ScrapeTask).filter(ScrapeTask.id == task["id"]).first()
+        if not db_task:
+            session.close()
+            return
+
+        try:
+            if task_type == "orders":
+                result = self._scrape_orders_for(merchant)
+                db_task.result = f"Scraped {len(result)} orders" if result else "No orders found"
+            else:
+                result = self._scrape_prices_for(merchant)
+                db_task.result = f"Scraped {len(result)} prices" if result else "No prices found"
+
+            db_task.status = "completed"
+            db_task.completed_at = datetime.now()
+            logger.info("✅ Task completed: %s %s — %s", merchant, task_type, db_task.result)
+        except Exception as e:
+            db_task.status = "failed"
+            db_task.error = str(e)[:500]
+            db_task.completed_at = datetime.now()
+            logger.error("❌ Task failed: %s %s — %s", merchant, task_type, e)
+        finally:
+            session.commit()
+            session.close()
+
+    def _scrape_orders_for(self, merchant: str) -> list:
+        """Scrape orders for a specific merchant. Returns order count."""
+        from main import scrape_all_orders as _scrape_all
+        # We only scrape the specific merchant by passing it
+        try:
+            # Import and use the scraper directly
+            from scrapers import WalmartScraper, SamsClubScraper, AmazonScraper, KrogerScraper, AldiScraper
+            _SCRAPER_MAP = {
+                "walmart": WalmartScraper, "samsclub": SamsClubScraper,
+                "amazon": AmazonScraper, "kroger": KrogerScraper, "aldi": AldiScraper,
+            }
+            from storage import get_engine, init_db, get_session
+
+            creds_file = PROJECT_DIR / "profiles" / "credentials.json"
+            with open(creds_file) as f:
+                creds = json.load(f)
+
+            site_creds = creds.get(merchant, {})
+            if not site_creds.get("user"):
+                return []
+
+            engine = get_engine()
+            init_db(engine)
+            session = get_session(engine)
+
+            scraper_class = _SCRAPER_MAP.get(merchant)
+            if not scraper_class:
+                return []
+
+            orders = []
+            with scraper_class(headless=True) as scraper:
+                scraper.login(site_creds.get("user", ""), site_creds.get("pass", ""))
+                orders = scraper.scrape_orders(max_orders=50)
+                for order_data in orders:
+                    from storage import store_order
+                    store_order(session, merchant, order_data)
+
+            session.close()
+            return orders
+        except Exception as e:
+            logger.error("Scrape orders for %s failed: %s", merchant, e)
+            return []
+
+    def _scrape_prices_for(self, merchant: str) -> list:
+        """Scrape prices for a specific merchant."""
+        try:
+            from scrapers import WalmartScraper, SamsClubScraper, AmazonScraper, KrogerScraper, AldiScraper
+            _SCRAPER_MAP = {
+                "walmart": WalmartScraper, "samsclub": SamsClubScraper,
+                "amazon": AmazonScraper, "kroger": KrogerScraper, "aldi": AldiScraper,
+            }
+            scraper_class = _SCRAPER_MAP.get(merchant)
+            if not scraper_class:
+                return []
+            with scraper_class() as scraper:
+                scraper.login()
+                items = scraper.scrape_current_prices(zip_code="43147")
+                if items:
+                    output_path = DATA_DIR / "latest_prices.json"
+                    existing = []
+                    if output_path.exists():
+                        with open(output_path) as f:
+                            existing = json.load(f)
+                    # Merge: remove old entries for this merchant, add new
+                    existing = [p for p in existing if p.get("store") != merchant]
+                    existing.extend(items)
+                    with open(output_path, "w") as f:
+                        json.dump(existing, f, indent=2, default=str)
+                return items
+        except Exception as e:
+            logger.error("Scrape prices for %s failed: %s", merchant, e)
+            return []
+
+
+# ─── Application Setup ───────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background scheduler on boot."""
+    task_queue.start()
+    yield
+    task_queue.stop()
+
+app = FastAPI(
+    title="Groceries FFILT.US",
+    description="Grocery automation — order history, price comparison, outage forecasting",
+    version="0.2.0",
+    lifespan=lifespan,
+)
+
+task_queue = TaskQueue()
+
+
+# ─── Helper Functions ────────────────────────────────────────────────────
 
 
 # ─── Pydantic Models ─────────────────────────────────────────────────────
@@ -610,3 +878,68 @@ async def get_stores():
 @app.get("/health")
 async def health():
     return {"status": "ok", "db_path": str(DATA_DIR / "grocery.db")}
+
+
+# ─── Task Queue API ──────────────────────────────────────────────────────
+
+@app.get("/api/queue/status")
+async def queue_status():
+    """Get current queue status — running task, last run, next run, merchants."""
+    return {
+        "current_task": task_queue.current_task,
+        "last_run": task_queue.last_run,
+        "next_run": task_queue.next_run,
+        "merchants_configured": task_queue.merchants_configured,
+        "is_running": task_queue._running,
+    }
+
+
+@app.get("/api/queue/tasks")
+async def queue_tasks(limit: int = 50, status_filter: Optional[str] = None):
+    """List recent tasks from the queue."""
+    session = get_db_session()
+    from models import ScrapeTask
+    query = session.query(ScrapeTask).order_by(ScrapeTask.created_at.desc())
+    if status_filter:
+        query = query.filter(ScrapeTask.status == status_filter)
+    tasks = query.limit(limit).all()
+    result = []
+    for t in tasks:
+        result.append({
+            "id": t.id,
+            "merchant": t.merchant,
+            "task_type": t.task_type,
+            "status": t.status,
+            "result": t.result,
+            "error": t.error,
+            "run_id": t.run_id,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "started_at": t.started_at.isoformat() if t.started_at else None,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+        })
+    session.close()
+    return JSONResponse(content={"tasks": result, "total": len(result)})
+
+
+@app.post("/api/queue/trigger")
+async def trigger_scrape():
+    """Manually trigger a full scrape run for all merchants."""
+    task_queue._schedule_full_scrape()
+    return {"status": "queued", "message": f"Tasks queued for {len(task_queue.merchants_configured)} merchants"}
+
+
+@app.post("/api/queue/trigger/{merchant}")
+async def trigger_merchant_scrape(merchant: str):
+    """Trigger scrape for a specific merchant."""
+    session = get_db_session()
+    from models import ScrapeTask
+    run_id = uuid.uuid4().hex[:12]
+    for task_type in ("orders", "prices"):
+        task = ScrapeTask(
+            merchant=merchant, task_type=task_type,
+            status="pending", priority=2, run_id=run_id,
+        )
+        session.add(task)
+    session.commit()
+    session.close()
+    return {"status": "queued", "message": f"Tasks queued for {merchant}", "run_id": run_id}

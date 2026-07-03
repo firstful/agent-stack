@@ -119,3 +119,20 @@ class PurchasePattern(Base):
     confidence = Column(Float, default=0.0)                        # 0.0-1.0
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.now)
+
+
+class ScrapeTask(Base):
+    """A scrape task in the internal queue."""
+    __tablename__ = "scrape_tasks"
+
+    id = Column(Integer, primary_key=True)
+    merchant = Column(String(50), nullable=False, index=True)
+    task_type = Column(String(20), nullable=False)  # "orders" or "prices"
+    status = Column(String(20), default="pending")  # pending, running, completed, failed
+    priority = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    result = Column(String(500), nullable=True)
+    error = Column(Text, nullable=True)
+    run_id = Column(String(100), nullable=True, index=True)  # batch identifier
