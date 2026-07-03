@@ -132,6 +132,32 @@ class BaseScraper(ABC):
 
     # ─── Login Flow ───────────────────────────────────────────────────────
 
+    def restore_session(self) -> bool:
+        """Try to restore a previously-saved session by navigating to orders.
+
+        Uses the persistent Chromium profile (cookies survive across launches
+        via ``launch_persistent_context``).  Returns True if already
+        authenticated, False if login is needed.
+        """
+        if not self.ORDERS_URL:
+            return False
+
+        logger.info("Attempting session restore — going straight to orders...")
+        try:
+            self.goto(self.ORDERS_URL, wait_until="domcontentloaded")
+            time.sleep(3)
+
+            if self._check_logged_in():
+                logger.info("Session restore successful — already authenticated")
+                self.save_state()
+                return True
+
+            logger.info("Session restore failed — not authenticated, proceeding to login")
+        except Exception as e:
+            logger.debug(f"Session restore error: {e}")
+
+        return False
+
     @abstractmethod
     def login(self, username: str, password: str) -> bool:
         """Perform login. Returns True if successful."""

@@ -33,6 +33,10 @@ class AmazonScraper(BaseScraper):
         """
         logger.info("Logging into Amazon...")
 
+        # ── Session restore: skip login if cookies still valid ────────────
+        if self.restore_session():
+            return True
+
         # Pre-warm: visit homepage first like a real user
         self.goto("https://www.amazon.com", wait_until="networkidle")
         human_delay(2, 4)
