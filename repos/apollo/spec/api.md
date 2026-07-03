@@ -34,14 +34,16 @@ JSON control messages:
 | `cancel` | `{}` | Discard accumulated audio, no processing. |
 | `interrupt` | `{}` | Barge-in: user pressed PTT mid-turn. Apollo stops the active Hermes run and audio processing. Client starts new recording. |
 | `ping` | `{}` | Keepalive. Server responds with `pong`. |
+| `reconnect` | `{"session_id":"...", "last_seq": N}` | **Async replay handshake.** Sent immediately after WebSocket open. Declares the client's last-known session ID and the highest sequence number it has processed. Server replays any undelivered run or responds with `reconnect_done`. |
+| `ack` | `{"seq": N}` | Periodic acknowledgment (every 5s). Client reports the highest sequence number it has processed. Used for server-side delivery tracking. |
 
 #### Server → Client (text frames)
 
-JSON control messages:
+JSON control messages — **every message includes a monotonically increasing `seq` field** for delivery tracking:
 
 | Type | Fields | Description |
 |------|--------|-------------|
-| `processing` | `{"step": "stt" | "thinking" | "tts"}` | Status update for UI |
+| `processing` | `{"step": "stt" \| "thinking" \| "tts"}` | Status update for UI |
 | `stt_transcript` | `{"text": "..."}` | User's speech recognized as text |
 | `tts_start` | `{"text": "..."}` | Hermes reply text, about to synthesize |
 | `tts_end` | `{}` | TTS stream complete |
@@ -50,6 +52,7 @@ JSON control messages:
 | `error` | `{"message": "..."}` | Processing error |
 | `pong` | `{}` | Response to `ping` |
 | `session_id` | `{"id": "..."}` | Hermes session ID for continuity |
+| `reconnect_done` | `{"replayed": bool, "complete": bool?, "interrupted": bool?}` | Response to `reconnect` handshake. `replayed=true` means the server delivered an undelivered previous run. `complete` indicates whether the replayed TTS was fully streamed. |
 
 #### Server → Client (binary frames)
 
@@ -119,11 +122,75 @@ When the user presses PTT mid-turn, the client sends `{"type": "interrupt"}` and
 
 1. If a Hermes run is active (PROCESSING state): `POST /v1/runs/{run_id}/stop` to abort it
 2. If TTS is being streamed (PLAYING state): abort the TTS generation and ffmpeg process
-3. Drain any buffered audio, discard partial state
-4. Respond with `{"type": "interrupted", "run_id": "..."}` to confirm
-5. Wait for the client to start a new PTT recording
+3. Save the partial run result to the RunStore for potential replay
+4. Drain any buffered audio, discard partial state
+5. Respond with `{"type": "interrupted", "run_id": "..."}` to confirm
+6. Wait for the client to start a new PTT recording
 
 The client then begins fresh audio capture. The old run's context is **discarded** — the new PTT turn starts as a new `/v1/runs` call. Session continuity is maintained via the `session_id` from the last *completed* turn (interrupted runs are not completed, so the session rolls back to the last clean turn).
+
+### Async Replay (Connection Resilience)
+
+Apollo survives WebSocket interruptions by decoupling Hermes run completion from connection lifetime. Every run result (transcript, reply text, TTS audio chunks) is stored in an in-memory **RunStore** keyed by Hermes session ID.
+
+#### Sequence Numbers
+
+Every server→client message (JSON text or binary audio) carries a monotonically increasing `seq` number. JSON messages embed it in the `seq` field. Binary audio frames are implicitly sequenced by order of delivery; the server's TTS loop assigns seqs to each chunk.
+
+The client tracks `lastSeq` — the highest seq it has fully processed (rendered to screen or played through speaker). It periodically reports this to the server via `ack` messages.
+
+#### Reconnect Flow
+
+```
+Client                              Server
+  │                                   │
+  ├─ WebSocket open ──────────────────┤
+  ├─ {"type":"reconnect",             │
+  │    "session_id":"sess_abc",       │
+  │    "last_seq":42} ────────────────┤
+  │                                   ├─ Check RunStore for session "sess_abc"
+  │                                   │
+  │  ┌── If undelivered run found:    │
+  │  │  {"type":"session_id",...}  ←──┤
+  │  │  {"type":"stt_transcript",..}←─┤
+  │  │  {"type":"tts_start",...}   ←──┤
+  │  │  [binary audio chunks N..M] ←──┤  replay saved audio
+  │  │  {"type":"tts_end"}        ←──┤
+  │  │  {"type":"reconnect_done",     │
+  │  │   "replayed":true}         ←──┤
+  │  │                                │
+  │  └── If nothing to replay:        │
+  │     {"type":"reconnect_done",     │
+  │      "replayed":false}        ←──┤
+  │                                   │
+  ├─ {"type":"ack","seq":N} ──────────┤  periodic (every 5s)
+```
+
+#### RunStore Lifecycle
+
+- **Created**: When a Hermes run completes and TTS starts. The reply text and first audio chunk create the entry.
+- **Populated**: Audio chunks are appended during TTS streaming.
+- **Completed**: When `tts_end` is sent, `complete=true`.
+- **Consumed**: When a reconnecting client successfully receives the full replay, the run is evicted.
+- **Expired**: Runs older than 300 seconds (5 minutes) are purged by a background cleanup task.
+
+#### Client Auto-Reconnect
+
+The Android client implements exponential backoff on WebSocket `onFailure` and `onClosed`:
+
+| Attempt | Delay |
+|---------|-------|
+| 1st | 1s |
+| 2nd | 2s |
+| 3rd | 4s |
+| 4th | 8s |
+| 5th+ | 16s (capped at 30s) |
+
+Session ID and last processed sequence number persist across reconnects within the app's lifetime, ensuring the client can pick up where it left off.
+
+#### Audio Replay Buffering
+
+During reconnect replay, the server may send audio chunks before the client has set up its audio pipeline (ExoPlayer). The client buffers these chunks in a `replayAudioBuffer` deque. When `tts_start` arrives, it drains the buffer into the freshly initialized player before accepting live chunks, producing seamless playback.
 
 ## Hermes API Integration
 

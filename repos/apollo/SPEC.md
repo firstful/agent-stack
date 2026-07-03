@@ -35,11 +35,12 @@ Apollo is a real-time voice gateway for Hermes Agent. It bridges an Android push
 - [ ] 8. **WebSocket client** — OkHttp WebSocket with CF-Access headers
 - [ ] 9. **Audio playback** — Media3 ExoPlayer streaming with ring buffer
 
-### Phase 3 — Production Hardening (4/4)
+### Phase 3 — Production Hardening (5/5)
 - [ ] 10. **Session continuity** — Hermes X-Hermes-Session-Id via Apollo
 - [ ] 11. **Client-side CF Access** — embedded service token in Android app
-- [ ] 12. **Error handling** — network loss, audio errors, graceful degradation
-- [ ] 13. **Observability** — OTEL traces on Apollo, structured logging
+- [ ] 12. **Async replay resilience** — WebSocket reconnect, RunStore, seq tracking, audio buffering
+- [ ] 13. **Error handling** — network loss, audio errors, graceful degradation
+- [ ] 14. **Observability** — OTEL traces on Apollo, structured logging
 
 ## Open Questions / Blockers
 

@@ -29,7 +29,8 @@ logger = logging.getLogger("apollo")
 
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8321"))
-HERMES_API_URL = os.environ.get("HERMES_API_URL", "http://hermes--api:9119")
+HERMES_API_URL = os.environ.get("HERMES_API_URL", "http://hermes--api:8642")
+HERMES_API_KEY = os.environ.get("HERMES_API_KEY", "")
 STT_MODEL_SIZE = os.environ.get("STT_MODEL", "base")
 CACHE_DIR = Path("/app/cache")
 AUDIO_SAMPLE_RATE = 16000
@@ -234,14 +235,17 @@ async def synthesize(text: str, voice: str = "en-US-ChristopherNeural",
 class HermesClient:
     """Client for Hermes API Server /v1/runs + /v1/runs/{id}/stop."""
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, api_key: str = ""):
         self.base_url = base_url.rstrip("/")
-        self.client = httpx.AsyncClient(timeout=120.0)
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        self.client = httpx.AsyncClient(timeout=120.0, headers=headers)
 
     async def start_run(self, text: str, session_id: Optional[str] = None) -> dict:
         """POST /v1/runs — returns {run_id, session_id, status}."""
         payload = {
-            "messages": [{"role": "user", "content": text}],
+            "input": text,
             "stream": True,
         }
         if session_id:
@@ -254,7 +258,11 @@ class HermesClient:
 
     async def stream_events(self, run_id: str, cancel_event: asyncio.Event) -> str:
         """GET /v1/runs/{run_id}/events — SSE. Returns accumulated reply text.
-        Cancels when cancel_event is set."""
+        Cancels when cancel_event is set.
+
+        Handles both legacy format (``type`` + ``content.text`` + ``done``)
+        and current format (``event`` + ``delta`` + ``run.completed``).
+        """
         reply_text = ""
 
         async with self.client.stream(
@@ -266,15 +274,22 @@ class HermesClient:
                 if not line.startswith("data: "):
                     continue
                 data = json.loads(line[6:])
+
+                # Current format: {"event": "message.delta", "delta": "..."}
+                ev = data.get("event", "")
+                if ev == "message.delta":
+                    reply_text += data.get("delta", "")
+                elif ev == "run.completed" or ev == "done":
+                    break
+                elif ev == "error":
+                    raise RuntimeError(f"Hermes error: {data.get('message', '')}")
+
+                # Legacy fallback: {"type": "message"|"delta", "content": {"text": "..."}}
                 ev_type = data.get("type", "")
                 if ev_type in ("message", "delta"):
                     content = data.get("content", {})
                     if content.get("type") == "text":
                         reply_text += content.get("text", "")
-                elif ev_type == "done":
-                    break
-                elif ev_type == "error":
-                    raise RuntimeError(f"Hermes error: {data.get('message', '')}")
 
         return reply_text
 
@@ -335,7 +350,7 @@ async def ptt_websocket(ws: WebSocket):
     await ws.accept()
     logger.info("WebSocket connected")
 
-    hermes = HermesClient(HERMES_API_URL)
+    hermes = HermesClient(HERMES_API_URL, HERMES_API_KEY)
     state = PTTState.IDLE
     audio_buffer: list[bytes] = []
     current_run_id: Optional[str] = None
