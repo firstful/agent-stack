@@ -10,8 +10,10 @@ import json
 import logging
 import os
 import subprocess
+import time
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import AsyncIterator, Optional
@@ -34,6 +36,77 @@ AUDIO_SAMPLE_RATE = 16000
 OPUS_BITRATE = "24k"
 
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Run store (async replay) ─────────────────────────────────
+
+RECONNECT_TTL = 300.0  # seconds to keep completed runs for replay
+
+
+@dataclass
+class RunResult:
+    """Accumulated result of a single Hermes PTT turn."""
+    run_id: str
+    session_id: str
+    transcript: str
+    reply_text: str
+    audio_chunks: list[bytes] = field(default_factory=list)
+    seq_start: int = 0          # seq of the first audio chunk
+    seq_end: int = 0            # seq of the last audio chunk (exclusive)
+    complete: bool = False      # True = TTS finished fully
+    created_at: float = 0.0
+    interrupted: bool = False
+
+
+class RunStore:
+    """Keeps completed/interrupted runs per session for async replay.
+
+    Each session maps to its most recent *unconsumed* run.  Once a
+    run has been fully delivered to a freshly-connected client it is
+    evicted.  Old orphaned runs are purged by a background task.
+    """
+
+    def __init__(self, ttl: float = RECONNECT_TTL):
+        self._runs: dict[str, RunResult] = {}   # session_id → RunResult
+        self._consumed: set[str] = set()        # run_ids fully delivered
+        self._ttl = ttl
+        self._cleanup_task: Optional[asyncio.Task] = None
+
+    def start_background_cleanup(self):
+        """Run periodic eviction of stale runs."""
+        async def _clean():
+            while True:
+                await asyncio.sleep(self._ttl)
+                now = time.monotonic()
+                stale = [
+                    sid for sid, r in self._runs.items()
+                    if (now - r.created_at) > self._ttl
+                ]
+                for sid in stale:
+                    self._runs.pop(sid, None)
+                    self._consumed.discard(sid)
+
+        self._cleanup_task = asyncio.create_task(_clean())
+
+    def put(self, result: RunResult) -> None:
+        self._runs[result.session_id] = result
+
+    def get(self, session_id: str) -> Optional[RunResult]:
+        return self._runs.get(session_id)
+
+    def mark_consumed(self, session_id: str) -> None:
+        if session_id in self._runs:
+            self._consumed.add(self._runs[session_id].run_id)
+            del self._runs[session_id]
+
+    def __contains__(self, session_id: str) -> bool:
+        return session_id in self._runs
+
+    @property
+    def pending_count(self) -> int:
+        return len(self._runs)
+
+
+run_store = RunStore()
 
 # ── Lazy-loaded globals ───────────────────────────────────────
 
@@ -224,8 +297,11 @@ async def lifespan(app: FastAPI):
     logger.info("Apollo starting up...")
     await init_stt()
     await init_tts()
+    run_store.start_background_cleanup()
     logger.info("Apollo ready on %s:%s", HOST, PORT)
     yield
+    if run_store._cleanup_task:
+        run_store._cleanup_task.cancel()
     logger.info("Apollo shutting down")
 
 
@@ -239,10 +315,20 @@ async def health():
         "stt_loaded": _stt_pipeline is not None,
         "tts_available": _tts_available,
         "hermes_api": HERMES_API_URL,
+        "pending_replays": run_store.pending_count,
     }
 
 
 # ── WebSocket PTT handler ─────────────────────────────────────
+
+_outbound_seq: int = 0  # monotonically increasing seq for all connections
+
+
+def next_seq() -> int:
+    global _outbound_seq
+    _outbound_seq += 1
+    return _outbound_seq
+
 
 @app.websocket("/v1/ptt")
 async def ptt_websocket(ws: WebSocket):
@@ -257,14 +343,75 @@ async def ptt_websocket(ws: WebSocket):
     cancel_event = asyncio.Event()
     active_tasks: list[asyncio.Task] = []
 
-    async def send_json(msg: dict):
+    # Connection-scoped state for replay tracking
+    conn_session_id: Optional[str] = None       # from reconnect handshake
+    conn_last_seq: int = 0                       # last seq the client acked
+    current_result: Optional[RunResult] = None   # run being accumulated
+
+    async def send_json(msg: dict, *, seq: Optional[int] = None) -> None:
+        """Send JSON with an auto-incrementing seq number."""
+        if seq is None:
+            seq = next_seq()
+        msg["seq"] = seq
         try:
             await ws.send_json(msg)
         except Exception:
             pass
 
-    async def reset_state():
-        nonlocal state, current_run_id, audio_buffer
+    async def send_bytes_with_seq(data: bytes) -> int:
+        """Send binary audio and return its seq number."""
+        seq = next_seq()
+        try:
+            await ws.send_bytes(data)
+        except Exception:
+            pass
+        return seq
+
+    async def _replay_run(result: RunResult) -> bool:
+        """Replay an undelivered run to a freshly-connected client.
+
+        Returns True if the run was fully delivered, False if
+        interrupted partway.
+        """
+        nonlocal state, current_session_id
+        logger.info("Replaying run %s for session %s", result.run_id, result.session_id)
+
+        current_session_id = result.session_id
+
+        await send_json({"type": "session_id", "id": result.session_id})
+        await send_json({"type": "stt_transcript", "text": result.transcript})
+        await send_json({"type": "processing", "step": "tts"})
+        await send_json({"type": "tts_start", "text": result.reply_text})
+
+        state = PTTState.TTS_STREAMING
+        cancel_event.clear()
+
+        # Replay all saved audio chunks in order
+        for i, chunk in enumerate(result.audio_chunks):
+            if cancel_event.is_set():
+                # Client interrupted during replay — save partial state
+                result.audio_chunks = result.audio_chunks[i:]
+                result.seq_start = result.seq_start + i
+                run_store.put(result)
+                return False
+            await send_bytes_with_seq(chunk)
+
+        if not cancel_event.is_set():
+            if result.complete:
+                await send_json({"type": "tts_end"})
+                run_store.mark_consumed(result.session_id)
+                state = PTTState.IDLE
+                return True
+            else:
+                # Run was incomplete (interrupted mid-TTS before disconnect)
+                await send_json({"type": "tts_fallback", "text": result.reply_text})
+                run_store.mark_consumed(result.session_id)
+                state = PTTState.IDLE
+                return True
+        return False
+
+    async def reset_state(*, save_run: bool = True):
+        nonlocal state, current_run_id, audio_buffer, current_result
         cancel_event.set()
         # Abort Hermes run if active
         if current_run_id and state in (PTTState.HERMES_RUNNING, PTTState.TTS_STREAMING):
@@ -275,12 +422,87 @@ async def ptt_websocket(ws: WebSocket):
         active_tasks.clear()
         audio_buffer.clear()
         current_run_id = None
+        current_result = None
         state = PTTState.IDLE
         cancel_event.clear()
 
+    # ── Reconnect handshake ─────────────────────────────────
+
+    # Peek at the first message — it may be a reconnect handshake.
+    # No timeout: on a first-ever connection the client sends a
+    # reconnect handshake within <1s, but on slower links (phone
+    # via CF tunnel) it may take longer.  A timeout just causes
+    # a race where the server gives up before the client speaks.
+    replayed = False
+    first_pending = None
+    try:
+        first_msg = await ws.receive()
+    except WebSocketDisconnect:
+        logger.info("Client disconnected during handshake")
+        return
+
+    if first_msg.get("type") == "websocket.receive" and "text" in first_msg:
+        try:
+            handshake = json.loads(first_msg["text"])
+            if handshake.get("type") == "reconnect":
+                conn_session_id = handshake.get("session_id", "")
+                conn_last_seq = handshake.get("last_seq", 0)
+                logger.info(
+                    "Reconnect handshake: session=%s last_seq=%d",
+                    conn_session_id, conn_last_seq,
+                )
+                # Check for undelivered run
+                if conn_session_id and conn_session_id in run_store:
+                    result = run_store.get(conn_session_id)
+                    if result and result.created_at:
+                        delivered = await _replay_run(result)
+                        if delivered:
+                            replayed = True
+                            await send_json({
+                                "type": "reconnect_done",
+                                "replayed": True,
+                                "complete": result.complete,
+                            })
+                        else:
+                            await send_json({
+                                "type": "reconnect_done",
+                                "replayed": True,
+                                "complete": False,
+                                "interrupted": True,
+                            })
+                else:
+                    await send_json({
+                        "type": "reconnect_done",
+                        "replayed": False,
+                    })
+            else:
+                await send_json({
+                    "type": "reconnect_done",
+                    "replayed": False,
+                })
+                first_pending = first_msg
+        except json.JSONDecodeError:
+            await send_json({
+                "type": "reconnect_done",
+                "replayed": False,
+            })
+            first_pending = first_msg
+    else:
+        await send_json({
+            "type": "reconnect_done",
+            "replayed": False,
+        })
+        first_pending = first_msg
+
+    # ── Main loop ───────────────────────────────────────────
+
     try:
         while True:
-            message = await ws.receive()
+            if not replayed and first_pending is not None:
+                message = first_pending
+                first_pending = None
+            else:
+                message = await ws.receive()
 
             if message["type"] == "websocket.disconnect":
                 break
@@ -371,6 +593,18 @@ async def ptt_websocket(ws: WebSocket):
                             state = PTTState.IDLE
                             continue
 
+                        # Create a RunResult for this turn (for replay)
+                        current_result = RunResult(
+                            run_id=current_run_id or "",
+                            session_id=current_session_id or "",
+                            transcript=transcript,
+                            reply_text=reply,
+                            created_at=time.monotonic(),
+                        )
+                        # Save to store immediately (in case of crash)
+                        if current_session_id:
+                            run_store.put(current_result)
+
                         # TTS
                         await send_json({"type": "processing", "step": "tts"})
                         await send_json({"type": "tts_start", "text": reply})
@@ -383,33 +617,71 @@ async def ptt_websocket(ws: WebSocket):
                                 async for chunk in synthesize(reply, cancel_event=cancel_event):
                                     if cancel_event.is_set():
                                         break
-                                    await ws.send_bytes(chunk)
+                                    seq = await send_bytes_with_seq(chunk)
+                                    # Save audio chunk for replay
+                                    if current_result is not None:
+                                        current_result.audio_chunks.append(chunk)
+                                        if current_result.seq_start == 0:
+                                            current_result.seq_start = seq
+                                        current_result.seq_end = seq + 1
+                                        # Update store periodically
+                                        if current_session_id:
+                                            run_store.put(current_result)
                             except Exception as e:
                                 logger.exception("TTS error")
                                 await send_json({"type": "tts_fallback", "text": reply})
+                                current_result = None
                         else:
                             await send_json({"type": "tts_fallback", "text": reply})
+                            current_result = None
 
                         if cancel_event.is_set():
-                            # Interrupted during TTS — don't send tts_end
+                            # Interrupted during TTS — mark as incomplete
+                            if current_result is not None:
+                                current_result.interrupted = True
+                                current_result.complete = False
+                                if current_session_id:
+                                    run_store.put(current_result)
+                                current_result = None
                             cancel_event.clear()
                             state = PTTState.IDLE
                             continue
+
+                        # TTS completed successfully
+                        if current_result is not None:
+                            current_result.complete = True
+                            if current_session_id:
+                                run_store.put(current_result)
+                            current_result = None
 
                         await send_json({"type": "tts_end"})
                         state = PTTState.IDLE
 
                     elif cmd_type == "interrupt":
                         logger.info("Interrupt received (state=%s, run=%s)", state, current_run_id)
-                        await reset_state()
+                        # Save current run as interrupted for replay
+                        if current_result is not None:
+                            current_result.interrupted = True
+                            current_result.complete = False
+                            if current_session_id:
+                                run_store.put(current_result)
+                            current_result = None
+                        await reset_state(save_run=False)
                         await send_json({"type": "interrupted", "run_id": current_run_id or ""})
 
                     elif cmd_type == "cancel":
                         audio_buffer.clear()
+                        current_result = None
                         state = PTTState.IDLE
 
                     elif cmd_type == "ping":
                         await send_json({"type": "pong"})
+
+                    elif cmd_type == "ack":
+                        # Client acknowledges receipt of a seq number
+                        ack_seq = cmd.get("seq", 0)
+                        if conn_session_id and ack_seq > conn_last_seq:
+                            conn_last_seq = ack_seq
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
@@ -420,8 +692,25 @@ async def ptt_websocket(ws: WebSocket):
         except Exception:
             pass
     finally:
-        await reset_state()
+        # Save current result for replay before cleaning up
+        if current_result is not None and current_session_id:
+            current_result.complete = state == PTTState.IDLE and not cancel_event.is_set()
+            current_result.interrupted = cancel_event.is_set()
+            run_store.put(current_result)
+        # Cancel everything
+        cancel_event.set()
+        if current_run_id and state in (PTTState.HERMES_RUNNING, PTTState.TTS_STREAMING):
+            try:
+                await hermes.stop_run(current_run_id)
+            except Exception:
+                pass
+        for t in active_tasks:
+            t.cancel()
         await hermes.close()
+        logger.info(
+            "Connection closed (session=%s, runs_in_store=%d)",
+            current_session_id, run_store.pending_count,
+        )
 
 
 # ── Entry point ────────────────────────────────────────────────
