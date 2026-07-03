@@ -4,7 +4,7 @@
   "container": {
     "port": 8321,
     "auto_port": true,
-    "podman_args": "--memory 2g --network stack-net",
+    "podman_args": "--memory 2g",
     "env": {
       "HOST": "0.0.0.0",
       "PORT": "8321",
@@ -28,6 +28,7 @@
   },
   "strategy": { "type": "blue-green", "queue": true },
   "build": {
+    "network": "host",
     "podman_args": "--memory 2g"
   },
   "logo": {
