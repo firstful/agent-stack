@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Browser profiles (persistent Chromium data — huge, session-specific)
+profiles/*/chromium-profile/
+profiles/*/browser_profile/
+profiles/*/screenshots/
+profiles/*/videos/
+
+# Debug / data artifacts
+data/*.png
+data/*.json
+debug_*.py
+*.png
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
