@@ -71,9 +71,15 @@ async function api(path, opts = {}) {
 }
 
 async function loadServices() {
-  // Discover service names from agent-stack.json files
-  // Hardcoded fallback for common ones
-  knownServiceNames = ['techdeck', 'opencode', 'vault', 'dash', 'cockpit', 'free-llm-router', 'kilocode-web', 'no-service', 'personal-blog', 'appflowy', 'marp-editor']
+  // Discover service names from the controller via vault server API
+  try {
+    const data = await api('/api/services')
+    knownServiceNames = data.services || []
+    console.log(`Vault: loaded ${knownServiceNames.length} services from controller`)
+  } catch(e) {
+    console.warn('Could not load services, using empty list', e)
+    knownServiceNames = []
+  }
 }
 
 async function loadSecrets() {

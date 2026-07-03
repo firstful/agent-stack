@@ -194,6 +194,59 @@ app.get('/api/secrets/plain/:service', (req, res) => {
   res.json({ name: service, secrets: secretsForService(service) })
 })
 
+// ── Service discovery from controller ────────────────────────────
+
+const CONTROLLER_URL = process.env.CONTROLLER_URL || 'http://host.containers.internal:80'
+
+let cachedServices: string[] = []
+let lastServiceFetch = 0
+const SERVICE_CACHE_TTL = 60_000  // 1 minute
+
+async function fetchServicesFromController(): Promise<string[]> {
+  try {
+    const resp = await fetch(`${CONTROLLER_URL}/status`, { signal: AbortSignal.timeout(5000) })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const data = await resp.json() as any
+    const names = Object.keys(data.services || {})
+    console.log(`[vault] discovered ${names.length} services from controller`)
+    return names.sort()
+  } catch (err) {
+    console.warn(`[vault] controller unreachable (${err}), falling back to secrets-based discovery`)
+    // Fallback: extract service names from existing secrets' scopes
+    const store = loadStore()
+    const scopeSet = new Set<string>()
+    for (const entry of Object.values(store)) {
+      for (const s of entry.scopes) scopeSet.add(s)
+    }
+    return Array.from(scopeSet).sort()
+  }
+}
+
+function getServices(): string[] {
+  const now = Date.now()
+  if (now - lastServiceFetch > SERVICE_CACHE_TTL) {
+    // Fire-and-forget refresh
+    fetchServicesFromController().then(svcs => {
+      cachedServices = svcs
+      lastServiceFetch = now
+    }).catch(() => {})
+  }
+  return cachedServices
+}
+
+// Warm the cache on startup
+fetchServicesFromController().then(svcs => {
+  cachedServices = svcs
+  lastServiceFetch = Date.now()
+  console.log(`[vault] initial service list: ${svcs.join(', ')}`)
+})
+
+// Endpoint for frontend to get service names
+app.get('/api/services', (_req, res) => {
+  const svcs = getServices()
+  res.json({ services: svcs, source: svcs.length === 0 ? 'fallback' : 'controller' })
+})
+
 // Frontend
 app.use(express.static(path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'public')))
 
