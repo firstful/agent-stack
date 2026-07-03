@@ -66,7 +66,20 @@ SCRAPER_MAP = {
 # ─── Credential Management ───────────────────────────────────────────────
 
 def load_credentials() -> dict:
-    """Load stored credentials, prompting if missing."""
+    """Load stored credentials from vault (preferred) or local file."""
+    # Try to export from vault first
+    profiles_dir = Path(__file__).parent / "profiles"
+    export_script = profiles_dir / "export_creds.py"
+    if export_script.exists():
+        try:
+            import subprocess
+            subprocess.run(
+                [sys.executable, str(export_script)],
+                capture_output=True, timeout=30,
+            )
+        except Exception:
+            pass
+
     if CREDENTIALS_FILE.exists():
         with open(CREDENTIALS_FILE) as f:
             return json.load(f)
