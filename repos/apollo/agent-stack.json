@@ -4,13 +4,13 @@
   "container": {
     "port": 8321,
     "auto_port": true,
+    "podman_args": "--memory 2g --network stack-net",
     "env": {
       "HOST": "0.0.0.0",
       "PORT": "8321",
       "APOLLO_DOMAIN": "apollo.ffilt.us",
       "HERMES_API_URL": "http://hermes--api:9119",
       "STT_MODEL": "base",
-      "TTS_PROVIDER": "edge",
       "LOG_LEVEL": "info"
     },
     "volumes": [
@@ -28,7 +28,7 @@
   },
   "strategy": { "type": "blue-green", "queue": true },
   "build": {
-    "podman_args": "--memory 2g --network stack-net"
+    "podman_args": "--memory 2g"
   },
   "logo": {
     "_type": "url",
