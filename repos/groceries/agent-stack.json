@@ -18,7 +18,7 @@
   "strategy": { "type": "blue-green", "queue": true },
   "build": {
     "no_cache": true,
-    "podman_args": "--memory 256m"
+    "podman_args": "--memory 256m --network host"
   },
   "logo": {
     "_type": "file",
