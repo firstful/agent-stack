@@ -1,0 +1,18 @@
+# Build
+android/app/build/
+android/.gradle/
+android/local.properties
+android/gradle/
+*.apk
+*.aab
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db

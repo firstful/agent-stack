@@ -1,0 +1,41 @@
+{
+  "name": "apollo",
+  "version": 1,
+  "container": {
+    "port": 8321,
+    "auto_port": true,
+    "env": {
+      "HOST": "0.0.0.0",
+      "PORT": "8321",
+      "APOLLO_DOMAIN": "apollo.ffilt.us",
+      "HERMES_API_URL": "http://hermes--api:9119",
+      "STT_MODEL": "base",
+      "TTS_PROVIDER": "edge",
+      "LOG_LEVEL": "info"
+    },
+    "volumes": [
+      "apollo-cache:/app/cache"
+    ],
+    "healthCheck": {
+      "path": "/health",
+      "timeout": 15000
+    }
+  },
+  "expose": {
+    "enabled": true,
+    "hostname": "apollo.ffilt.us",
+    "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
+  },
+  "strategy": { "type": "blue-green", "queue": true },
+  "build": {
+    "podman_args": "--memory 2g --network stack-net"
+  },
+  "logo": {
+    "_type": "url",
+    "url": "https://cdn.jsdelivr.net/npm/heroicons@2/outline/microphone.svg"
+  },
+  "rateLimit": {
+    "requestsPerMinute": 120,
+    "blockDurationMs": 300000
+  }
+}

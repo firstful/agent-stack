@@ -1,7 +1,8 @@
 # Repo → App Name Mapping
 
 | Repo | App Name |
-|---|---|
+|------|----------|
+| apollo | Apollo |
 | appflowy | AppFlowy |
 | cockpit | Cockpit |
 | free-llm-router | Free LLM Router |
