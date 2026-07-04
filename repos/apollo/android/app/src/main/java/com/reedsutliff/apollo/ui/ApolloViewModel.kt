@@ -162,8 +162,12 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
     fun sendText(text: String) {
         if (text.isBlank()) return
         val thread = _currentThread.value ?: run {
-            createDefaultThread()
-            _currentThread.value!!
+            val t = createDefaultThread()
+            // Ensure thread is persisted to Room before message insert
+            viewModelScope.launch {
+                threadDao.insert(t.toEntity())
+            }
+            t
         }
 
         val message = ChatMessage(
@@ -192,9 +196,9 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             if (it.id == thread.id) updatedThread else it
         }
 
-        // Persist thread update to Room
+        // Persist thread update to Room (insert if new, update if exists)
         viewModelScope.launch {
-            threadDao.update(updatedThread.toEntity())
+            threadDao.insert(updatedThread.toEntity())
         }
 
         // Send via WebSocket
@@ -333,9 +337,11 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
 
     // ── Internal helpers ────────────────────────────────────
 
-    private fun createDefaultThread() {
+    private fun createDefaultThread(): Thread {
         val thread = Thread(name = "General")
         _threadList.value = listOf(thread)
+        _currentThread.value = thread
+        return thread
     }
 
     private fun loadMessagesForThread(threadId: String) {
