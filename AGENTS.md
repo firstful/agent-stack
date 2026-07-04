@@ -6,6 +6,7 @@ This file helps AI agents (and humans) navigate the agent-stack project efficien
 
 | Topic | File / Directory |
 |-------|-----------------|
+| **ffilt.us Subdomain Index** | **[ffilt-us-index.md](ffilt-us-index.md)** ← **START HERE** for any *.ffilt.us hostname |
 | Architecture overview | [docs/architecture.md](docs/architecture.md) |
 | Change detection (rebuild triggers) | [docs/change-detection.md](docs/change-detection.md) |
 | Service discovery env vars | [docs/service-discovery.md](docs/service-discovery.md) |
@@ -112,6 +113,10 @@ This file helps AI agents (and humans) navigate the agent-stack project efficien
 - **Queue mode** (`strategy: { type: "blue-green", queue: true }`): Commits are queued and processed one per reconciliation cycle, preventing build storms from rapid commits.
 - **Canary** (`strategy: { type: "blue-green", canary: { ... } }`): After a successful build, routes a fraction of live traffic to the new slot and observes 5xx error rates before promoting. Requires all sidecars to be marked `canarySafe: true`.
 - **Hard swap** (`[stack hard-swap]` commit message): Skips the canary observation window, promoting immediately. Useful for emergency rollouts or changes already validated elsewhere.
+
+## ffilt.us Subdomain Index
+
+A master registry of all `*.ffilt.us` subdomains and the services they map to is maintained at **[ffilt-us-index.md](ffilt-us-index.md)**. Any time a user mentions a ffilt.us subdomain, consult this index first for context on what service they're referring to. The index includes brief descriptions, config paths, deployment strategies, and links to related documentation.
 
 ## How to Search This Repo
 

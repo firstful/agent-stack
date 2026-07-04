@@ -1,6 +1,0 @@
-2026/07/03-14:16:39.661 3b11c0 Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/walmart/chromium-profile/Default/Session Storage/MANIFEST-000001
-2026/07/03-14:16:39.662 3b11c0 Recovering log #3
-2026/07/03-14:16:39.663 3b11c0 Reusing old log /srv/agent-stack/repos/groceries/profiles/walmart/chromium-profile/Default/Session Storage/000003.log 
-2026/07/03-14:17:42.102 3b11c0 Level-0 table #5: started
-2026/07/03-14:17:42.104 3b11c0 Level-0 table #5: 18075 bytes OK
-2026/07/03-14:17:42.105 3b11c0 Delete type=0 #3

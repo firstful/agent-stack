@@ -1,6 +1,0 @@
-2026/07/03-14:16:08.180 3b0ea7 Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/walmart/chromium-profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/07/03-14:16:08.185 3b0ea7 Recovering log #3
-2026/07/03-14:16:08.185 3b0ea7 Reusing old log /srv/agent-stack/repos/groceries/profiles/walmart/chromium-profile/Default/Local Storage/leveldb/000003.log 
-2026/07/03-14:16:16.587 3b0eaa Level-0 table #5: started
-2026/07/03-14:16:16.591 3b0eaa Level-0 table #5: 168175 bytes OK
-2026/07/03-14:16:16.593 3b0eaa Delete type=0 #3

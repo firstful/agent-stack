@@ -1,6 +1,0 @@
-2026/07/02-23:34:12.956 1a53c6 Reusing MANIFEST /srv/agent-stack/repos/groceries/profiles/walmart/browser_profile/Default/Session Storage/MANIFEST-000001
-2026/07/02-23:34:12.956 1a53c6 Recovering log #4
-2026/07/02-23:34:12.957 1a53c6 Reusing old log /srv/agent-stack/repos/groceries/profiles/walmart/browser_profile/Default/Session Storage/000004.log 
-2026/07/02-23:35:14.923 1a53c6 Level-0 table #8: started
-2026/07/02-23:35:14.926 1a53c6 Level-0 table #8: 15545 bytes OK
-2026/07/02-23:35:14.928 1a53c6 Delete type=0 #4

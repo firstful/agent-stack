@@ -3,6 +3,50 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+import java.io.ByteArrayOutputStream
+
+// ── Auto versioning from git + date ──────────────────────────
+val repoRoot: String = project.rootDir.parent  // up from android/ to apollo/
+val gitCommitCount: Int = try {
+    ByteArrayOutputStream().use { baos ->
+        project.exec {
+            commandLine("git", "-C", repoRoot, "rev-list", "--count", "HEAD")
+            standardOutput = baos
+        }
+        baos.toString().trim().toInt()
+    }
+} catch (_: Exception) { 1 }
+
+val gitCommitHash: String = try {
+    ByteArrayOutputStream().use { baos ->
+        project.exec {
+            commandLine("git", "-C", repoRoot, "rev-parse", "--short", "HEAD")
+            standardOutput = baos
+        }
+        baos.toString().trim()
+    }
+} catch (_: Exception) { "unknown" }
+
+val buildDate: String = try {
+    ByteArrayOutputStream().use { baos ->
+        project.exec {
+            commandLine("git", "-C", repoRoot, "log", "-1", "--format=%cd", "--date=format:%Y%m%d")
+            standardOutput = baos
+        }
+        baos.toString().trim()
+    }
+} catch (_: Exception) { "00000000" }
+
+val buildTime: String = try {
+    ByteArrayOutputStream().use { baos ->
+        project.exec {
+            commandLine("git", "-C", repoRoot, "log", "-1", "--format=%cd", "--date=format:%H%M")
+            standardOutput = baos
+        }
+        baos.toString().trim()
+    }
+} catch (_: Exception) { "0000" }
+
 android {
     namespace = "com.reedsutliff.apollo"
     compileSdk = 34
@@ -11,13 +55,18 @@ android {
         applicationId = "com.reedsutliff.apollo"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = gitCommitCount
+        versionName = "${gitCommitCount}.${buildDate}.${buildTime}-${gitCommitHash}"
 
         // Cloudflare Access service token — set via local.properties or env
         buildConfigField("String", "CF_ACCESS_CLIENT_ID", "\"${project.findProperty("cfAccessClientId") ?: ""}\"")
         buildConfigField("String", "CF_ACCESS_CLIENT_SECRET", "\"${project.findProperty("cfAccessClientSecret") ?: ""}\"")
         buildConfigField("String", "APOLLO_WS_URL", "\"${project.findProperty("apolloWsUrl") ?: "wss://apollo.ffilt.us/v1/ptt"}\"")
+        // Auto versioning fields
+        buildConfigField("int", "VERSION_CODE", "$gitCommitCount")
+        buildConfigField("String", "VERSION_NAME", "\"${gitCommitCount}.${buildDate}.${buildTime}-${gitCommitHash}\"")
+        buildConfigField("String", "GIT_HASH", "\"$gitCommitHash\"")
+        buildConfigField("String", "BUILD_DATE", "\"${buildDate}T${buildTime}\"")
     }
 
     buildFeatures {
