@@ -12,7 +12,7 @@
 
 | Subdomain | Service Name | Repo / Config | Description |
 |-----------|-------------|---------------|-------------|
-| apollo.ffilt.us | Apollo | `repos/apollo/` | Voice PTT gateway for Hermes. Raw PCM WebSocket, faster-whisper STT, EdgeTTS. Blue-green. |
+| talaria.ffilt.us | Talaria | `repos/talaria/` | Voice PTT gateway for Hermes. Raw PCM WebSocket, faster-whisper STT, EdgeTTS. Blue-green. |
 | blogpreview.ffilt.us | Personal Blog | `repos/personal-blog/` | Preview/staging of reedsutliff/personal-blog static site. Blue-green. |
 | cockpit.ffilt.us | Cockpit | `desired/cockpit.json` | Linux server admin web console (systemd-managed). |
 | code.ffilt.us | Code (OpenCode) | `desired/code.json` | OpenCode AI coding agent web UI (systemd-managed). |

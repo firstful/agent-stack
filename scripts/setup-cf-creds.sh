@@ -25,10 +25,10 @@ ensure_prop() {
     fi
 }
 
-# Apollo
-ensure_prop "/srv/agent-stack/repos/apollo/android/local.properties" "cfAccessClientId" "$cfAccessClientId"
-ensure_prop "/srv/agent-stack/repos/apollo/android/local.properties" "cfAccessClientSecret" "$cfAccessClientSecret"
-ensure_prop "/srv/agent-stack/repos/apollo/android/local.properties" "apolloWsUrl" "$apolloWsUrl"
+# Talaria
+ensure_prop "/srv/agent-stack/repos/talaria/android/local.properties" "cfAccessClientId" "$cfAccessClientId"
+ensure_prop "/srv/agent-stack/repos/talaria/android/local.properties" "cfAccessClientSecret" "$cfAccessClientSecret"
+ensure_prop "/srv/agent-stack/repos/talaria/android/local.properties" "talariaWsUrl" "$talariaWsUrl"
 
 # Red Thread
 ensure_prop "/srv/repos/red-thread/local.properties" "cfAccessClientId" "$cfAccessClientId"

@@ -2,7 +2,7 @@
 
 | Repo | App Name |
 |------|----------|
-| apollo | Apollo |
+| talaria | Talaria |
 | appflowy | AppFlowy |
 | cockpit | Cockpit |
 | free-llm-router | Free LLM Router |
