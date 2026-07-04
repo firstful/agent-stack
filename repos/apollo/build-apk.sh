@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-apk.sh — Build Apollo debug APK with auto-versioning
+# build-apk.sh — Build Talaria (formerly Apollo) debug APK with auto-versioning
 # and deploy to files.ffilt.us with version in the filename.
 #
 # Usage:  ./build-apk.sh          # build + deploy
@@ -21,7 +21,7 @@ if [ -f "$LOCAL_PROPS" ]; then
     done < <(grep -E '^(cfAccessClientId|cfAccessClientSecret|apolloWsUrl)=' "$LOCAL_PROPS")
 fi
 
-echo "=== Building Apollo APK ==="
+echo "=== Building Talaria APK ==="
 ./gradlew assembleDebug "${GRADLE_ARGS[@]}"
 
 # Read the generated BuildConfig for version info
@@ -35,8 +35,8 @@ else
 fi
 
 APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
-FILENAME="apollo-${VERSION_NAME}.apk"
-DEST_DIR="/srv/files/apk/Apollo"
+FILENAME="talaria-${VERSION_NAME}.apk"
+DEST_DIR="/srv/files/apk/Talaria"
 
 echo ""
 echo "=== Deploying to $DEST_DIR/ ==="
@@ -47,12 +47,12 @@ mkdir -p "$DEST_DIR"
 
 cp "$APK_SRC" "$DEST_DIR/$FILENAME"
 # Remove old builds except the latest 5
-ls -1t "$DEST_DIR"/apollo-*.apk 2>/dev/null | tail -n +6 | xargs -r rm -f
+ls -1t "$DEST_DIR"/talaria-*.apk 2>/dev/null | tail -n +6 | xargs -r rm -f
 # Update latest symlink
-ln -sf "$FILENAME" "$DEST_DIR/apollo-latest.apk"
+ln -sf "$FILENAME" "$DEST_DIR/talaria-latest.apk"
 
 echo "  ✅ $DEST_DIR/$FILENAME  ($(du -h "$DEST_DIR/$FILENAME" | cut -f1))"
-echo "  ✅ Symlink: $DEST_DIR/apollo-latest.apk → $FILENAME"
+echo "  ✅ Symlink: $DEST_DIR/talaria-latest.apk → $FILENAME"
 echo ""
-echo "  URL: https://files.ffilt.us/apk/Apollo/$FILENAME"
-echo "  URL: https://files.ffilt.us/apk/Apollo/apollo-latest.apk"
+echo "  URL: https://files.ffilt.us/apk/Talaria/$FILENAME"
+echo "  URL: https://files.ffilt.us/apk/Talaria/talaria-latest.apk"
