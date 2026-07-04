@@ -451,6 +451,10 @@ export function loadHistory(): PerfHistory {
   }
 }
 
+/**
+ * Save a perf history object to disk, overwriting the history file.
+ * Errors are silently swallowed to avoid crashing the collection loop.
+ */
 function saveHistory(history: PerfHistory): void {
   try {
     fs.writeFileSync(historyFile(), JSON.stringify(history, null, 2));

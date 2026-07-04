@@ -92,7 +92,7 @@ export function slotMarker(name: string): string {
 /**
  * Path to the canary marker file.  Stores JSON with the canary start time,
  * which slot is being observed, and the cumulative 5xx error count from the
- * slot-proxy.  The slot-proxy writes the error metrics here; the controller
+ * controller (in its proxy role).  The controller writes the error metrics here; the controller
  * reads them to decide promotion or rollback.
  */
 export function canaryMarker(name: string): string {

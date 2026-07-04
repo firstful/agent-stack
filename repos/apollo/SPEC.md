@@ -7,8 +7,8 @@ Apollo is a real-time voice gateway for Hermes Agent. It bridges an Android push
 ## Status
 
 - **Phase**: Spec
-- **Completion**: 0/5 deliverables
-- **Last updated**: 2026-07-03
+- **Completion**: 0/21 deliverables
+- **Last updated**: 2026-07-04
 
 ## Specification Index
 
@@ -18,6 +18,7 @@ Apollo is a real-time voice gateway for Hermes Agent. It bridges an Android push
 | [Architecture](spec/architecture.md) | High-level architecture diagram and primary concepts |
 | [API](spec/api.md) | WebSocket protocol, Hermes API integration, audio format |
 | [Android](spec/android.md) | Android app spec: PTT UX, audio capture, playback |
+| [Android v2](spec/android-v2.md) | Multimodal v2: text chat, threads, settings, modality switching |
 | [Deploy](spec/deploy.md) | agent-stack deployment, Cloudflare Access, slot-swap |
 
 ## Deliverables
@@ -41,6 +42,18 @@ Apollo is a real-time voice gateway for Hermes Agent. It bridges an Android push
 - [ ] 12. **Async replay resilience** — WebSocket reconnect, RunStore, seq tracking, audio buffering
 - [ ] 13. **Error handling** — network loss, audio errors, graceful degradation
 - [ ] 14. **Observability** — OTEL traces on Apollo, structured logging
+
+### Phase 4 — Multimodal v2 (7/7)
+
+- [x] 15. **Chat controls + text mode** — TextField input, send via WebSocket, text/voice coexistence
+- [x] 16. **Settings panel / navigation drawer** — Drawer with thread list, settings, connection management
+- [x] 17. **Topics / threads** — Multiple conversation threads with local Room persistence
+- [x] 18. **Seamless modality switching** — PTT → text mid-conversation, same Hermes session
+- [x] 19. **Server protocol extensions** — text_input, switch_session, text_echo, thread-aware RunStore
+- [x] 20. **Room database layer** — Thread + Message entities, DAOs, migrations
+- [x] 21. **DataStore preferences** — User-configurable settings persisted locally
+
+See: [Android v2 Spec](spec/android-v2.md), [Implementation Backlog](backlog-v2.md)
 
 ## Open Questions / Blockers
 

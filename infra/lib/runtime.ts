@@ -70,7 +70,7 @@ function readQueueCount(name: string): number {
 
 /**
  * Read the canary deployment state from the marker file.
- * The slot-proxy writes weighted-traffic metrics here; the controller
+ * The controller (in its proxy role) writes weighted-traffic metrics here; the controller
  * reads them to decide promotion or rollback of a canary slot.
  * Returns null when no canary is active (no marker file).
  * @param name - Service name
@@ -78,7 +78,7 @@ function readQueueCount(name: string): number {
  */
 function readCanaryState(name: string): { slot: string; startTime: number; weight?: number } | null {
   // Reads the JSON state at /tmp/stack.<name>.canary, written by
-  // reconcile.ts when a canary deploy is in progress.  The slot-proxy
+  // reconcile.ts when a canary deploy is in progress.  The controller
   // appends 5xx error counts here for the controller to evaluate.
   try {
     const raw = fs.readFileSync(canaryMarker(name), "utf-8");

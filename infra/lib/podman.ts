@@ -13,6 +13,7 @@
  */
 
 import { execSync } from "child_process";
+import * as fs from "fs";
 import path from "path";
 import { resolveSecrets, interpolateSecrets, resolveEnvSecrets } from "./services";
 import type { Service } from "./types";
@@ -69,6 +70,51 @@ export function imageTag(name: string): string {
  */
 export function containerLabel(): string {
   return CONTAINER_LABEL;
+}
+
+/**
+ * Get the volume mount string for the mitmproxy CA bundle.
+ * Creates a combined CA bundle (system + mitmproxy) if needed or stale.
+ * Returns a podman -v argument, or empty string if mitmproxy is unavailable.
+ * Shared by buildImage() (build time) and runContainer() (run time).
+ *
+ * Rationale: the host runs a transparent mitmproxy on port 8080 that
+ * intercepts outbound HTTPS to inject Cloudflare Access headers.  Without
+ * trusting the mitmproxy CA, containers see TLS cert warnings on every
+ * HTTPS fetch.  This function merges the host's system CA bundle with the
+ * mitmproxy CA into a single file and mounts it over the container's default
+ * CA path so tools (curl, pip, npm, git) trust both CAs automatically.
+ */
+function getMitmCAVolumeMount(): string {
+  const MITM_CA = "/var/lib/cfproxy/.mitmproxy/mitmproxy-ca-cert.pem";
+  const HOST_CA = "/etc/ssl/certs/ca-certificates.crt";
+  const COMBINED_CA = "/var/lib/cfproxy/combined-ca-bundle.crt";
+  if (fs.existsSync(MITM_CA)) {
+    try {
+      const hostBundle = fs.readFileSync(HOST_CA, "utf-8");
+      const mitmCert = fs.readFileSync(MITM_CA, "utf-8");
+      const needsRebuild =
+        !fs.existsSync(COMBINED_CA) ||
+        fs.statSync(COMBINED_CA).mtimeMs < fs.statSync(MITM_CA).mtimeMs;
+      if (needsRebuild) {
+        const marker = mitmCert.trim().slice(0, 60);
+        if (!hostBundle.includes(marker)) {
+          fs.writeFileSync(COMBINED_CA, hostBundle + "\n" + mitmCert);
+          console.log(`[ca-bundle] created ${COMBINED_CA} (mitmproxy CA injected)`);
+        } else {
+          // Cert already in host bundle — copy it to the combined path so the
+          // volume mount target exists (prevents docker/podman errors from a
+          // dangling mount to a non-existent file).
+          fs.writeFileSync(COMBINED_CA, hostBundle);
+          console.log(`[ca-bundle] created ${COMBINED_CA} (from host bundle, mitmproxy already trusted)`);
+        }
+      }
+      return ` -v ${COMBINED_CA}:/etc/ssl/certs/ca-certificates.crt:ro`;
+    } catch (e: any) {
+      console.warn(`[ca-bundle] failed to create combined bundle: ${e.message}`);
+    }
+  }
+  return "";
 }
 
 /**
@@ -142,6 +188,11 @@ export function buildImage(service: Service): void {
   const containerfile = cfg.containerfile
     ? `-f ${path.join(service.repo!, cfg.containerfile)}`
     : "";
+
+  // Inject combined CA bundle so pip/npm/curl can verify TLS
+  // through the host's mitmproxy during the build.
+  const caVol = getMitmCAVolumeMount();
+
   try {
     // Resource limits: 4GB memory, 200ms CPU period quota (2 cores at 100%).
     // --cpu-quota=200000 --cpu-period=100000 means the container gets up to
@@ -150,7 +201,7 @@ export function buildImage(service: Service): void {
     // builds or under load.
     // podman's caching layer only rebuilds Dockerfile steps whose inputs changed.
     sh(
-      `podman build ${containerfile} ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}`
+      `podman build ${containerfile} ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}${caVol}`
     );
   } catch (e: any) {
     console.error(`[build] ${imageTag(service.name)} failed: ${e.message}`);
@@ -302,6 +353,13 @@ export function runContainer(
     .map((v) => `-v ${v}`)
     .join(" ");
 
+  // ── Auto-inject mitmproxy CA cert ──────────────────────────
+  // The host runs a transparent mitmproxy (cf-proxy) on port 8080
+  // that intercepts all outbound HTTPS for CF-Access header injection.
+  // Containers can't verify TLS certs without trusting the mitmproxy CA.
+  // We create a combined CA bundle and mount it over the default path.
+  const mitmVol = getMitmCAVolumeMount();
+
   // Map host PATH into container at /host<path> so tools like
   // curl and git are available even from minimal base images.
   // This is a pragmatic workaround: many service images ship without
@@ -323,6 +381,12 @@ export function runContainer(
   const interpolated = interpolateSecrets(containerEnv, resolvedSecrets);
   const allEnv: Record<string, string> = { ...interpolated, ...resolvedSecrets };
   allEnv.IS_CONTAINER = "true";
+  // When the mitmproxy CA bundle is mounted, tell Python SSL libraries
+  // (httpx, certifi, requests, huggingface_hub) to use it instead of
+  // their bundled CA store, so the mitmproxy CA is trusted.
+  if (mitmVol) {
+    allEnv.SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+  }
   const env = Object.entries(allEnv)
     .map(([k, v]) => `-e ${k}=${v}`)
     .join(" ");
@@ -361,7 +425,13 @@ export function runContainer(
   try {
     // Full command line: detached mode, stack-managed label, port mapping, network,
     // host gateway entries, volumes, discovery env vars, vault secrets, and command.
-    const cmdline = `podman run -d --label ${containerLabel()} --name ${name} -p ${hostPort}:${port} --network ${NETWORK_NAME} --add-host host.containers.internal:host-gateway --add-host runtime:host-gateway --add-host agent-stack:host-gateway ${vol} ${discovery} ${env} ${priv} ${tag} ${cmd}`;
+    // Use service-level network override when set; --network host skips port mapping
+    // and host-gateway adds (they don't apply to host networking).
+    const netName = service.container?.network || NETWORK_NAME;
+    const netFlag = netName === "host" ? "--network host" : `--network ${netName}`;
+    const portFlag = netName === "host" ? "" : `-p ${hostPort}:${port}`;
+    const gatewayFlags = netName === "host" ? "" : "--add-host host.containers.internal:host-gateway --add-host runtime:host-gateway --add-host agent-stack:host-gateway";
+    const cmdline = `podman run -d --label ${containerLabel()} --name ${name} ${portFlag} ${netFlag} ${gatewayFlags} ${vol}${mitmVol} ${discovery} ${env} ${priv} ${tag} ${cmd}`;
     // Use shWithStderr so we capture podman's stderr for error diagnosis
     const { stderr } = shWithStderr(cmdline);
     if (stderr) {

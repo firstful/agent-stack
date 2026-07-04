@@ -56,21 +56,30 @@ class RunResult:
     complete: bool = False      # True = TTS finished fully
     created_at: float = 0.0
     interrupted: bool = False
+    thread_id: str = ""         # v2: thread id for thread-aware store
+    is_text_input: bool = False # v2: True if this run came from text_input
 
 
 class RunStore:
-    """Keeps completed/interrupted runs per session for async replay.
+    """Keeps completed/interrupted runs per session+thread for async replay.
 
-    Each session maps to its most recent *unconsumed* run.  Once a
-    run has been fully delivered to a freshly-connected client it is
-    evicted.  Old orphaned runs are purged by a background task.
+    Each (session_id, thread_id) pair maps to its most recent *unconsumed*
+    run.  Once a run has been fully delivered to a freshly-connected client
+    it is evicted.  Old orphaned runs are purged by a background task.
+
+    For backward compatibility with v1 clients (no thread_id), the thread_id
+    defaults to empty string, effectively keying by session_id alone.
     """
 
     def __init__(self, ttl: float = RECONNECT_TTL):
-        self._runs: dict[str, RunResult] = {}   # session_id → RunResult
-        self._consumed: set[str] = set()        # run_ids fully delivered
+        self._runs: dict[tuple[str, str], RunResult] = {}   # (session_id, thread_id) → RunResult
+        self._consumed: set[str] = set()                     # run_ids fully delivered
         self._ttl = ttl
         self._cleanup_task: Optional[asyncio.Task] = None
+
+    @staticmethod
+    def _make_key(session_id: str, thread_id: str = "") -> tuple[str, str]:
+        return (session_id, thread_id)
 
     def start_background_cleanup(self):
         """Run periodic eviction of stale runs."""
@@ -79,28 +88,34 @@ class RunStore:
                 await asyncio.sleep(self._ttl)
                 now = time.monotonic()
                 stale = [
-                    sid for sid, r in self._runs.items()
+                    key for key, r in self._runs.items()
                     if (now - r.created_at) > self._ttl
                 ]
-                for sid in stale:
-                    self._runs.pop(sid, None)
-                    self._consumed.discard(sid)
+                for key in stale:
+                    run_id = self._runs[key].run_id
+                    self._runs.pop(key, None)
+                    self._consumed.discard(run_id)
 
         self._cleanup_task = asyncio.create_task(_clean())
 
     def put(self, result: RunResult) -> None:
-        self._runs[result.session_id] = result
+        key = self._make_key(result.session_id, result.thread_id)
+        self._runs[key] = result
 
-    def get(self, session_id: str) -> Optional[RunResult]:
-        return self._runs.get(session_id)
+    def get(self, session_id: str, thread_id: str = "") -> Optional[RunResult]:
+        return self._runs.get(self._make_key(session_id, thread_id))
 
-    def mark_consumed(self, session_id: str) -> None:
-        if session_id in self._runs:
-            self._consumed.add(self._runs[session_id].run_id)
-            del self._runs[session_id]
+    def mark_consumed(self, session_id: str, thread_id: str = "") -> None:
+        key = self._make_key(session_id, thread_id)
+        if key in self._runs:
+            self._consumed.add(self._runs[key].run_id)
+            del self._runs[key]
 
-    def __contains__(self, session_id: str) -> bool:
-        return session_id in self._runs
+    def __contains__(self, key) -> bool:
+        """Supports both str (v1: session_id) and tuple (v2: (session_id, thread_id))."""
+        if isinstance(key, str):
+            key = self._make_key(key)
+        return key in self._runs
 
     @property
     def pending_count(self) -> int:
@@ -360,6 +375,7 @@ async def ptt_websocket(ws: WebSocket):
 
     # Connection-scoped state for replay tracking
     conn_session_id: Optional[str] = None       # from reconnect handshake
+    conn_thread_id: Optional[str] = None         # v2: thread_id from reconnect
     conn_last_seq: int = 0                       # last seq the client acked
     current_result: Optional[RunResult] = None   # run being accumulated
 
@@ -389,11 +405,26 @@ async def ptt_websocket(ws: WebSocket):
         interrupted partway.
         """
         nonlocal state, current_session_id
-        logger.info("Replaying run %s for session %s", result.run_id, result.session_id)
+        logger.info("Replaying run %s for session %s (thread=%s)",
+                    result.run_id, result.session_id, result.thread_id)
 
         current_session_id = result.session_id
 
-        await send_json({"type": "session_id", "id": result.session_id})
+        # v2: include thread_id if present
+        session_msg: dict = {"type": "session_id", "id": result.session_id}
+        if result.thread_id:
+            session_msg["thread_id"] = result.thread_id
+        await send_json(session_msg)
+
+        # v2: text-mode runs use text_echo, voice runs use stt_transcript
+        if result.is_text_input:
+            await send_json({"type": "text_echo", "text": result.transcript})
+            # Text runs: skip audio, just send tts_fallback
+            await send_json({"type": "tts_fallback", "text": result.reply_text})
+            run_store.mark_consumed(result.session_id, result.thread_id)
+            state = PTTState.IDLE
+            return True
+
         await send_json({"type": "stt_transcript", "text": result.transcript})
         await send_json({"type": "processing", "step": "tts"})
         await send_json({"type": "tts_start", "text": result.reply_text})
@@ -414,13 +445,13 @@ async def ptt_websocket(ws: WebSocket):
         if not cancel_event.is_set():
             if result.complete:
                 await send_json({"type": "tts_end"})
-                run_store.mark_consumed(result.session_id)
+                run_store.mark_consumed(result.session_id, result.thread_id)
                 state = PTTState.IDLE
                 return True
             else:
                 # Run was incomplete (interrupted mid-TTS before disconnect)
                 await send_json({"type": "tts_fallback", "text": result.reply_text})
-                run_store.mark_consumed(result.session_id)
+                run_store.mark_consumed(result.session_id, result.thread_id)
                 state = PTTState.IDLE
                 return True
         return False
@@ -461,14 +492,16 @@ async def ptt_websocket(ws: WebSocket):
             handshake = json.loads(first_msg["text"])
             if handshake.get("type") == "reconnect":
                 conn_session_id = handshake.get("session_id", "")
+                conn_thread_id = handshake.get("thread_id", "")  # v2
                 conn_last_seq = handshake.get("last_seq", 0)
                 logger.info(
-                    "Reconnect handshake: session=%s last_seq=%d",
-                    conn_session_id, conn_last_seq,
+                    "Reconnect handshake: session=%s thread=%s last_seq=%d",
+                    conn_session_id, conn_thread_id, conn_last_seq,
                 )
-                # Check for undelivered run
-                if conn_session_id and conn_session_id in run_store:
-                    result = run_store.get(conn_session_id)
+                # Check for undelivered run (v2: include thread_id in lookup)
+                lookup_key = (conn_session_id, conn_thread_id) if conn_thread_id else conn_session_id
+                if conn_session_id and lookup_key in run_store:
+                    result = run_store.get(conn_session_id, conn_thread_id or "")
                     if result and result.created_at:
                         delivered = await _replay_run(result)
                         if delivered:
@@ -698,6 +731,131 @@ async def ptt_websocket(ws: WebSocket):
                         if conn_session_id and ack_seq > conn_last_seq:
                             conn_last_seq = ack_seq
 
+                    # ── v2: text_input ──────────────────────────
+                    elif cmd_type == "text_input":
+                        if state != PTTState.IDLE:
+                            await send_json({
+                                "type": "error",
+                                "message": "Session busy — agent is processing",
+                            })
+                            continue
+
+                        text = cmd.get("text", "").strip()
+                        if not text:
+                            await send_json({"type": "error", "message": "Empty text input"})
+                            continue
+
+                        thread_id = cmd.get("thread_id", "")
+                        session_id = cmd.get("session_id", "") or current_session_id
+
+                        logger.info(
+                            "text_input: session=%s thread=%s text=%.100s",
+                            session_id, thread_id, text,
+                        )
+
+                        # Echo the text back for client transcript
+                        await send_json({
+                            "type": "text_echo",
+                            "text": text,
+                        })
+
+                        await send_json({"type": "processing", "step": "thinking"})
+
+                        # Send to Hermes
+                        state = PTTState.HERMES_RUNNING
+                        cancel_event.clear()
+                        try:
+                            result = await hermes.start_run(text, session_id=session_id)
+                            current_run_id = result.get("run_id")
+                            sess = result.get("session_id")
+                            if sess:
+                                current_session_id = sess
+                                await send_json({
+                                    "type": "session_id",
+                                    "id": sess,
+                                    "thread_id": thread_id,
+                                })
+                        except Exception as e:
+                            logger.exception("Hermes start_run failed (text_input)")
+                            await send_json({
+                                "type": "error",
+                                "message": f"Hermes API error: {e}",
+                            })
+                            state = PTTState.IDLE
+                            continue
+
+                        # Stream events
+                        try:
+                            reply = await hermes.stream_events(current_run_id, cancel_event)
+                        except Exception as e:
+                            logger.exception("Hermes stream_events failed (text_input)")
+                            await send_json({
+                                "type": "error",
+                                "message": f"Agent error: {e}",
+                            })
+                            state = PTTState.IDLE
+                            continue
+
+                        # If interrupted mid-stream, bail
+                        if cancel_event.is_set():
+                            state = PTTState.IDLE
+                            cancel_event.clear()
+                            continue
+
+                        if not reply:
+                            await send_json({"type": "error", "message": "Empty response"})
+                            state = PTTState.IDLE
+                            continue
+
+                        # Create RunResult for replay (text mode — no audio)
+                        current_result = RunResult(
+                            run_id=current_run_id or "",
+                            session_id=current_session_id or "",
+                            transcript=text,
+                            reply_text=reply,
+                            created_at=time.monotonic(),
+                            thread_id=thread_id,
+                            is_text_input=True,
+                        )
+                        if current_session_id:
+                            run_store.put(current_result)
+
+                        # Text inputs: skip TTS, send tts_fallback
+                        await send_json({
+                            "type": "tts_fallback",
+                            "text": reply,
+                        })
+
+                        # Mark as complete
+                        if current_result is not None:
+                            current_result.complete = True
+                            if current_session_id:
+                                run_store.put(current_result)
+                            current_result = None
+
+                        state = PTTState.IDLE
+
+                    # ── v2: switch_session ──────────────────────
+                    elif cmd_type == "switch_session":
+                        new_session_id = cmd.get("session_id", "")
+                        new_thread_id = cmd.get("thread_id", "")
+
+                        logger.info(
+                            "switch_session: session=%s thread=%s",
+                            new_session_id, new_thread_id,
+                        )
+
+                        if new_session_id:
+                            current_session_id = new_session_id
+                        if new_thread_id:
+                            conn_thread_id = new_thread_id
+
+                        await send_json({
+                            "type": "session_switched",
+                            "session_id": current_session_id or "",
+                            "thread_id": conn_thread_id or "",
+                        })
+
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:
@@ -731,9 +889,14 @@ async def ptt_websocket(ws: WebSocket):
 # ── Entry point ────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import uvicorn
+
+    # Configure logging AFTER uvicorn import (uvicorn overrides root logger
+    # on import, not just on run), but BEFORE uvicorn.run so our handler
+    # takes effect for app-level loggers.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        force=True,  # Override uvicorn's root logger config
     )
-    import uvicorn
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")

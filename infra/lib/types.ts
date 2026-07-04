@@ -59,6 +59,9 @@ export interface ContainerConfig {
   command?: string[];
   healthCheck?: HealthCheckConfig;
   sidecars?: SidecarConfig[];
+  /** Override the podman network for this container (default: stack-net).
+   *  Use "host" for --network host, or any podman network name. */
+  network?: string;
 }
 
 /** systemd service unit configuration for non-container services. */
@@ -77,11 +80,10 @@ export interface ExposeConfig {
   enabled: boolean;
   hostname?: string;
   /** Additional hostnames (including wildcards like *.engramic.ffilt.us)
-   *  for profile-scoped or multi-domain routing.  The slot-proxy checks
+   *  for profile-scoped or multi-domain routing.  The controller checks
    *  these alongside the primary hostname. */
   hostnames?: string[];
   tunnel?: string;
-  no_proxy?: boolean;
 }
 
 // ── Logo Configuration ──
@@ -97,7 +99,7 @@ export interface LogoConfig {
   url?: string;
 }
 
-/** Per-service rate limiting configuration applied at the slot-proxy. */
+/** Per-service rate limiting configuration applied by the controller (proxy role). */
 export interface RateLimitConfig {
   /** Max requests per minute from a single IP. */
   requestsPerMinute: number;
@@ -111,7 +113,7 @@ export interface RateLimitConfig {
  * Canary deploy configuration.
  *
  * After building a new image on the idle slot, the controller adds a `canary`
- * field to the runtime state (services.json).  The slot-proxy detects this and
+ * field to the runtime state (services.json).  The controller detects this and
  * routes a weighted fraction of **live traffic** to the canary slot while
  * counting HTTP 5xx responses.  If the error count stays below `maxErrorCount`
  * for `observationPeriodMs`, the canary is promoted to active (100% traffic).
@@ -157,7 +159,7 @@ export type DeployStrategy = "blue-green" | "recreate";
  *   reconciliation cycle, so three rapid commits build linearly instead of
  *   triggering three concurrent rebuilds.  Each entry in the queue represents
  *   a pending rebuild of the *latest* code state; the queue simply paces builds.
- * - `canary` — when set, the slot-proxy routes `weight` of live traffic to the
+ * - `canary` — when set, the controller routes `weight` of live traffic to the
  *   newly built slot and observes HTTP 5xx error rates before promoting.
  */
 export interface StrategyConfig {
@@ -247,7 +249,7 @@ export interface Service {
   secrets?: string[];
   build?: BuildConfig;
   privileged?: boolean;
-  /** Per-IP rate limiting, enforced by the slot-proxy. */
+  /** Per-IP rate limiting, enforced by the controller. */
   rateLimit?: RateLimitConfig;
   /**
    * Deploy strategy (default: "blue-green").  Set "recreate" to skip slot swap.

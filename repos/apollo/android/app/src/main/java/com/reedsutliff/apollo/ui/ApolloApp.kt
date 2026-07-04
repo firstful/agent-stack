@@ -1,5 +1,10 @@
 package com.reedsutliff.apollo.ui
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -352,8 +357,30 @@ fun PTTButton(
         else -> Color(0xFF6366F1)
     }
 
-    // TODO: Add pulse animation for PROCESSING state
-    val scaleVal = 1f
+    // ── Pulse animation ──────────────────────────────────────
+    val isActive = state == PttButtonState.RECORDING ||
+            state == PttButtonState.PROCESSING ||
+            state == PttButtonState.PLAYING
+
+    val transition = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = if (isActive) 0.9f else 0.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseAlpha",
+    )
+    val pulseScale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (isActive) 1.12f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulseScale",
+    )
 
     val labelText = when (state) {
         PttButtonState.IDLE -> "Hold to Talk"
@@ -363,6 +390,15 @@ fun PTTButton(
         PttButtonState.INTERRUPTED -> "Interrupted"
     }
 
+    // Icon changes with state
+    val iconText = when (state) {
+        PttButtonState.RECORDING -> "\uD83D\uDD34"   // red circle
+        PttButtonState.PROCESSING -> "\u23F3"          // hourglass
+        PttButtonState.PLAYING -> "\uD83D\uDD0A"       // speaker
+        PttButtonState.INTERRUPTED -> "\u270B"         // raised hand
+        else -> "\uD83C\uDFA4"                         // microphone
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -370,10 +406,10 @@ fun PTTButton(
         Box(
             modifier = Modifier
                 .size(80.dp)
-                .scale(scaleVal)
+                .scale(pulseScale)
                 .clip(CircleShape)
                 .background(buttonColor)
-                .border(3.dp, buttonColor.copy(alpha = 0.4f), CircleShape)
+                .border(3.dp, buttonColor.copy(alpha = pulseAlpha), CircleShape)
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
@@ -385,7 +421,7 @@ fun PTTButton(
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Text("\uD83C\uDFA4", fontSize = 32.sp)
+            Text(iconText, fontSize = 32.sp)
         }
 
         Spacer(Modifier.height(8.dp))
@@ -397,6 +433,45 @@ fun PTTButton(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+
+        // Extra visual meter during recording
+        if (state == PttButtonState.RECORDING) {
+            Spacer(Modifier.height(6.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Animated audio level bars
+                val barAlpha by rememberInfiniteTransition(label = "bar").animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 400),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                    label = "barAlpha",
+                )
+                repeat(3) { i ->
+                    val delay = i * 133
+                    val barAnim by rememberInfiniteTransition(label = "bar$i").animateFloat(
+                        initialValue = 0.3f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 400, delayMillis = delay),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                        label = "barAnim$i",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(6.dp)
+                            .height(20.dp * barAnim)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xFFEF4444).copy(alpha = barAnim)),
+                    )
+                }
+            }
+        }
     }
 }
 

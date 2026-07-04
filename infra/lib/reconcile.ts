@@ -215,7 +215,7 @@ function clearCanaryState(name: string): void {
 
 /**
  * Read the proxy's canary 5xx error count for a service.
- * The slot-proxy writes cumulative metrics to canary-metrics.json
+ * The controller (in its proxy role) writes cumulative metrics to canary-metrics.json
  * based on actual HTTP response codes from live traffic.
  * Returns the error count, or null if no metrics available yet.
  */
