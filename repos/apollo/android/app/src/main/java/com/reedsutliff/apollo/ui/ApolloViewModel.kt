@@ -163,10 +163,6 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
         if (text.isBlank()) return
         val thread = _currentThread.value ?: run {
             val t = createDefaultThread()
-            // Ensure thread is persisted to Room before message insert
-            viewModelScope.launch {
-                threadDao.insert(t.toEntity())
-            }
             t
         }
 
@@ -179,13 +175,8 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             status = MessageStatus.SENDING,
         )
 
-        // Add message to local list
+        // Add message to local list immediately (instant UI update)
         _messages.value = _messages.value + message
-
-        // Persist message to Room
-        viewModelScope.launch {
-            messageDao.insert(message.toEntity())
-        }
 
         // Update thread preview
         val updatedThread = thread.copy(
@@ -196,9 +187,10 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             if (it.id == thread.id) updatedThread else it
         }
 
-        // Persist thread update to Room (insert if new, update if exists)
+        // Persist to Room in one sequential block (thread first, then message)
         viewModelScope.launch {
             threadDao.insert(updatedThread.toEntity())
+            messageDao.insert(message.toEntity())
         }
 
         // Send via WebSocket
