@@ -8,8 +8,21 @@ set -euo pipefail
 
 cd "$(dirname "$0")/android"
 
+# Read credentials from local.properties and pass them to Gradle
+LOCAL_PROPS="local.properties"
+GRADLE_ARGS=()
+if [ -f "$LOCAL_PROPS" ]; then
+    while IFS='=' read -r key value; do
+        case "$key" in
+            cfAccessClientId|cfAccessClientSecret|apolloWsUrl)
+                GRADLE_ARGS+=("-P${key}=${value}")
+                ;;
+        esac
+    done < <(grep -E '^(cfAccessClientId|cfAccessClientSecret|apolloWsUrl)=' "$LOCAL_PROPS")
+fi
+
 echo "=== Building Apollo APK ==="
-./gradlew assembleDebug
+./gradlew assembleDebug "${GRADLE_ARGS[@]}"
 
 # Read the generated BuildConfig for version info
 BUILD_DIR="app/build/generated/source/buildConfig/debug/com/reedsutliff/apollo"
