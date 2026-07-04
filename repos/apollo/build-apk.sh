@@ -23,12 +23,14 @@ fi
 
 APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
 FILENAME="apollo-${VERSION_NAME}.apk"
-DEST_DIR="/srv/files"
+DEST_DIR="/srv/files/apk/Apollo"
 
 echo ""
 echo "=== Deploying to $DEST_DIR/ ==="
 echo "  Version: $VERSION_NAME  (code $VERSION_CODE)"
 echo "  APK:     $FILENAME"
+
+mkdir -p "$DEST_DIR"
 
 cp "$APK_SRC" "$DEST_DIR/$FILENAME"
 # Remove old builds except the latest 5
@@ -39,5 +41,5 @@ ln -sf "$FILENAME" "$DEST_DIR/apollo-latest.apk"
 echo "  ✅ $DEST_DIR/$FILENAME  ($(du -h "$DEST_DIR/$FILENAME" | cut -f1))"
 echo "  ✅ Symlink: $DEST_DIR/apollo-latest.apk → $FILENAME"
 echo ""
-echo "  URL: https://files.ffilt.us/$FILENAME"
-echo "  URL: https://files.ffilt.us/apollo-latest.apk"
+echo "  URL: https://files.ffilt.us/apk/Apollo/$FILENAME"
+echo "  URL: https://files.ffilt.us/apk/Apollo/apollo-latest.apk"
