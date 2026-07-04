@@ -32,8 +32,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.i(LOG_TAG, "=== Apollo starting (${BuildConfig.VERSION_NAME}) ===")
-        LogBuffer.log("I", "Apollo", "=== Apollo starting (${BuildConfig.VERSION_NAME}) ===")
+        Log.i(LOG_TAG, "=== Talaria starting (${BuildConfig.VERSION_NAME}) ===")
+        LogBuffer.log("I", "Talaria", "=== Talaria starting (${BuildConfig.VERSION_NAME}) ===")
 
         // Request microphone permission if not already granted
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         } else {
             Log.i(LOG_TAG, "Microphone permission already granted")
-            LogBuffer.log("I", "Apollo", "Microphone permission already granted")
+            LogBuffer.log("I", "Talaria", "Microphone permission already granted")
         }
 
         setContent {

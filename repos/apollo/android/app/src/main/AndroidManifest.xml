@@ -8,7 +8,7 @@
     <application
         android:name=".ApolloApplication"
         android:allowBackup="false"
-        android:label="Apollo"
+        android:label="Talaria"
         android:supportsRtl="true"
         android:theme="@style/Theme.Apollo"
         android:usesCleartextTraffic="false">

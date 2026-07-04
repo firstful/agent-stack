@@ -152,7 +152,7 @@ fun ApolloApp(
                     TopAppBar(
                         title = {
                             Text(
-                                text = "Apollo",
+                                text = "Talaria",
                                 fontWeight = FontWeight.Bold,
                             )
                         },

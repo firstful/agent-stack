@@ -115,7 +115,7 @@ private fun DrawerHeader() {
             .padding(horizontal = 24.dp, vertical = 20.dp),
     ) {
         Text(
-            text = "Apollo",
+            text = "Talaria",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
