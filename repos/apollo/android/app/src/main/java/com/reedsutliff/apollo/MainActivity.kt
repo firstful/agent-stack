@@ -1,11 +1,13 @@
 package com.reedsutliff.apollo
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
@@ -24,6 +26,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,6 +67,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
@@ -230,6 +234,36 @@ fun ApolloApp(context: ComponentActivity) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    // ── Share logs handler ────────────────────────────────
+    fun shareLogs() {
+        ApolloLogger.i("Share logs requested")
+        Handler(Looper.getMainLooper()).post {
+            val file = ApolloLogger.dumpToFile(context)
+            if (file != null && file.exists()) {
+                try {
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share Apollo Logs"))
+                    ApolloLogger.i("Share intent launched for ${file.name}")
+                } catch (e: Exception) {
+                    ApolloLogger.e("Share intent failed", e)
+                    Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                ApolloLogger.w("No logs to share (file is null or empty)")
+                Toast.makeText(context, "No logs recorded yet", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // WebSocket client — single instance across recompositions
     val wsClient = remember {
         PTTWebSocketClient(
@@ -300,7 +334,7 @@ fun ApolloApp(context: ComponentActivity) {
                 .padding(16.dp),
         ) {
             // Status bar
-            StatusBar(connectionState, pttState)
+            StatusBar(connectionState, pttState, ::shareLogs)
             Spacer(Modifier.height(8.dp))
 
             // Chat transcript
@@ -325,7 +359,7 @@ fun ApolloApp(context: ComponentActivity) {
 // ── Status Bar ───────────────────────────────────────────────
 
 @Composable
-fun StatusBar(conn: ConnectionState, ptt: PttButtonState) {
+fun StatusBar(conn: ConnectionState, ptt: PttButtonState, onShareLogs: () -> Unit) {
     val dotColor = when (conn) {
         ConnectionState.CONNECTED -> Color(0xFF22C55E)
         ConnectionState.CONNECTING -> Color(0xFFEAB308)
@@ -355,6 +389,21 @@ fun StatusBar(conn: ConnectionState, ptt: PttButtonState) {
         )
         Spacer(Modifier.width(8.dp))
         Text(statusText, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        
+        Spacer(Modifier.weight(1f))
+        
+        // Share logs button
+        Text(
+            "📋 Share Logs",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .clickable { onShareLogs() }
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+        )
     }
 }
 
