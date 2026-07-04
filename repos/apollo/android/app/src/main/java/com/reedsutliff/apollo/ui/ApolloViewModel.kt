@@ -47,6 +47,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.io.PipedInputStream
 import java.io.PipedOutputStream
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -115,6 +116,14 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
         val sessionId: String,
     )
     private val pendingMessages = mutableListOf<PendingMessage>()
+
+    private data class PendingAudioMessage(
+        val id: String,
+        val threadId: String,
+        val audioData: ByteArray,
+        val sessionId: String,
+    )
+    private val pendingAudioMessages = mutableListOf<PendingAudioMessage>()
 
     init {
         // Load persisted settings from DataStore
@@ -226,11 +235,7 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
 
     fun startPtt() {
         Log.i(LOG_TAG, "startPtt() — conn=${_connectionState.value}")
-        if (_connectionState.value != ConnectionState.CONNECTED) {
-            Log.w(LOG_TAG, "PTT pressed but not connected — reconnecting")
-            connect()
-            return
-        }
+        val connected = _connectionState.value == ConnectionState.CONNECTED
 
         // Barge-in: interrupt if processing or playing
         if (_pttState.value == PttButtonState.PROCESSING ||
@@ -238,7 +243,27 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             interrupt()
         }
 
-        wsClient?.startRecording()
+        val messageId = UUID.randomUUID().toString()
+        val thread = _currentThread.value ?: run {
+            val t = createDefaultThread()
+            t
+        }
+
+        // Create placeholder voice message immediately for status tracking
+        val msg = ChatMessage(
+            id = messageId,
+            threadId = thread.id,
+            text = if (connected) "🎤 Recording…" else "🎤 Queued audio…",
+            isUser = true,
+            modality = MessageModality.VOICE,
+            status = if (connected) MessageStatus.SENDING else MessageStatus.QUEUED,
+        )
+        _messages.value = _messages.value + msg
+        viewModelScope.launch {
+            messageDao.insert(msg.toEntity())
+        }
+
+        wsClient?.startRecording(messageId, connected)
     }
 
     fun stopPtt() {
@@ -403,6 +428,10 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
         private var reconnectJob: Job? = null
         private val replayAudioBuffer = ArrayDeque<ByteArray>()
 
+        // Audio status tracking
+        private var currentAudioMsgId: String = ""
+        private var offlineAudioBuffer: ByteArrayOutputStream? = null
+
         private fun log(level: String, msg: String) {
             // Route through centralized in-memory ring buffer for crash log sharing
             Log.d("ApolloWS", "[$level] $msg")
@@ -456,6 +485,10 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                     _connectionState.value = ConnectionState.DISCONNECTED
                     _pttState.value = PttButtonState.IDLE
                     stopPlayback()
+                    // Mark any SENDING messages as ERROR (transmission failed)
+                    _messages.value = _messages.value.map {
+                        if (it.status == MessageStatus.SENDING) it.copy(status = MessageStatus.ERROR) else it
+                    }
                     scheduleReconnect()
                 }
 
@@ -463,6 +496,10 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                     log("I", "WebSocket CLOSED — code=$code reason=$reason")
                     _connectionState.value = ConnectionState.DISCONNECTED
                     _pttState.value = PttButtonState.IDLE
+                    // Mark any SENDING messages as ERROR
+                    _messages.value = _messages.value.map {
+                        if (it.status == MessageStatus.SENDING) it.copy(status = MessageStatus.ERROR) else it
+                    }
                     scheduleReconnect()
                 }
             })
@@ -499,28 +536,71 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                 PendingMessage(it.id, it.threadId, it.text, sessionId ?: "")
             }
 
-            if (allQueued.isEmpty()) return
-            log("I", "Flushing ${allQueued.size} queued messages")
+            if (allQueued.isNotEmpty()) {
+                log("I", "Flushing ${allQueued.size} queued text messages")
+                for (pm in allQueued.distinctBy { it.id }) {
+                    val payload = JSONObject().apply {
+                        put("type", "text_input")
+                        put("thread_id", pm.threadId)
+                        put("session_id", pm.sessionId)
+                        put("text", pm.text)
+                        put("client_message_id", pm.id)
+                    }
+                    log("D", "SEND → ${payload.toString().take(200)}")
+                    ws?.send(payload.toString())
 
-            for (pm in allQueued.distinctBy { it.id }) {
-                val payload = JSONObject().apply {
-                    put("type", "text_input")
-                    put("thread_id", pm.threadId)
-                    put("session_id", pm.sessionId)
-                    put("text", pm.text)
-                    put("client_message_id", pm.id)
+                    // Update status QUEUED → SENDING in local state
+                    val current = _messages.value.find { it.id == pm.id } ?: continue
+                    _messages.value = _messages.value.map {
+                        if (it.id == pm.id) it.copy(status = MessageStatus.SENDING) else it
+                    }
+                    // Persist status change
+                    viewModelScope.launch {
+                        messageDao.insert(current.copy(status = MessageStatus.SENDING).toEntity())
+                    }
                 }
-                log("D", "SEND → ${payload.toString().take(200)}")
-                ws?.send(payload.toString())
+            }
 
-                // Update status QUEUED → SENDING in local state
-                val current = _messages.value.find { it.id == pm.id } ?: continue
-                _messages.value = _messages.value.map {
-                    if (it.id == pm.id) it.copy(status = MessageStatus.SENDING) else it
-                }
-                // Persist status change
-                viewModelScope.launch {
-                    messageDao.insert(current.copy(status = MessageStatus.SENDING).toEntity())
+            // Flush pending audio messages
+            val audioToFlush = pendingAudioMessages.toList()
+            pendingAudioMessages.clear()
+            if (audioToFlush.isNotEmpty()) {
+                log("I", "Flushing ${audioToFlush.size} queued audio messages")
+                for (am in audioToFlush.distinctBy { it.id }) {
+                    // Send ptt_start with client_message_id for status tracking
+                    ws?.send(JSONObject().apply {
+                        put("type", "ptt_start")
+                        put("client_message_id", am.id)
+                    }.toString())
+
+                    // Stream the full audio in chunks
+                    val chunkSize = AUDIO_BUFFER_SIZE
+                    var offset = 0
+                    val data = am.audioData
+                    while (offset < data.size) {
+                        val end = minOf(offset + chunkSize, data.size)
+                        val chunk = data.copyOfRange(offset, end)
+                        val ob = okio.Buffer()
+                        ob.write(chunk)
+                        ws?.send(ob.readByteString())
+                        offset = end
+                    }
+
+                    // Send ptt_end to trigger processing
+                    ws?.send(JSONObject().apply { put("type", "ptt_end") }.toString())
+
+                    // Update status QUEUED → SENDING in local state
+                    _messages.value = _messages.value.map {
+                        if (it.id == am.id) it.copy(status = MessageStatus.SENDING) else it
+                    }
+                    // Persist status change
+                    viewModelScope.launch {
+                        val existing = _messages.value.find { it.id == am.id }
+                        if (existing != null) {
+                            messageDao.insert(existing.toEntity())
+                        }
+                    }
+                    log("I", "Flushed audio message ${am.id} (${data.size} bytes)")
                 }
             }
         }
@@ -581,12 +661,14 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
 
         // ── Recording ───────────────────────────────────────
 
-        fun startRecording() {
-            log("I", "startRecording()")
+        fun startRecording(clientMessageId: String, connected: Boolean) {
+            log("I", "startRecording() clientMessageId=$clientMessageId connected=$connected")
             if (audioRecord != null) {
                 log("W", "Already recording, returning")
                 return
             }
+
+            currentAudioMsgId = clientMessageId
 
             val bufferSize = maxOf(
                 AudioRecord.getMinBufferSize(
@@ -609,16 +691,33 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
 
                 _pttState.value = PttButtonState.RECORDING
 
+                // If connected, announce recording start with client_message_id
+                if (connected) {
+                    ws?.send(JSONObject().apply {
+                        put("type", "ptt_start")
+                        put("client_message_id", clientMessageId)
+                    }.toString())
+                } else {
+                    // Offline: buffer audio for later queued send
+                    offlineAudioBuffer = ByteArrayOutputStream()
+                }
+
+                val isOnline = connected
+                val buf = ByteArray(AUDIO_BUFFER_SIZE)
+                var totalBytes = 0
+                var frames = 0
+
                 recordingJob = scope.launch {
-                    val buf = ByteArray(AUDIO_BUFFER_SIZE)
-                    var totalBytes = 0
-                    var frames = 0
                     while (isActive && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                         val bytesRead = audioRecord?.read(buf, 0, AUDIO_BUFFER_SIZE) ?: -1
                         if (bytesRead > 0) {
-                            val ob = okio.Buffer()
-                            ob.write(buf, 0, bytesRead)
-                            ws?.send(ob.readByteString())
+                            if (isOnline) {
+                                val ob = okio.Buffer()
+                                ob.write(buf, 0, bytesRead)
+                                ws?.send(ob.readByteString())
+                            } else {
+                                offlineAudioBuffer?.write(buf, 0, bytesRead)
+                            }
                             totalBytes += bytesRead
                             frames++
                         } else if (bytesRead < 0) {
@@ -632,6 +731,10 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                 _pttState.value = PttButtonState.IDLE
                 audioRecord?.release()
                 audioRecord = null
+                // Mark placeholder message as ERROR
+                _messages.value = _messages.value.map {
+                    if (it.id == clientMessageId) it.copy(status = MessageStatus.ERROR) else it
+                }
             }
         }
 
@@ -642,6 +745,26 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             try { audioRecord?.stop() } catch (_: Exception) {}
             audioRecord?.release()
             audioRecord = null
+
+            // If recording was offline, queue for later delivery
+            if (offlineAudioBuffer != null) {
+                val audioData = offlineAudioBuffer?.toByteArray() ?: ByteArray(0)
+                offlineAudioBuffer?.close()
+                offlineAudioBuffer = null
+
+                if (audioData.isNotEmpty()) {
+                    val thread = _currentThread.value ?: return
+                    pendingAudioMessages.add(PendingAudioMessage(
+                        id = currentAudioMsgId,
+                        threadId = thread.id,
+                        audioData = audioData,
+                        sessionId = sessionId ?: "",
+                    ))
+                    log("I", "Queued audio message for later delivery: ${audioData.size} bytes")
+                }
+                _pttState.value = PttButtonState.IDLE
+                return
+            }
 
             ws?.send(JSONObject().apply { put("type", "ptt_end") }.toString())
             _pttState.value = PttButtonState.PROCESSING
@@ -666,21 +789,69 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     "stt_transcript" -> {
                         val t = json.optString("text", "")
-                        log("I", "STT transcript (${t.length} chars)")
-                        addMessage(ChatMessage(
-                            id = UUID.randomUUID().toString(),
-                            threadId = _currentThread.value?.id ?: "",
-                            text = t,
-                            isUser = true,
-                            modality = MessageModality.VOICE,
-                            status = MessageStatus.SENT,
-                        ))
+                        val clientMsgId = json.optString("client_message_id", "")
+                        log("I", "STT transcript (${t.length} chars) client_message_id=$clientMsgId")
+
+                        if (clientMsgId.isNotEmpty()) {
+                            // Update the placeholder voice message with real transcript text
+                            // and advance status SENDING→SENT (server fully received audio)
+                            _messages.value = _messages.value.map {
+                                if (it.id == clientMsgId) it.copy(
+                                    text = t,
+                                    status = MessageStatus.SENT,
+                                ) else it
+                            }
+                            viewModelScope.launch {
+                                val existing = _messages.value.find { it.id == clientMsgId }
+                                if (existing != null) {
+                                    messageDao.insert(existing.toEntity())
+                                }
+                            }
+                        } else {
+                            // Fallback: add as new message (legacy path)
+                            addMessage(ChatMessage(
+                                id = UUID.randomUUID().toString(),
+                                threadId = _currentThread.value?.id ?: "",
+                                text = t,
+                                isUser = true,
+                                modality = MessageModality.VOICE,
+                                status = MessageStatus.SENT,
+                            ))
+                        }
                         _transcript.value = t
+                    }
+                    "ptt_start_echo" -> {
+                        // Server acknowledged ptt_start — update SENDING→SENT
+                        val clientMsgId = json.optString("client_message_id", "")
+                        log("D", "ptt_start_echo: client_message_id=$clientMsgId")
+                        if (clientMsgId.isNotEmpty()) {
+                            _messages.value = _messages.value.map {
+                                if (it.id == clientMsgId && it.status == MessageStatus.SENDING)
+                                    it.copy(status = MessageStatus.SENT) else it
+                            }
+                        }
                     }
                     "tts_start" -> {
                         val t = json.optString("text", "")
                         log("I", "TTS start (${t.length} chars)")
                         _pttState.value = PttButtonState.PLAYING
+
+                        // Advance last user voice message to DELIVERED
+                        _messages.value = _messages.value.map {
+                            if (it.isUser && it.modality == MessageModality.VOICE &&
+                                (it.status == MessageStatus.SENT || it.status == MessageStatus.SENDING))
+                                it.copy(status = MessageStatus.DELIVERED) else it
+                        }
+                        viewModelScope.launch {
+                            val deliveredVoice = _messages.value.find {
+                                it.isUser && it.modality == MessageModality.VOICE &&
+                                    it.status == MessageStatus.DELIVERED
+                            }
+                            if (deliveredVoice != null) {
+                                messageDao.insert(deliveredVoice.toEntity())
+                            }
+                        }
+
                         addMessage(ChatMessage(
                             id = UUID.randomUUID().toString(),
                             threadId = _currentThread.value?.id ?: "",
@@ -703,6 +874,7 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                         _pttState.value = PttButtonState.IDLE
 
                         // Mark last user SENT message as DELIVERED (Hermes processed it)
+                        // Covers both text (SENT) and voice (SENT/SENDING) messages
                         _messages.value = _messages.value.map {
                             if (it.isUser && it.status == MessageStatus.SENT) it.copy(status = MessageStatus.DELIVERED) else it
                         }

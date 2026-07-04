@@ -403,6 +403,9 @@ async def ptt_websocket(ws: WebSocket):
     conn_last_seq: int = 0                       # last seq the client acked
     current_result: Optional[RunResult] = None   # run being accumulated
 
+    # Audio status tracking
+    pending_client_msg_id: str = ""              # client_message_id from ptt_start
+
     async def send_json(msg: dict, *, seq: Optional[int] = None) -> None:
         """Send JSON with an auto-incrementing seq number."""
         if seq is None:
@@ -596,6 +599,18 @@ async def ptt_websocket(ws: WebSocket):
 
                     cmd_type = cmd.get("type", "")
 
+                    if cmd_type == "ptt_start":
+                        # Client announces audio recording start with metadata
+                        client_msg_id = cmd.get("client_message_id")
+                        if client_msg_id:
+                            pending_client_msg_id = client_msg_id
+                            # Echo back immediately so client can update SENDING→SENT
+                            await send_json({
+                                "type": "ptt_start_echo",
+                                "client_message_id": client_msg_id,
+                            })
+                        continue
+
                     if cmd_type == "ptt_end":
                         if state != PTTState.RECORDING:
                             continue
@@ -626,7 +641,11 @@ async def ptt_websocket(ws: WebSocket):
                             state = PTTState.IDLE
                             continue
 
-                        await send_json({"type": "stt_transcript", "text": transcript})
+                        await send_json({
+                            "type": "stt_transcript",
+                            "text": transcript,
+                            "client_message_id": pending_client_msg_id or "",
+                        })
                         await send_json({"type": "processing", "step": "thinking"})
 
                         # Send to Hermes
