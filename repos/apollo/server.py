@@ -777,11 +777,15 @@ async def ptt_websocket(ws: WebSocket):
                             session_id, thread_id, text,
                         )
 
-                        # Echo the text back for client transcript
-                        await send_json({
+                        # Echo the text back with client_message_id for status tracking
+                        echo_msg = {
                             "type": "text_echo",
                             "text": text,
-                        })
+                        }
+                        client_msg_id = cmd.get("client_message_id")
+                        if client_msg_id:
+                            echo_msg["client_message_id"] = client_msg_id
+                        await send_json(echo_msg)
 
                         await send_json({"type": "processing", "step": "thinking"})
 

@@ -4,7 +4,7 @@ import java.util.UUID
 
 enum class MessageModality { VOICE, TEXT }
 
-enum class MessageStatus { SENDING, SENT, DELIVERED, ERROR }
+enum class MessageStatus { QUEUED, SENDING, SENT, DELIVERED, ERROR }
 
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),

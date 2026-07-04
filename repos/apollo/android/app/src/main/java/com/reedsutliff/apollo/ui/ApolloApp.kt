@@ -66,6 +66,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reedsutliff.apollo.model.ChatMessage
 import com.reedsutliff.apollo.model.ConnectionState
 import com.reedsutliff.apollo.model.MessageModality
+import com.reedsutliff.apollo.model.MessageStatus
 import com.reedsutliff.apollo.model.PttButtonState
 import kotlinx.coroutines.launch
 
@@ -314,6 +315,22 @@ fun ChatBubble(msg: ChatMessage) {
         MessageModality.TEXT -> "\u2328"
     }
 
+    // Status icon for user messages
+    val statusIcon = when (msg.status) {
+        MessageStatus.QUEUED -> "\u23F3"           // hourglass
+        MessageStatus.SENDING -> "\u25CB"           // unfilled circle
+        MessageStatus.SENT -> "\u2713"              // single check
+        MessageStatus.DELIVERED -> "\u2713\u2713"   // double check
+        MessageStatus.ERROR -> "\u274C"             // cross mark
+    }
+    val statusColor = when (msg.status) {
+        MessageStatus.QUEUED -> Color(0xFFF59E0B)  // amber
+        MessageStatus.SENDING -> Color(0xFF94A3B8) // slate
+        MessageStatus.SENT -> Color(0xFF22C55E)    // green
+        MessageStatus.DELIVERED -> Color(0xFF22C55E) // green
+        MessageStatus.ERROR -> Color(0xFFEF4444)   // red
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = alignment,
@@ -332,6 +349,15 @@ fun ChatBubble(msg: ChatMessage) {
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
+            // Status indicator for user messages
+            if (msg.isUser) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = statusIcon,
+                    fontSize = 10.sp,
+                    color = statusColor,
+                )
+            }
         }
         Box(
             modifier = Modifier

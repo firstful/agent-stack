@@ -107,6 +107,15 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
     private val settingsRepository = SettingsRepository(ApolloPreferences(appContext))
     private var messagesJob: Job? = null
 
+    // ── Offline message queue ──────────────────────────────────
+    private data class PendingMessage(
+        val id: String,
+        val threadId: String,
+        val text: String,
+        val sessionId: String,
+    )
+    private val pendingMessages = mutableListOf<PendingMessage>()
+
     init {
         // Load persisted settings from DataStore
         viewModelScope.launch {
@@ -166,13 +175,16 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             t
         }
 
+        val messageId = UUID.randomUUID().toString()
+        val isConnected = _connectionState.value == ConnectionState.CONNECTED
+
         val message = ChatMessage(
-            id = UUID.randomUUID().toString(),
+            id = messageId,
             threadId = thread.id,
             text = text.trim(),
             isUser = true,
             modality = MessageModality.TEXT,
-            status = MessageStatus.SENDING,
+            status = if (isConnected) MessageStatus.SENDING else MessageStatus.QUEUED,
         )
 
         // Add message to local list immediately (instant UI update)
@@ -193,17 +205,23 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
             messageDao.insert(message.toEntity())
         }
 
-        // Send via WebSocket
-        wsClient?.sendMessage(
-            JSONObject().apply {
-                put("type", "text_input")
-                put("thread_id", thread.id)
-                put("session_id", sessionId ?: "")
-                put("text", text.trim())
-            }.toString()
-        )
-
-        Log.i(LOG_TAG, "sendText: ${text.take(50)}...")
+        if (isConnected) {
+            // Send via WebSocket immediately with client_message_id for tracking
+            wsClient?.sendMessage(
+                JSONObject().apply {
+                    put("type", "text_input")
+                    put("thread_id", thread.id)
+                    put("session_id", sessionId ?: "")
+                    put("text", text.trim())
+                    put("client_message_id", messageId)
+                }.toString()
+            )
+            Log.i(LOG_TAG, "sendText: ${text.take(50)}...")
+        } else {
+            // Queue for later delivery when connection resumes
+            pendingMessages.add(PendingMessage(messageId, thread.id, text.trim(), sessionId ?: ""))
+            Log.i(LOG_TAG, "sendText: queued (offline) — ${text.take(50)}...")
+        }
     }
 
     fun startPtt() {
@@ -418,6 +436,9 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                     val msg = handshake.toString()
                     log("I", "Sending handshake: $msg")
                     ws.send(msg)
+                    
+                    // Flush any queued messages from offline period
+                    flushPendingMessages()
                 }
 
                 override fun onMessage(ws: WebSocket, text: String) {
@@ -463,6 +484,45 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
         fun sendMessage(text: String) {
             log("D", "SEND → ${text.take(200)}")
             ws?.send(text)
+        }
+
+        // ── Flush offline queue ────────────────────────────────
+
+        private fun flushPendingMessages() {
+            // Flush in-memory pending queue
+            val toFlush = pendingMessages.toList()
+            pendingMessages.clear()
+
+            // Also check for QUEUED messages loaded from Room (app restart case)
+            val roomQueued = _messages.value.filter { it.status == MessageStatus.QUEUED }
+            val allQueued = toFlush + roomQueued.map {
+                PendingMessage(it.id, it.threadId, it.text, sessionId ?: "")
+            }
+
+            if (allQueued.isEmpty()) return
+            log("I", "Flushing ${allQueued.size} queued messages")
+
+            for (pm in allQueued.distinctBy { it.id }) {
+                val payload = JSONObject().apply {
+                    put("type", "text_input")
+                    put("thread_id", pm.threadId)
+                    put("session_id", pm.sessionId)
+                    put("text", pm.text)
+                    put("client_message_id", pm.id)
+                }
+                log("D", "SEND → ${payload.toString().take(200)}")
+                ws?.send(payload.toString())
+
+                // Update status QUEUED → SENDING in local state
+                val current = _messages.value.find { it.id == pm.id } ?: continue
+                _messages.value = _messages.value.map {
+                    if (it.id == pm.id) it.copy(status = MessageStatus.SENDING) else it
+                }
+                // Persist status change
+                viewModelScope.launch {
+                    messageDao.insert(current.copy(status = MessageStatus.SENDING).toEntity())
+                }
+            }
         }
 
         // ── Auto-reconnect ───────────────────────────────────
@@ -641,6 +701,19 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                         val t = json.optString("text", "") + " 🔇"
                         log("I", "TTS fallback")
                         _pttState.value = PttButtonState.IDLE
+
+                        // Mark last user SENT message as DELIVERED (Hermes processed it)
+                        _messages.value = _messages.value.map {
+                            if (it.isUser && it.status == MessageStatus.SENT) it.copy(status = MessageStatus.DELIVERED) else it
+                        }
+                        // Persist status changes
+                        val userMsg = _messages.value.find { it.isUser && it.status == MessageStatus.DELIVERED }
+                        if (userMsg != null) {
+                            viewModelScope.launch {
+                                messageDao.insert(userMsg.toEntity())
+                            }
+                        }
+
                         addMessage(ChatMessage(
                             id = UUID.randomUUID().toString(),
                             threadId = _currentThread.value?.id ?: "",
@@ -684,21 +757,22 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                         _pttState.value = PttButtonState.IDLE
                     }
                     "text_echo" -> {
-                        // Server echoes user text for transcript
+                        // Server echoes user text — update status to SENT
                         val echoText = json.optString("text", "")
-                        val msgId = json.optString("message_id", null)
-                        log("D", "text_echo: msgId=$msgId")
+                        val clientMsgId = json.optString("client_message_id", null)
+                        log("D", "text_echo: client_message_id=$clientMsgId")
 
-                        // Mark the matching message as DELIVERED
-                        _messages.value = _messages.value.map {
-                            if (it.id == msgId) it.copy(status = MessageStatus.DELIVERED) else it
-                        }
-
-                        // Persist status update to Room
-                        val updatedMsg = _messages.value.find { it.id == msgId }
-                        if (updatedMsg != null) {
-                            viewModelScope.launch {
-                                messageDao.insert(updatedMsg.toEntity())
+                        if (clientMsgId != null) {
+                            // Mark the matching message as SENT (server confirmed receipt)
+                            _messages.value = _messages.value.map {
+                                if (it.id == clientMsgId) it.copy(status = MessageStatus.SENT) else it
+                            }
+                            // Persist status update to Room
+                            val updatedMsg = _messages.value.find { it.id == clientMsgId }
+                            if (updatedMsg != null) {
+                                viewModelScope.launch {
+                                    messageDao.insert(updatedMsg.toEntity())
+                                }
                             }
                         }
                     }
