@@ -4,7 +4,6 @@
   "container": {
     "port": 8321,
     "auto_port": true,
-    "network": "host",
     "podman_args": "--memory 2g",
     "env": {
       "HOST": "0.0.0.0",
