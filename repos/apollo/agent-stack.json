@@ -4,15 +4,17 @@
   "container": {
     "port": 8321,
     "auto_port": true,
+    "network": "host",
     "podman_args": "--memory 2g",
     "env": {
       "HOST": "0.0.0.0",
       "PORT": "8321",
       "APOLLO_DOMAIN": "apollo.ffilt.us",
-      "HERMES_API_URL": "http://hermes--api:8642",
+      "HERMES_API_URL": "http://host.containers.internal:8642",
       "HERMES_API_KEY": "GCAQyy2CIlnEwNa-7ykl3stA4xJ-hO2oTo_x_bmNhWw",
       "STT_MODEL": "base",
-      "LOG_LEVEL": "info"
+      "LOG_LEVEL": "info",
+      "HF_HOME": "/app/cache"
     },
     "volumes": [
       "apollo-cache:/app/cache"
