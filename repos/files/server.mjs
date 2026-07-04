@@ -89,7 +89,8 @@ function serveDirectoryListing(res, dirPath, relPath) {
       try { stat = fs.statSync(full); } catch { return null; }
       const isDir = e.isDirectory();
       return {
-        name: e.name + (isDir ? '/' : ''),
+        name: e.name,
+        displayName: e.name + (isDir ? '/' : ''),
         isDir,
         size: isDir ? null : stat.size,
         mtime: stat.mtime,
@@ -127,7 +128,7 @@ ${items.map(i => {
   const icon = i.isDir ? '📁' : '📄';
   const size = i.isDir ? '—' : formatSize(i.size);
   const cls = i.isDir ? 'dir' : '';
-  return `<tr><td class="${cls}">${icon} <a href="${encodeURIComponent(i.name)}">${i.name}</a></td><td>${size}</td></tr>`;
+  return `<tr><td class="${cls}">${icon} <a href="${encodeURIComponent(i.name)}${i.isDir ? '/' : ''}">${i.displayName}</a></td><td>${size}</td></tr>`;
 }).join('\n')}
 </table>
 </body></html>`;
@@ -217,6 +218,13 @@ const server = http.createServer((req, res) => {
   try {
     const stat = fs.statSync(filePath);
     if (stat.isDirectory()) {
+      // Ensure trailing slash for proper relative URL resolution
+      const p = url.pathname;
+      if (!p.endsWith('/')) {
+        res.writeHead(301, { 'Location': p + '/' });
+        res.end();
+        return;
+      }
       // Check for index.html
       const indexPath = path.join(filePath, 'index.html');
       if (fs.existsSync(indexPath)) {
