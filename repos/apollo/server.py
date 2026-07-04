@@ -128,6 +128,9 @@ run_store = RunStore()
 
 _stt_pipeline = None
 _tts_available = False
+_stt_init_lock = asyncio.Lock()
+_tts_init_done = False
+_background_init_task: Optional[asyncio.Task] = None
 
 
 # ── State machine ─────────────────────────────────────────────
@@ -147,15 +150,18 @@ async def init_stt():
     global _stt_pipeline
     if _stt_pipeline is not None:
         return
-    logger.info("Loading faster-whisper model: %s", STT_MODEL_SIZE)
-    loop = asyncio.get_event_loop()
+    async with _stt_init_lock:
+        if _stt_pipeline is not None:
+            return
+        logger.info("Loading faster-whisper model: %s", STT_MODEL_SIZE)
+        loop = asyncio.get_event_loop()
 
-    def _load():
-        from faster_whisper import WhisperModel
-        return WhisperModel(STT_MODEL_SIZE, device="cpu", compute_type="int8")
+        def _load():
+            from faster_whisper import WhisperModel
+            return WhisperModel(STT_MODEL_SIZE, device="cpu", compute_type="int8")
 
-    _stt_pipeline = await loop.run_in_executor(None, _load)
-    logger.info("STT model loaded: %s", STT_MODEL_SIZE)
+        _stt_pipeline = await loop.run_in_executor(None, _load)
+        logger.info("STT model loaded: %s", STT_MODEL_SIZE)
 
 
 async def transcribe(audio_bytes: bytes) -> str:
@@ -177,7 +183,10 @@ async def transcribe(audio_bytes: bytes) -> str:
 # ── TTS: Edge TTS ────────────────────────────────────────────
 
 async def init_tts():
-    global _tts_available
+    global _tts_available, _tts_init_done
+    if _tts_init_done:
+        return
+    _tts_init_done = True
     try:
         import edge_tts
         voices = await edge_tts.list_voices()
@@ -186,6 +195,14 @@ async def init_tts():
     except ImportError:
         logger.warning("edge-tts not installed")
         _tts_available = False
+
+
+async def _background_load_models():
+    """Load STT + TTS in background so HTTP/WS serving is not blocked."""
+    logger.info("Background model loading started")
+    await init_stt()
+    await init_tts()
+    logger.info("Background model loading complete")
 
 
 async def synthesize(text: str, voice: str = "en-US-ChristopherNeural",
@@ -324,12 +341,19 @@ class HermesClient:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _background_init_task
     logger.info("Apollo starting up...")
-    await init_stt()
-    await init_tts()
+    # Background-load STT/TTS models — server serves requests immediately
+    _background_init_task = asyncio.create_task(_background_load_models())
     run_store.start_background_cleanup()
-    logger.info("Apollo ready on %s:%s", HOST, PORT)
+    logger.info("Apollo ready on %s:%s (models loading in background)", HOST, PORT)
     yield
+    if _background_init_task and not _background_init_task.done():
+        _background_init_task.cancel()
+        try:
+            await _background_init_task
+        except asyncio.CancelledError:
+            pass
     if run_store._cleanup_task:
         run_store._cleanup_task.cancel()
     logger.info("Apollo shutting down")
