@@ -7,6 +7,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -237,7 +238,7 @@ fun ApolloApp(
                         }
                     }
 
-                    // Input mode toggle hint
+                    // Input mode toggle hint — tappable to switch modes
                     Text(
                         text = when (inputMode) {
                             InputMode.VOICE -> "Tap to type"
@@ -247,7 +248,13 @@ fun ApolloApp(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp),
+                            .padding(top = 4.dp)
+                            .clickable {
+                                viewModel.setInputMode(
+                                    if (inputMode == InputMode.VOICE) InputMode.TEXT
+                                    else InputMode.VOICE
+                                )
+                            },
                         textAlign = TextAlign.Center,
                     )
 
