@@ -191,7 +191,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ApolloLogger.i("=== Apollo starting (v1.0.0) ===")
+        ApolloLogger.i("=== Apollo starting (${BuildConfig.VERSION_NAME}) ===")
 
         // Global crash handler — writes crash to log + file before dying
         Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
@@ -351,6 +351,17 @@ fun ApolloApp(context: ComponentActivity) {
                 state = pttState,
                 onDown = ::onPttDown,
                 onUp = ::onPttUp,
+            )
+
+            // App version footer
+            Text(
+                BuildConfig.VERSION_NAME,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                textAlign = TextAlign.Center,
             )
         }
     }
@@ -972,3 +983,4 @@ fun ApolloTheme(content: @Composable () -> Unit) {
         content = content,
     )
 }
+
