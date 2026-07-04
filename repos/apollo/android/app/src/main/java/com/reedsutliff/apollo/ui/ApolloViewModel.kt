@@ -758,8 +758,7 @@ class ApolloViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     "text_echo" -> {
                         // Server echoes user text — update status to SENT
-                        val echoText = json.optString("text", "")
-                        val clientMsgId = json.optString("client_message_id", null)
+                        val clientMsgId = if (json.has("client_message_id")) json.getString("client_message_id") else null
                         log("D", "text_echo: client_message_id=$clientMsgId")
 
                         if (clientMsgId != null) {
