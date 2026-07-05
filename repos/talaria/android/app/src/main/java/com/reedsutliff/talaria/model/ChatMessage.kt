@@ -6,6 +6,8 @@ enum class MessageModality { VOICE, TEXT }
 
 enum class MessageStatus { QUEUED, SENDING, SENT, DELIVERED, ERROR }
 
+enum class MessageFeedback { NONE, THUMBS_UP, THUMBS_DOWN }
+
 data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
     val threadId: String,
@@ -15,5 +17,6 @@ data class ChatMessage(
     val status: MessageStatus = MessageStatus.SENT,
     val timestamp: Long = System.currentTimeMillis(),
     val interrupted: Boolean = false,
-    val runId: String? = null
+    val runId: String? = null,
+    val feedback: MessageFeedback = MessageFeedback.NONE,
 )

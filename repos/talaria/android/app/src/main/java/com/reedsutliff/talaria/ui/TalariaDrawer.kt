@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reedsutliff.talaria.model.AppSettings
 import com.reedsutliff.talaria.model.ConnectionState
+import com.reedsutliff.talaria.model.HermesSession
 import com.reedsutliff.talaria.model.Thread
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,7 +51,7 @@ private const val APP_VERSION = "2.0.0"
  * Content for the modal navigation drawer.
  *
  * Displays the app header, connection status with controls, a scrollable thread
- * list with swipe-to-delete, and a Settings navigation item.
+ * list with swipe-to-delete, recent Hermes sessions, and a Settings navigation item.
  *
  * Designed to be passed as the [drawerContent] parameter of
  * [androidx.compose.material3.ModalNavigationDrawer].
@@ -61,6 +62,7 @@ fun TalariaDrawerContent(
     currentThreadId: String?,
     connectionState: ConnectionState,
     settings: AppSettings,
+    hermesSessions: List<HermesSession> = emptyList(),
     onSwitchThread: (String) -> Unit,
     onCreateThread: () -> Unit,
     onDeleteThread: (String) -> Unit,
@@ -68,16 +70,15 @@ fun TalariaDrawerContent(
     onReconnect: () -> Unit,
     onDisconnect: () -> Unit,
     onShareLogs: () -> Unit,
+    onForkSession: ((String) -> Unit)? = null,
 ) {
     ModalDrawerSheet(
         modifier = Modifier.width(300.dp),
     ) {
-        // ── Header ──────────────────────────────────────────
         DrawerHeader()
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-        // ── Connection section ──────────────────────────────
         ConnectionSection(
             connectionState = connectionState,
             onReconnect = onReconnect,
@@ -86,7 +87,6 @@ fun TalariaDrawerContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-        // ── Threads section ─────────────────────────────────
         ThreadsSection(
             threads = threads,
             currentThreadId = currentThreadId,
@@ -95,9 +95,17 @@ fun TalariaDrawerContent(
             onDeleteThread = onDeleteThread,
         )
 
+        if (hermesSessions.isNotEmpty()) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+            RecentSessionsSection(
+                sessions = hermesSessions,
+                onForkSession = onForkSession,
+            )
+        }
+
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-        // ── Settings ────────────────────────────────────────
         SettingsSection(
             onOpenSettings = onOpenSettings,
             onShareLogs = onShareLogs,
@@ -382,6 +390,55 @@ private fun SwipeableThreadRow(
                 text = timeText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            )
+        }
+    }
+}
+
+// ── Recent Sessions ───────────────────────────────────────────
+
+@Composable
+private fun RecentSessionsSection(
+    sessions: List<HermesSession>,
+    onForkSession: ((String) -> Unit)?,
+) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Text(
+            text = "Recent Sessions",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+        )
+
+        sessions.take(5).forEach { session ->
+            NavigationDrawerItem(
+                icon = {
+                    Text(
+                        text = session.sourceEmoji,
+                        fontSize = 16.sp,
+                    )
+                },
+                label = {
+                    Column {
+                        Text(
+                            text = session.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = session.displaySource,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            maxLines = 1,
+                        )
+                    }
+                },
+                selected = false,
+                onClick = {
+                    onForkSession?.invoke(session.id)
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
             )
         }
     }

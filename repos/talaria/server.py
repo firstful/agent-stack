@@ -341,6 +341,9 @@ async def ptt_websocket(ws: WebSocket):
                     elif cmd_type == "set_profile":
                         await handler.handle_set_profile(cmd)
 
+                    elif cmd_type == "feedback":
+                        await handler.handle_feedback(cmd)
+
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:

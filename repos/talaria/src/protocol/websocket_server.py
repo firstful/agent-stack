@@ -396,3 +396,9 @@ class MessageHandler:
             "type": "profile_set",
             "profile": profile,
         })
+
+    async def handle_feedback(self, cmd: dict) -> None:
+        """Handle feedback — user rated a bot response thumbs up/down."""
+        client_msg_id = cmd.get("client_message_id", "")
+        feedback = cmd.get("feedback", "")
+        logger.info("Feedback received: msg=%s feedback=%s", client_msg_id, feedback)

@@ -23,6 +23,7 @@ import com.reedsutliff.talaria.model.AppSettings
 import com.reedsutliff.talaria.model.ChatMessage
 import com.reedsutliff.talaria.model.ConnectionState
 import com.reedsutliff.talaria.model.HermesSession
+import com.reedsutliff.talaria.model.MessageFeedback
 import com.reedsutliff.talaria.model.MessageModality
 import com.reedsutliff.talaria.model.MessageStatus
 import com.reedsutliff.talaria.model.PttButtonState
@@ -99,6 +100,18 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
     private val _partialTranscript = MutableStateFlow("")
     val partialTranscript: StateFlow<String> = _partialTranscript.asStateFlow()
+
+    private val _latencyMs = MutableStateFlow(0L)
+    val latencyMs: StateFlow<Long> = _latencyMs.asStateFlow()
+
+    private val _isPaused = MutableStateFlow(false)
+    val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
+
+    private val _playbackPosition = MutableStateFlow(0L)
+    val playbackPosition: StateFlow<Long> = _playbackPosition.asStateFlow()
+
+    private val _playbackDuration = MutableStateFlow(0L)
+    val playbackDuration: StateFlow<Long> = _playbackDuration.asStateFlow()
 
     // ── Internal ────────────────────────────────────────────
 
@@ -486,6 +499,14 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         Log.i(LOG_TAG, "Playback speed: ${_playbackSpeed.value}x")
     }
 
+    fun togglePlayback() {
+        wsClient?.togglePause()
+    }
+
+    fun seekPlayback(positionMs: Long) {
+        wsClient?.seekTo(positionMs)
+    }
+
     // ── Hermes sessions ──────────────────────────────────────
 
     fun listHermesSessions(limit: Int = 20) {
@@ -519,6 +540,29 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             _settings.value = _settings.value.copy(selectedProfile = profile)
             settingsRepository.update(_settings.value)
         }
+    }
+
+    // ── Message feedback ──────────────────────────────────────
+
+    fun sendFeedback(messageId: String, feedback: MessageFeedback) {
+        // Update local message state
+        _messages.value = _messages.value.map {
+            if (it.id == messageId) it.copy(feedback = feedback) else it
+        }
+        // Persist to Room
+        viewModelScope.launch {
+            val msg = _messages.value.find { it.id == messageId }
+            if (msg != null) {
+                messageDao.insert(msg.toEntity())
+            }
+        }
+        // Send to server
+        wsClient?.sendMessage(JSONObject().apply {
+            put("type", "feedback")
+            put("client_message_id", messageId)
+            put("feedback", feedback.name.lowercase())
+        }.toString())
+        Log.i(LOG_TAG, "sendFeedback: $messageId → $feedback")
     }
 
     // ── File reading ─────────────────────────────────────────
@@ -803,6 +847,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             val ack = JSONObject().apply {
                 put("type", "ack")
                 put("seq", lastSeq)
+                put("ts", System.currentTimeMillis())
             }
             log("D", "ACK → seq=$lastSeq")
             ws?.send(ack.toString())
@@ -1107,7 +1152,12 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         }
                     }
                     "ping" -> { /* keepalive */ }
-                    "pong" -> { /* keepalive response */ }
+                    "pong" -> {
+                        val sentAt = json.optLong("ts", 0)
+                        if (sentAt > 0) {
+                            _latencyMs.value = System.currentTimeMillis() - sentAt
+                        }
+                    }
                     "stt_partial" -> {
                         val t = json.optString("text", "")
                         log("D", "STT partial: ${t.take(50)}")
@@ -1186,11 +1236,9 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             log("I", "startPlayback()")
             if (isPlaying) return
             isPlaying = true
+            _isPaused.value = false
 
             try {
-                // Write buffered audio to a temp file, then play from file.
-                // PipedInputStream's tiny internal buffer (1024 bytes on most Android
-                // devices) would block when draining the replay buffer synchronously.
                 val tempFile = java.io.File(
                     appContext.cacheDir, "talaria_audio_${System.currentTimeMillis()}.ogg"
                 )
@@ -1208,13 +1256,49 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                     prepare()
                     setPlaybackSpeed(_playbackSpeed.value)
                     playWhenReady = true
-                    log("I", "ExoPlayer prepared from temp file: ${tempFile.absolutePath} (speed=${_playbackSpeed.value}x)")
+
+                    addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == androidx.media3.common.Player.STATE_READY) {
+                                _playbackDuration.value = duration.coerceAtLeast(0)
+                            }
+                        }
+                        override fun onIsPlayingChanged(playing: Boolean) {
+                            _isPaused.value = !playing
+                        }
+                    })
+
+                    // Poll position every 200ms
+                    scope.launch {
+                        while (isActive && exoPlayer != null) {
+                            _playbackPosition.value = currentPosition.coerceAtLeast(0)
+                            delay(200)
+                        }
+                    }
+
+                    log("I", "ExoPlayer prepared: ${tempFile.absolutePath} (speed=${_playbackSpeed.value}x)")
                 }
             } catch (e: Exception) {
                 log("E", "startPlayback failed: ${e.message}")
                 isPlaying = false
                 exoPlayer = null
             }
+        }
+
+        fun togglePause() {
+            if (exoPlayer == null) return
+            if (_isPaused.value) {
+                exoPlayer?.play()
+                log("I", "Playback resumed")
+            } else {
+                exoPlayer?.pause()
+                log("I", "Playback paused")
+            }
+        }
+
+        fun seekTo(positionMs: Long) {
+            exoPlayer?.seekTo(positionMs)
+            log("I", "Seek to ${positionMs}ms")
         }
 
         private fun handleBinary(data: ByteArray) {
@@ -1226,6 +1310,9 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         private fun stopPlayback() {
             log("I", "stopPlayback()")
             isPlaying = false
+            _isPaused.value = false
+            _playbackPosition.value = 0
+            _playbackDuration.value = 0
             try {
                 exoPlayer?.stop()
                 exoPlayer?.release()

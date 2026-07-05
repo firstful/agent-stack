@@ -1,13 +1,22 @@
 package com.reedsutliff.talaria.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.widget.Toast
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +40,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +50,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -69,10 +83,36 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reedsutliff.talaria.model.ChatMessage
 import com.reedsutliff.talaria.model.ConnectionState
+import com.reedsutliff.talaria.model.HermesSession
+import com.reedsutliff.talaria.model.MessageFeedback
 import com.reedsutliff.talaria.model.MessageModality
 import com.reedsutliff.talaria.model.MessageStatus
 import com.reedsutliff.talaria.model.PttButtonState
 import kotlinx.coroutines.launch
+
+// ── Haptic helpers ────────────────────────────────────────────
+
+fun hapticLightClick(context: android.content.Context) {
+    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val vm = context.getSystemService(VibratorManager::class.java)
+        vm.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+    }
+    vibrator.vibrate(VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE))
+}
+
+fun hapticHeavyClick(context: android.content.Context) {
+    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val vm = context.getSystemService(VibratorManager::class.java)
+        vm.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+    }
+    vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+}
 
 /**
  * Top-level composable for Talaria.
@@ -95,6 +135,8 @@ fun TalariaApp(
     val settings by viewModel.settings.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val partialTranscript by viewModel.partialTranscript.collectAsState()
+    val hermesSessions by viewModel.hermesSessions.collectAsState()
+    val latencyMs by viewModel.latencyMs.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -141,6 +183,7 @@ fun TalariaApp(
                 currentThreadId = currentThread?.id,
                 connectionState = connectionState,
                 settings = settings,
+                hermesSessions = hermesSessions,
                 onSwitchThread = { viewModel.switchThread(it) },
                 onCreateThread = { viewModel.createThread("New Thread") },
                 onDeleteThread = { viewModel.deleteThread(it) },
@@ -151,6 +194,9 @@ fun TalariaApp(
                 onReconnect = { viewModel.connect() },
                 onDisconnect = { viewModel.disconnect() },
                 onShareLogs = { viewModel.shareLogs(context) },
+                onForkSession = { sessionId ->
+                    scope.launch { viewModel.forkHermesSession(sessionId) }
+                },
             )
         },
     ) {
@@ -159,6 +205,7 @@ fun TalariaApp(
                 settings = settings,
                 onUpdateSettings = { viewModel.updateSettings(it) },
                 onBack = { showSettings = false },
+                hermesProfiles = hermesSessions.map { it.title }.distinct(),
             )
         } else {
             Scaffold(
@@ -181,7 +228,15 @@ fun TalariaApp(
                             }
                         },
                         actions = {
-                            // Connection status dot
+                            // Connection status dot with latency
+                            if (connectionState == ConnectionState.CONNECTED && latencyMs > 0) {
+                                Text(
+                                    text = "${latencyMs}ms",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
                             Box(
                                 modifier = Modifier
                                     .size(12.dp)
@@ -240,10 +295,36 @@ fun TalariaApp(
                         messages = messages,
                         listState = listState,
                         isThinking = pttState == PttButtonState.PROCESSING,
+                        onFilePathClick = { path ->
+                            viewingFilePath = path
+                            viewingFileContent = null
+                            viewModel.readRemoteFile(path) { content ->
+                                viewingFileContent = content ?: "Error: Could not read file"
+                            }
+                        },
+                        onFeedback = { msgId, feedback ->
+                            viewModel.sendFeedback(msgId, feedback)
+                        },
                         modifier = Modifier.weight(1f),
                     )
 
                     Spacer(Modifier.height(16.dp))
+
+                    // Audio playback controls (during TTS)
+                    val isPaused by viewModel.isPaused.collectAsState()
+                    val playbackPosition by viewModel.playbackPosition.collectAsState()
+                    val playbackDuration by viewModel.playbackDuration.collectAsState()
+
+                    if (pttState == PttButtonState.PLAYING) {
+                        PlaybackControls(
+                            isPaused = isPaused,
+                            positionMs = playbackPosition,
+                            durationMs = playbackDuration,
+                            onTogglePause = { viewModel.togglePlayback() },
+                            onSeek = { viewModel.seekPlayback(it) },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
 
                     // Input area
                     when (inputMode) {
@@ -345,6 +426,8 @@ fun ChatTranscript(
     messages: List<ChatMessage>,
     listState: LazyListState,
     isThinking: Boolean = false,
+    onFilePathClick: ((String) -> Unit)? = null,
+    onFeedback: ((String, MessageFeedback) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
@@ -358,12 +441,11 @@ fun ChatTranscript(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(messages, key = { it.id }) { msg ->
-                ChatBubble(msg, onFilePathClick = { path ->
-                    scope.launch {
-                        viewingFilePath = path
-                        viewingFileContent = viewModel.readRemoteFile(path)
-                    }
-                })
+                ChatBubble(
+                    msg,
+                    onFilePathClick = onFilePathClick,
+                    onFeedback = onFeedback,
+                )
             }
 
             // Thinking indicator as the next chat bubble
@@ -376,8 +458,14 @@ fun ChatTranscript(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatBubble(msg: ChatMessage, onFilePathClick: ((String) -> Unit)? = null) {
+fun ChatBubble(
+    msg: ChatMessage,
+    onFilePathClick: ((String) -> Unit)? = null,
+    onFeedback: ((String, MessageFeedback) -> Unit)? = null,
+) {
+    val context = LocalContext.current
     val alignment = if (msg.isUser) Alignment.End else Alignment.Start
     val bgColor = if (msg.isUser)
         Color(0xFF6366F1) else MaterialTheme.colorScheme.surfaceVariant
@@ -438,9 +526,19 @@ fun ChatBubble(msg: ChatMessage, onFilePathClick: ((String) -> Unit)? = null) {
                 .widthIn(max = 320.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(bgColor)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = {
+                        hapticLightClick(context)
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        val clip = ClipData.newPlainText("message", msg.text)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                    },
+                )
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            val displayText = if (msg.interrupted) "${msg.text} ✂️" else msg.text
+            val displayText = if (msg.interrupted) "${msg.text} \u2702\uFE0F" else msg.text
             if (!msg.isUser) {
                 RichContentText(
                     text = displayText,
@@ -453,6 +551,49 @@ fun ChatBubble(msg: ChatMessage, onFilePathClick: ((String) -> Unit)? = null) {
                     color = textColor,
                     fontSize = 15.sp,
                 )
+            }
+        }
+
+        // Feedback buttons for bot messages
+        if (!msg.isUser && msg.status == MessageStatus.DELIVERED && onFeedback != null) {
+            Row(
+                modifier = Modifier.padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                IconButton(
+                    onClick = {
+                        hapticLightClick(context)
+                        onFeedback(msg.id, MessageFeedback.THUMBS_UP)
+                    },
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ThumbUp,
+                        contentDescription = "Thumbs up",
+                        tint = if (msg.feedback == MessageFeedback.THUMBS_UP)
+                            Color(0xFF22C55E)
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        hapticLightClick(context)
+                        onFeedback(msg.id, MessageFeedback.THUMBS_DOWN)
+                    },
+                    modifier = Modifier.size(24.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ThumbDown,
+                        contentDescription = "Thumbs down",
+                        tint = if (msg.feedback == MessageFeedback.THUMBS_DOWN)
+                            Color(0xFFEF4444)
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
         }
     }
@@ -529,6 +670,7 @@ fun PTTButton(
     onDown: () -> Unit,
     onUp: () -> Unit,
 ) {
+    val context = LocalContext.current
     val buttonColor = when (state) {
         PttButtonState.RECORDING -> Color(0xFFEF4444)
         PttButtonState.PROCESSING -> Color(0xFFF59E0B)
@@ -563,9 +705,9 @@ fun PTTButton(
 
     val labelText = when (state) {
         PttButtonState.IDLE -> "Hold to Talk"
-        PttButtonState.RECORDING -> "Recording…"
-        PttButtonState.PROCESSING -> "Thinking…"
-        PttButtonState.PLAYING -> "Playing…"
+        PttButtonState.RECORDING -> "Recording\u2026"
+        PttButtonState.PROCESSING -> "Thinking\u2026"
+        PttButtonState.PLAYING -> "Playing\u2026"
         PttButtonState.INTERRUPTED -> "Interrupted"
     }
 
@@ -592,8 +734,10 @@ fun PTTButton(
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
+                            hapticHeavyClick(context)
                             onDown()
                             tryAwaitRelease()
+                            hapticLightClick(context)
                             onUp()
                         }
                     )
@@ -652,6 +796,68 @@ fun PTTButton(
             }
         }
     }
+}
+
+// ── Audio Playback Controls ───────────────────────────────────
+
+@Composable
+fun PlaybackControls(
+    isPaused: Boolean,
+    positionMs: Long,
+    durationMs: Long,
+    onTogglePause: () -> Unit,
+    onSeek: (Long) -> Unit,
+) {
+    val context = LocalContext.current
+    val maxSliderValue = durationMs.coerceAtLeast(1).toFloat()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            IconButton(
+                onClick = {
+                    hapticLightClick(context)
+                    onTogglePause()
+                },
+                modifier = Modifier.size(32.dp),
+            ) {
+                Text(
+                    text = if (isPaused) "\u25B6" else "\u23F8",
+                    fontSize = 16.sp,
+                )
+            }
+
+            Slider(
+                value = positionMs.toFloat(),
+                onValueChange = { onSeek(it.toLong()) },
+                valueRange = 0f..maxSliderValue,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+            )
+
+            Text(
+                text = "${formatDuration(positionMs)} / ${formatDuration(durationMs)}",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+private fun formatDuration(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
 }
 
 // ── Theme ────────────────────────────────────────────────────

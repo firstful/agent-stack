@@ -16,7 +16,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +55,7 @@ private const val APP_VERSION = "2.0.0"
  * @param settings Current [AppSettings] from the ViewModel.
  * @param onUpdateSettings Callback invoked with the modified settings on save.
  * @param onBack Callback to navigate back (e.g. close the settings screen).
+ * @param hermesProfiles Available Hermes profile names from the server.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,15 +63,16 @@ fun SettingsScreen(
     settings: AppSettings,
     onUpdateSettings: (AppSettings) -> Unit,
     onBack: () -> Unit,
+    hermesProfiles: List<String> = emptyList(),
 ) {
-    // Local editable copies — only committed on "Save"
     var serverUrl by rememberSaveable { mutableStateOf(settings.serverUrl) }
     var cfClientId by rememberSaveable { mutableStateOf(settings.cfClientId) }
     var cfClientSecret by rememberSaveable { mutableStateOf(settings.cfClientSecret) }
     var sttEnabled by rememberSaveable { mutableStateOf(settings.sttEnabled) }
     var ttsEnabled by rememberSaveable { mutableStateOf(settings.ttsEnabled) }
+    var selectedProfile by rememberSaveable { mutableStateOf(settings.selectedProfile) }
+    var profileExpanded by rememberSaveable { mutableStateOf(false) }
 
-    // Show/hide toggles for masked fields
     var showClientId by rememberSaveable { mutableStateOf(false) }
     var showClientSecret by rememberSaveable { mutableStateOf(false) }
 
@@ -75,7 +80,8 @@ fun SettingsScreen(
             cfClientId != settings.cfClientId ||
             cfClientSecret != settings.cfClientSecret ||
             sttEnabled != settings.sttEnabled ||
-            ttsEnabled != settings.ttsEnabled
+            ttsEnabled != settings.ttsEnabled ||
+            selectedProfile != settings.selectedProfile
 
     Scaffold(
         topBar = {
@@ -156,6 +162,49 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
 
+            // ── Hermes Profile ─────────────────────────────
+            SectionHeader("Hermes Profile")
+
+            ExposedDropdownMenuBox(
+                expanded = profileExpanded,
+                onExpandedChange = { profileExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = selectedProfile.ifEmpty { "Default" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Active Profile") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = profileExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                ExposedDropdownMenu(
+                    expanded = profileExpanded,
+                    onDismissRequest = { profileExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Default") },
+                        onClick = {
+                            selectedProfile = ""
+                            profileExpanded = false
+                        },
+                    )
+                    hermesProfiles.forEach { profile ->
+                        DropdownMenuItem(
+                            text = { Text(profile) },
+                            onClick = {
+                                selectedProfile = profile
+                                profileExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
             // ── Audio ───────────────────────────────────────
             SectionHeader("Audio")
 
@@ -198,6 +247,7 @@ fun SettingsScreen(
                                 cfClientSecret = cfClientSecret.trim(),
                                 sttEnabled = sttEnabled,
                                 ttsEnabled = ttsEnabled,
+                                selectedProfile = selectedProfile,
                             )
                         )
                     },
