@@ -12,7 +12,7 @@ The types defined here are used throughout the Talaria system for:
 - Async operation results
 """
 
-from typing import TypedDict, Dict, List, Optional, Union, TypeVar, Generic
+from typing import Any, TypedDict, Dict, List, Optional, Union, TypeVar, Generic
 from enum import Enum
 
 # Type variable for generic operations
