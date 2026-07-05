@@ -54,5 +54,15 @@ ln -sf "$FILENAME" "$DEST_DIR/talaria-latest.apk"
 echo "  ✅ $DEST_DIR/$FILENAME  ($(du -h "$DEST_DIR/$FILENAME" | cut -f1))"
 echo "  ✅ Symlink: $DEST_DIR/talaria-latest.apk → $FILENAME"
 echo ""
+
+# Update OTA version manifest for install.ffilt.us
+VERSION_JSON="/srv/files/apk/version-com.reedsutliff.talaria.json"
+cat > "$VERSION_JSON" <<EOF
+{"app":"com.reedsutliff.talaria","version":"$VERSION_CODE","apk":"Talaria/$FILENAME"}
+EOF
+echo "  ✅ OTA manifest: $VERSION_JSON"
+echo "  📲 install.ffilt.us/update?app=com.reedsutliff.talaria&ver=$VERSION_CODE"
+
+echo ""
 echo "  URL: https://files.ffilt.us/apk/Talaria/$FILENAME"
 echo "  URL: https://files.ffilt.us/apk/Talaria/talaria-latest.apk"

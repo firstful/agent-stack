@@ -34,16 +34,16 @@ const MIME_TYPES = {
 
 // ── Version manifest ─────────────────────────────────────────────────────
 
-function readVersionJson() {
-  const vp = path.join(APK_DIR, 'version.json');
+function readVersionJson(app) {
+  // Use per-app version file if provided: version-<app>.json
+  const file = app ? 'version-' + app.replace(/[^a-zA-Z0-9._-]/g, '') + '.json' : 'version.json';
+  const vp = path.join(APK_DIR, file);
   try {
     return JSON.parse(fs.readFileSync(vp, 'utf-8'));
   } catch {
     return null;
   }
 }
-
-// ── Route: OTA Update ────────────────────────────────────────────────────
 
 function handleUpdate(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -56,16 +56,10 @@ function handleUpdate(req, res) {
     return;
   }
 
-  const vi = readVersionJson();
+  const vi = readVersionJson(app);
   if (!vi) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Version manifest not found' }));
-    return;
-  }
-
-  if (vi.app !== app) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: `Unknown app: ${app}` }));
+    res.end(JSON.stringify({ error: 'Version manifest not found for app: ' + app }));
     return;
   }
 
@@ -81,7 +75,7 @@ function handleUpdate(req, res) {
     const headers = {
       'Content-Type': 'application/vnd.android.package-archive',
       'Content-Length': stat.size,
-      'Content-Disposition': `attachment; filename="${vi.apk}"`,
+      'Content-Disposition': 'attachment; filename="' + vi.apk + '"',
       'X-Update-Version': vi.version,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
     };
@@ -95,15 +89,18 @@ function handleUpdate(req, res) {
 
 // ── Route: Stable → versioned redirect ───────────────────────────────────
 
-// Map of stable names → app identifiers for version.json lookup
-const STABLE_APKS = ['red-thread.apk'];
+const STABLE_APKS = ['red-thread.apk', 'talaria.apk'];
 
 function tryRedirectApk(res, filename) {
   if (!STABLE_APKS.includes(filename)) return false;
-  const vi = readVersionJson();
+  // Derive app ID from stable name
+  const appName = filename.replace('.apk', '');
+  const appMap = { 'red-thread': 'com.ffilt.us.red-thread', 'talaria': 'com.reedsutliff.talaria' };
+  const appId = appMap[appName];
+  const vi = readVersionJson(appId);
   if (!vi || !vi.apk) return false;
   res.writeHead(302, {
-    Location: `/${vi.apk}`,
+    Location: '/' + vi.apk,
     'Cache-Control': 'no-cache, no-store, must-revalidate',
   });
   res.end();

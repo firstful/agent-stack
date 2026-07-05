@@ -50,6 +50,17 @@ class TalariaApplication : Application() {
 
         Log.i(TAG, "Crash handler installed ✓")
         LogBuffer.log("I", TAG, "Crash handler installed ✓")
+
+        // Background self-update check
+        Thread {
+            kotlinx.coroutines.runBlocking {
+                UpdateManager.check(
+                    context = this@TalariaApplication,
+                    currentVersionCode = BuildConfig.VERSION_CODE,
+                    currentVersionName = BuildConfig.VERSION_NAME,
+                )
+            }
+        }.apply { name = "update-check"; isDaemon = true }.start()
     }
 
     /**
