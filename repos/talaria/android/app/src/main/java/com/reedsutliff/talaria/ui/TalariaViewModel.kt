@@ -260,6 +260,8 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         )
         _messages.value = _messages.value + msg
         viewModelScope.launch {
+            // Ensure thread exists in Room before inserting message (foreign key)
+            threadDao.insert(thread.toEntity())
             messageDao.insert(msg.toEntity())
         }
 
@@ -376,6 +378,10 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         val thread = Thread(name = "General")
         _threadList.value = listOf(thread)
         _currentThread.value = thread
+        // Persist to Room so subsequent message inserts don't violate FK
+        viewModelScope.launch {
+            threadDao.insert(thread.toEntity())
+        }
         return thread
     }
 

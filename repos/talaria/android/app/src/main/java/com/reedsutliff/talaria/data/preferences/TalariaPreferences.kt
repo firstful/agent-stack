@@ -27,7 +27,13 @@ class TalariaPreferences(private val context: Context) {
     // ── Flow-based reads ──────────────────────────────────────
 
     val serverUrl: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[SERVER_URL] ?: "wss://talaria.ffilt.us/v1/ptt"
+        val saved = prefs[SERVER_URL]
+        // Migrate old domain (Apollo -> Talaria rename)
+        if (saved != null && saved.contains("apollo.ffilt.us")) {
+            saved.replace("apollo.ffilt.us", "talaria.ffilt.us")
+        } else {
+            saved ?: "wss://talaria.ffilt.us/v1/ptt"
+        }
     }
 
     val cfClientId: Flow<String> = context.dataStore.data.map { prefs ->
