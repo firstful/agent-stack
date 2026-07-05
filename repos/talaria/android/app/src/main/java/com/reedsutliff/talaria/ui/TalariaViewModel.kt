@@ -44,9 +44,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import org.json.JSONObject
-import java.io.IOException
-import java.io.PipedInputStream
-import java.io.PipedOutputStream
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -237,11 +234,39 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         Log.i(LOG_TAG, "startPtt() — conn=${_connectionState.value}")
         val connected = _connectionState.value == ConnectionState.CONNECTED
 
-        // Barge-in: interrupt if processing or playing
-        if (_pttState.value == PttButtonState.PROCESSING ||
-            _pttState.value == PttButtonState.PLAYING) {
+        // If bot is speaking or thinking, interrupt and send /steer to redirect
+        val botActive = _pttState.value == PttButtonState.PROCESSING ||
+                _pttState.value == PttButtonState.PLAYING
+        if (botActive) {
             interrupt()
+            // Send /steer command to redirect the agent's focus
+            val thread = _currentThread.value ?: run {
+                val t = createDefaultThread()
+                t
+            }
+            val steerId = UUID.randomUUID().toString()
+            val steerPayload = JSONObject().apply {
+                put("type", "text_input")
+                put("thread_id", thread.id)
+                put("session_id", sessionId ?: "")
+                put("text", "/steer ")
+                put("client_message_id", steerId)
+            }
+            wsClient?.sendMessage(steerPayload.toString())
+            Log.i(LOG_TAG, "startPtt: sent /steer (client_message_id=$steerId)")
+            // Small delay for the interrupt/steer to propagate before recording
+            viewModelScope.launch {
+                delay(200)
+                doStartPttRecording()
+            }
+        } else {
+            doStartPttRecording()
         }
+    }
+
+    private fun doStartPttRecording() {
+        val connected = _connectionState.value == ConnectionState.CONNECTED
+        Log.i(LOG_TAG, "doStartPttRecording() — conn=$connected")
 
         val messageId = UUID.randomUUID().toString()
         val thread = _currentThread.value ?: run {
@@ -425,7 +450,6 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         private var recordingJob: Job? = null
         private var scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         private var exoPlayer: androidx.media3.exoplayer.ExoPlayer? = null
-        private var pipedOut: PipedOutputStream? = null
         private var isPlaying = false
 
         // Async replay state
@@ -973,56 +997,38 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             isPlaying = true
 
             try {
-                val pipedIn = PipedInputStream()
-                pipedOut = PipedOutputStream(pipedIn)
-
-                val ds = object : androidx.media3.datasource.DataSource {
-                    private var position = 0L
-                    override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
-                        position = 0
-                        return Long.MAX_VALUE
+                // Write buffered audio to a temp file, then play from file.
+                // PipedInputStream's tiny internal buffer (1024 bytes on most Android
+                // devices) would block when draining the replay buffer synchronously.
+                val tempFile = java.io.File(
+                    appContext.cacheDir, "talaria_audio_${System.currentTimeMillis()}.ogg"
+                )
+                if (replayAudioBuffer.isNotEmpty()) {
+                    val fos = java.io.FileOutputStream(tempFile)
+                    while (replayAudioBuffer.isNotEmpty()) {
+                        fos.write(replayAudioBuffer.removeFirst())
                     }
-                    override fun read(buffer: ByteArray, offset: Int, count: Int): Int {
-                        return pipedIn.read(buffer, offset, count)
-                    }
-                    override fun getUri() = null
-                    override fun close() {}
-                    override fun addTransferListener(listener: androidx.media3.datasource.TransferListener) {}
+                    fos.close()
                 }
 
                 exoPlayer = androidx.media3.exoplayer.ExoPlayer.Builder(appContext).build().apply {
-                    val mi = androidx.media3.common.MediaItem.Builder()
-                        .setMimeType(androidx.media3.common.MimeTypes.AUDIO_OGG)
-                        .build()
-                    setMediaSource(
-                        androidx.media3.exoplayer.source.ProgressiveMediaSource
-                            .Factory { ds }
-                            .createMediaSource(mi)
-                    )
+                    val mi = androidx.media3.common.MediaItem.fromUri(tempFile.toURI().toString())
+                    setMediaItem(mi)
                     prepare()
                     playWhenReady = true
-                    log("I", "ExoPlayer prepared")
+                    log("I", "ExoPlayer prepared from temp file: ${tempFile.absolutePath}")
                 }
             } catch (e: Exception) {
                 log("E", "startPlayback failed: ${e.message}")
                 isPlaying = false
                 exoPlayer = null
-                pipedOut = null
             }
         }
 
         private fun handleBinary(data: ByteArray) {
-            if (isPlaying && pipedOut != null) {
-                try {
-                    pipedOut?.write(data)
-                    pipedOut?.flush()
-                } catch (e: IOException) {
-                    log("W", "handleBinary: pipe write error — ${e.message}")
-                }
-            } else {
-                log("D", "handleBinary: buffering ${data.size} bytes")
-                replayAudioBuffer.addLast(data)
-            }
+            // Binary audio chunks are always buffered. When tts_start arrives,
+            // drainReplayBuffer writes them to a temp file and starts playback.
+            replayAudioBuffer.addLast(data)
         }
 
         private fun stopPlayback() {
@@ -1033,24 +1039,11 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                 exoPlayer?.release()
             } catch (_: Exception) {}
             exoPlayer = null
-            try { pipedOut?.close() } catch (_: IOException) {}
-            pipedOut = null
         }
 
         private fun drainReplayBuffer() {
-            if (replayAudioBuffer.isNotEmpty()) {
-                log("I", "draining ${replayAudioBuffer.size} buffered chunks")
-                startPlayback()
-                while (replayAudioBuffer.isNotEmpty()) {
-                    val chunk = replayAudioBuffer.removeFirst()
-                    try {
-                        pipedOut?.write(chunk)
-                        pipedOut?.flush()
-                    } catch (_: IOException) {}
-                }
-            } else {
-                startPlayback()
-            }
+            // startPlayback now handles consuming the replay buffer (writes to temp file)
+            startPlayback()
         }
     }
 

@@ -105,10 +105,16 @@ fun TalariaApp(
         onDispose { viewModel.disconnect() }
     }
 
-    // Auto-scroll to bottom when new messages arrive
+    // Auto-scroll to bottom when new messages arrive, but only if
+    // user is already near the bottom (not reading history)
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            val nearBottom = lastVisible == null ||
+                lastVisible.index >= messages.size - 3
+            if (nearBottom) {
+                listState.animateScrollToItem(messages.size - 1)
+            }
         }
     }
 
@@ -214,6 +220,7 @@ fun TalariaApp(
                     ChatTranscript(
                         messages = messages,
                         listState = listState,
+                        isThinking = pttState == PttButtonState.PROCESSING,
                         modifier = Modifier.weight(1f),
                     )
 
@@ -281,19 +288,29 @@ fun TalariaApp(
 fun ChatTranscript(
     messages: List<ChatMessage>,
     listState: LazyListState,
+    isThinking: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
-        state = listState,
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(messages, key = { it.id }) { msg ->
-            ChatBubble(msg)
+    Box(modifier = modifier.fillMaxWidth()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(messages, key = { it.id }) { msg ->
+                ChatBubble(msg)
+            }
+
+            // Thinking indicator as the next chat bubble
+            if (isThinking) {
+                item(key = "__thinking__") {
+                    ThinkingBubble()
+                }
+            }
         }
     }
 }
@@ -371,6 +388,69 @@ fun ChatBubble(msg: ChatMessage) {
                 color = textColor,
                 fontSize = 15.sp,
             )
+        }
+    }
+}
+
+// ── Thinking Indicator Bubble ──────────────────────────────────
+
+@Composable
+fun ThinkingBubble() {
+    val transition = rememberInfiniteTransition(label = "think")
+    val alpha by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "thinkAlpha",
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 2.dp),
+        ) {
+            Text(
+                text = "🤔 Hermes",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(3) { i ->
+                    val dotDelay = i * 160
+                    val dotAlpha by rememberInfiniteTransition(label = "dot$i").animateFloat(
+                        initialValue = 0.3f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 480, delayMillis = dotDelay),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                        label = "dotAlpha$i",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = dotAlpha)),
+                    )
+                }
+            }
         }
     }
 }
