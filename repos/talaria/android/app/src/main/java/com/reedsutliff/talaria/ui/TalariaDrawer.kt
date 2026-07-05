@@ -421,7 +421,7 @@ private fun RecentSessionsSection(
                 label = {
                     Column {
                         Text(
-                            text = session.name,
+                            text = session.title,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

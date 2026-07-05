@@ -489,7 +489,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
     fun cyclePlaybackSpeed() {
         val speeds = floatArrayOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
         val current = _playbackSpeed.value
-        val idx = speeds.indexOf(current)
+        val idx = speeds.indexOfFirst { it == current }
         _playbackSpeed.value = speeds[(idx + 1) % speeds.size]
         wsClient?.applySpeed(_playbackSpeed.value)
         viewModelScope.launch {
