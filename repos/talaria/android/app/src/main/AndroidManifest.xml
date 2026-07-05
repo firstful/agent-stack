@@ -8,7 +8,9 @@
     <application
         android:name=".TalariaApplication"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="Talaria"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Talaria"
         android:usesCleartextTraffic="false">
