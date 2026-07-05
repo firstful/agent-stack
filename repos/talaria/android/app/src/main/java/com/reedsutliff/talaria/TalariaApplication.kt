@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.reedsutliff.talaria.BuildConfig
 import com.reedsutliff.talaria.LogBuffer
+import com.reedsutliff.talaria.data.preferences.TalariaPreferences
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -51,13 +54,19 @@ class TalariaApplication : Application() {
         Log.i(TAG, "Crash handler installed ✓")
         LogBuffer.log("I", TAG, "Crash handler installed ✓")
 
-        // Background self-update check
+        // Background self-update check — load CF credentials from DataStore
+        // (which may override BuildConfig defaults with user-configured values)
         Thread {
             kotlinx.coroutines.runBlocking {
+                val prefs = TalariaPreferences(this@TalariaApplication)
+                val cfId = prefs.cfClientId.first()
+                val cfSecret = prefs.cfClientSecret.first()
                 UpdateManager.check(
                     context = this@TalariaApplication,
                     currentVersionCode = BuildConfig.VERSION_CODE,
                     currentVersionName = BuildConfig.VERSION_NAME,
+                    cfClientId = cfId,
+                    cfClientSecret = cfSecret,
                 )
             }
         }.apply { name = "update-check"; isDaemon = true }.start()

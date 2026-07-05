@@ -40,6 +40,11 @@ class ThreadRepository(
         return messageDao.getByThreadId(threadId)
     }
 
+    /** One-shot messages query — no reactive Flow. */
+    suspend fun getMessagesOnce(threadId: String): List<MessageEntity> {
+        return messageDao.getByThreadIdOnce(threadId)
+    }
+
     suspend fun insertMessage(message: MessageEntity) {
         messageDao.insert(message)
     }

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
+import com.reedsutliff.talaria.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -44,6 +45,8 @@ object UpdateManager {
         context: Context,
         currentVersionCode: Int,
         currentVersionName: String,
+        cfClientId: String = BuildConfig.CF_ACCESS_CLIENT_ID,
+        cfClientSecret: String = BuildConfig.CF_ACCESS_CLIENT_SECRET,
     ) = withContext(Dispatchers.IO) {
         try {
             val url = URL("$UPDATE_URL?app=$APP_ID&ver=$currentVersionCode")
@@ -51,6 +54,14 @@ object UpdateManager {
             conn.connectTimeout = 10_000
             conn.readTimeout = 30_000
             conn.instanceFollowRedirects = false
+
+            // Authenticate through Cloudflare Access
+            if (cfClientId.isNotBlank()) {
+                conn.setRequestProperty("CF-Access-Client-Id", cfClientId)
+            }
+            if (cfClientSecret.isNotBlank()) {
+                conn.setRequestProperty("CF-Access-Client-Secret", cfClientSecret)
+            }
 
             when (conn.responseCode) {
                 202 -> {

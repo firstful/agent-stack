@@ -105,6 +105,12 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
     private val settingsRepository = SettingsRepository(TalariaPreferences(appContext))
     private var messagesJob: Job? = null
 
+    /** Monotonically-increasing generation counter for loadMessagesForThread.
+     *  When a new load is initiated, the old generation is invalidated so a
+     *  stale coroutine that completes after the new one started won't overwrite
+     *  the state. */
+    private val loadGeneration = java.util.concurrent.atomic.AtomicInteger(0)
+
     // ── Offline message queue ──────────────────────────────────
     private data class PendingMessage(
         val id: String,
@@ -112,7 +118,11 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         val text: String,
         val sessionId: String,
     )
-    private val pendingMessages = mutableListOf<PendingMessage>()
+    /** Thread-safe offline queues (accessed from main thread, audio thread,
+     *  and OkHttp WebSocket callback thread concurrently). */
+    private val pendingMessages = java.util.Collections.synchronizedList(
+        mutableListOf<PendingMessage>()
+    )
 
     private data class PendingAudioMessage(
         val id: String,
@@ -120,37 +130,47 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         val audioData: ByteArray,
         val sessionId: String,
     )
-    private val pendingAudioMessages = mutableListOf<PendingAudioMessage>()
+    private val pendingAudioMessages = java.util.Collections.synchronizedList(
+        mutableListOf<PendingAudioMessage>()
+    )
+
+    // Serialises thread creation so concurrent calls from sendText/startPtt
+    // before init completes all return the same default thread.
+    private val defaultThreadMutex = java.util.concurrent.locks.ReentrantLock()
 
     init {
-        // Load persisted settings from DataStore
+        // Load persisted settings from DataStore (reactive)
         viewModelScope.launch {
             settingsRepository.settings.collect { _settings.value = it }
         }
 
-        // Load persisted threads from Room
+        // Load persisted threads from Room and set up current thread
+        // on the first emission.  Using the collect here only for the
+        // initial thread-list population — messages are loaded via
+        // one-shot query (not reactive) to avoid the race where a
+        // Room Flow emission overwrites in-memory messages that were
+        // added optimistically but not yet persisted.
         viewModelScope.launch {
             threadRepository.allThreads.collect { entities ->
-                _threadList.value = entities.map { it.toModel() }
+                val threads = entities.map { it.toModel() }
+                _threadList.value = threads
+
+                // First emission: pick the current thread
+                if (_currentThread.value == null) {
+                    val lastId = _settings.value.lastThreadId
+                    val thread = if (lastId != null) {
+                        threads.find { it.id == lastId }
+                    } else {
+                        threads.firstOrNull()
+                    }
+                    if (thread != null) {
+                        _currentThread.value = thread
+                        loadMessagesForThread(thread.id)
+                    } else {
+                        createDefaultThread()
+                    }
+                }
             }
-        }
-
-        // Create a default thread if none exist
-        if (_threadList.value.isEmpty()) {
-            createDefaultThread()
-        }
-
-        // Select last active thread or first one
-        val lastId = _settings.value.lastThreadId
-        val thread = if (lastId != null) {
-            _threadList.value.find { it.id == lastId }
-        } else {
-            _threadList.value.firstOrNull()
-        }
-        if (thread != null) {
-            _currentThread.value = thread
-            // Load messages from Room
-            loadMessagesForThread(thread.id)
         }
     }
 
@@ -400,20 +420,41 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
     // ── Internal helpers ────────────────────────────────────
 
     private fun createDefaultThread(): Thread {
-        val thread = Thread(name = "General")
-        _threadList.value = listOf(thread)
-        _currentThread.value = thread
-        // Persist to Room so subsequent message inserts don't violate FK
-        viewModelScope.launch {
-            threadDao.insert(thread.toEntity())
+        // Guard against concurrent calls (sendText / startPtt racing with init).
+        // If the current thread is already set, return it directly rather than
+        // creating a duplicate "General" thread.
+        defaultThreadMutex.lock()
+        try {
+            _currentThread.value?.let { return it }
+
+            val thread = Thread(name = "General")
+            _threadList.value = listOf(thread)
+            _currentThread.value = thread
+            // Persist to Room so subsequent message inserts don't violate FK
+            viewModelScope.launch {
+                threadDao.insert(thread.toEntity())
+            }
+            // Load messages (thread is new, so this will be empty)
+            loadMessagesForThread(thread.id)
+            return thread
+        } finally {
+            defaultThreadMutex.unlock()
         }
-        return thread
     }
 
     private fun loadMessagesForThread(threadId: String) {
         messagesJob?.cancel()
+        val gen = loadGeneration.incrementAndGet()
         messagesJob = viewModelScope.launch {
-            threadRepository.getMessages(threadId).collect { entities ->
+            // One-shot load — NOT a persistent Flow. All subsequent mutations
+            // update _messages in-memory directly (optimistic UI) and persist
+            // to Room asynchronously. This avoids the race where a Room Flow
+            // emission overwrites messages that were added in-memory but not
+            // yet written to Room.
+            val entities = threadRepository.getMessagesOnce(threadId)
+            // Only apply if this generation is still current (guards against
+            // stale coroutine arriving after a newer switchThread call).
+            if (loadGeneration.get() == gen) {
                 _messages.value = entities.map { it.toModel() }
             }
         }
