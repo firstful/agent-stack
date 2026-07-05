@@ -27,9 +27,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
@@ -58,6 +61,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -89,10 +93,14 @@ fun TalariaApp(
     val threadList by viewModel.threadList.collectAsState()
     val inputMode by viewModel.inputMode.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val playbackSpeed by viewModel.playbackSpeed.collectAsState()
+    val partialTranscript by viewModel.partialTranscript.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     var showSettings by remember { mutableStateOf(false) }
+    var viewingFilePath by remember { mutableStateOf<String?>(null) }
+    var viewingFileContent by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     // Auto-connect on first composition
@@ -181,6 +189,17 @@ fun TalariaApp(
                                     .background(dotColor),
                             )
                             Spacer(Modifier.width(12.dp))
+                            // Playback speed toggle
+                            if (pttState == PttButtonState.PLAYING || playbackSpeed != 1.0f) {
+                                TextButton(onClick = { viewModel.cyclePlaybackSpeed() }) {
+                                    Text(
+                                        text = "${playbackSpeed}x",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                            }
                             // Settings icon
                             IconButton(onClick = {
                                 scope.launch { drawerState.open() }
@@ -280,6 +299,43 @@ fun TalariaApp(
             }
         }
     }
+
+    // ── File Viewer Dialog ──────────────────────────────────────
+    if (viewingFilePath != null) {
+        AlertDialog(
+            onDismissRequest = {
+                viewingFilePath = null
+                viewingFileContent = null
+            },
+            title = {
+                Text(
+                    text = viewingFilePath?.substringAfterLast('/') ?: "File",
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            },
+            text = {
+                SelectionContainer {
+                    Text(
+                        text = viewingFileContent ?: "Loading...",
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 16.sp,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewingFilePath = null
+                        viewingFileContent = null
+                    }
+                ) {
+                    Text("Close")
+                }
+            },
+        )
+    }
 }
 
 // ── Chat Transcript ──────────────────────────────────────────
@@ -302,7 +358,12 @@ fun ChatTranscript(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(messages, key = { it.id }) { msg ->
-                ChatBubble(msg)
+                ChatBubble(msg, onFilePathClick = { path ->
+                    scope.launch {
+                        viewingFilePath = path
+                        viewingFileContent = viewModel.readRemoteFile(path)
+                    }
+                })
             }
 
             // Thinking indicator as the next chat bubble
@@ -316,36 +377,33 @@ fun ChatTranscript(
 }
 
 @Composable
-fun ChatBubble(msg: ChatMessage) {
+fun ChatBubble(msg: ChatMessage, onFilePathClick: ((String) -> Unit)? = null) {
     val alignment = if (msg.isUser) Alignment.End else Alignment.Start
     val bgColor = if (msg.isUser)
         Color(0xFF6366F1) else MaterialTheme.colorScheme.surfaceVariant
     val textColor = if (msg.isUser) Color.White else MaterialTheme.colorScheme.onSurface
 
-    // Format timestamp
     val timeText = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
         .format(java.util.Date(msg.timestamp))
 
-    // Modality badge
     val modalityBadge = when (msg.modality) {
         MessageModality.VOICE -> "\uD83C\uDFA4"
         MessageModality.TEXT -> "\u2328"
     }
 
-    // Status icon for user messages
     val statusIcon = when (msg.status) {
-        MessageStatus.QUEUED -> "\u23F3"           // hourglass
-        MessageStatus.SENDING -> "\u25CB"           // unfilled circle
-        MessageStatus.SENT -> "\u2713"              // single check
-        MessageStatus.DELIVERED -> "\u2713\u2713"   // double check
-        MessageStatus.ERROR -> "\u274C"             // cross mark
+        MessageStatus.QUEUED -> "\u23F3"
+        MessageStatus.SENDING -> "\u25CB"
+        MessageStatus.SENT -> "\u2713"
+        MessageStatus.DELIVERED -> "\u2713\u2713"
+        MessageStatus.ERROR -> "\u274C"
     }
     val statusColor = when (msg.status) {
-        MessageStatus.QUEUED -> Color(0xFFF59E0B)  // amber
-        MessageStatus.SENDING -> Color(0xFF94A3B8) // slate
-        MessageStatus.SENT -> Color(0xFF22C55E)    // green
-        MessageStatus.DELIVERED -> Color(0xFF22C55E) // green
-        MessageStatus.ERROR -> Color(0xFFEF4444)   // red
+        MessageStatus.QUEUED -> Color(0xFFF59E0B)
+        MessageStatus.SENDING -> Color(0xFF94A3B8)
+        MessageStatus.SENT -> Color(0xFF22C55E)
+        MessageStatus.DELIVERED -> Color(0xFF22C55E)
+        MessageStatus.ERROR -> Color(0xFFEF4444)
     }
 
     Column(
@@ -366,7 +424,6 @@ fun ChatBubble(msg: ChatMessage) {
                 fontSize = 10.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             )
-            // Status indicator for user messages
             if (msg.isUser) {
                 Spacer(Modifier.width(4.dp))
                 Text(
@@ -378,16 +435,25 @@ fun ChatBubble(msg: ChatMessage) {
         }
         Box(
             modifier = Modifier
-                .widthIn(max = 280.dp)
+                .widthIn(max = 320.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(bgColor)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Text(
-                text = if (msg.interrupted) "${msg.text} ✂️" else msg.text,
-                color = textColor,
-                fontSize = 15.sp,
-            )
+            val displayText = if (msg.interrupted) "${msg.text} ✂️" else msg.text
+            if (!msg.isUser) {
+                RichContentText(
+                    text = displayText,
+                    onFilePathClick = onFilePathClick,
+                    textColor = textColor,
+                )
+            } else {
+                Text(
+                    text = displayText,
+                    color = textColor,
+                    fontSize = 15.sp,
+                )
+            }
         }
     }
 }

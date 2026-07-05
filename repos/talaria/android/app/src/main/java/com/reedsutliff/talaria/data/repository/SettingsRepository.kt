@@ -14,6 +14,8 @@ class SettingsRepository(private val preferences: TalariaPreferences) {
         preferences.lastThreadId,
         preferences.sttEnabled,
         preferences.ttsEnabled,
+        preferences.selectedProfile,
+        preferences.playbackSpeed,
     ) { args ->
         AppSettings(
             serverUrl = args[0] as String,
@@ -22,6 +24,8 @@ class SettingsRepository(private val preferences: TalariaPreferences) {
             lastThreadId = args[3] as String?,
             sttEnabled = args[4] as Boolean,
             ttsEnabled = args[5] as Boolean,
+            selectedProfile = args[6] as String,
+            playbackSpeed = args[7] as Float,
         )
     }
 
@@ -32,5 +36,7 @@ class SettingsRepository(private val preferences: TalariaPreferences) {
         preferences.setLastThreadId(settings.lastThreadId)
         preferences.setSttEnabled(settings.sttEnabled)
         preferences.setTtsEnabled(settings.ttsEnabled)
+        preferences.setSelectedProfile(settings.selectedProfile)
+        preferences.setPlaybackSpeed(settings.playbackSpeed)
     }
 }

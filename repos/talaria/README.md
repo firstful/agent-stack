@@ -1,41 +1,97 @@
-# Talaria
+# Talaria — Real-time Voice Gateway for Hermes Agent
 
-Push-to-talk voice agent — Android client + FastAPI WebSocket server.
+## Overview
 
-## Build & Deploy
+Talaria is a real-time voice PTT (Push-to-Talk) gateway for Hermes Agent. It handles WebSocket connections from Android clients for voice interactions with AI agents.
 
-The APK is auto-versioned with the format `<git-commit-count>.<date>.<time>-<git-hash>`.
+## Features
 
-### One-step build + deploy
+- **WebSocket PTT Protocol**: Binary Opus in, binary Opus + JSON events out
+- **Speech-to-Text**: Faster-whisper based STT with configurable models
+- **Text-to-Speech**: Edge TTS for streaming audio responses
+- **Connection Replay**: Resume playback after disconnections
+- **State Management**: PTT state machine with validated transitions
+- **Thread Safety**: Safe concurrent audio processing
 
-```bash
-./build-apk.sh
+## Architecture
+
+```
+repos/talaria/
+├── server.py                 # Main FastAPI server
+├── hermes_api_server.py      # Hermes API proxy (unused)
+├── src/                      # Modular source code
+│   ├── core/                 # Core components
+│   │   ├── types.py         # Type definitions and enums
+│   │   ├── state_machine.py # PTT state machine
+│   │   ├── connection.py    # WebSocket connection manager
+│   │   ├── audio_buffer.py  # Audio buffer management
+│   │   ├── replay_store.py  # Connection replay storage
+│   │   └── audio_validator.py # Input validation
+│   ├── audio/               # Audio processing
+│   │   ├── stt.py          # Speech-to-text
+│   │   └── tts.py          # Text-to-speech
+│   ├── protocol/            # Protocol handling
+│   │   └── websocket_server.py # WebSocket handler
+│   └── services/            # External services
+│       └── hermes_client.py # Hermes API client
+├── requirements.txt         # Python dependencies
+├── pyproject.toml          # Project configuration
+├── mypy.ini                # Type checking config
+├── pyrightconfig.json      # Pyright config
+├── Dockerfile              # Container build
+├── agent-stack.json        # Deployment config
+└── README.md               # This file
 ```
 
-Builds a debug APK, extracts the version from BuildConfig, then copies it to
-`/srv/files/apk/Talaria/` with a versioned filename and updates the
-`talaria-latest.apk` symlink. Only the 5 most recent builds are retained.
+## Quick Start
 
-**Deployed URLs:**
-- Latest:  https://files.ffilt.us/apk/Talaria/talaria-latest.apk
-- Version: https://files.ffilt.us/apk/Talaria/talaria-<version>.apk
-
-### Build only (no deploy)
+### Development
 
 ```bash
-./build-apk.sh --no-deploy
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+python server.py
 ```
 
-The raw APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
+### Docker
 
-### Prerequisites
+```bash
+# Build the container
+docker build -t talaria .
 
-- Android SDK at `/opt/android-sdk` (set in `android/local.properties`)
-- JDK 17+
-- The host machine serves `files.ffilt.us` from `/srv/files/`
+# Run the container
+docker run -p 8321:8321 talaria
+```
 
-### Crash Logs
+## Configuration
 
-On a crash, the app writes a stack trace to internal storage at
-`filesDir/crashes/crash-<timestamp>.txt`. Recent logs and any crash reports
-can be shared via the drawer menu → **Share Logs** (no ADB or root required).
+Environment variables:
+
+- `HOST`: Server host (default: 0.0.0.0)
+- `PORT`: Server port (default: 8321)
+- `HERMES_API_URL`: Hermes API URL
+- `HERMES_API_KEY`: Hermes API key
+- `STT_MODEL`: STT model name (default: base)
+- `TTS_VOICE`: TTS voice (default: en-US-ChristopherNeural)
+- `MAX_AUDIO_CHUNK_SIZE`: Max audio chunk size in bytes (default: 5MB)
+- `MAX_AUDIO_BUFFER_SIZE`: Max audio buffer size in bytes (default: 50MB)
+
+## API
+
+### Health Check
+
+```
+GET /health
+```
+
+### WebSocket PTT
+
+```
+WS /v1/ptt
+```
+
+## License
+
+MIT

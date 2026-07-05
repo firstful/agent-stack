@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pyth
 
 # Copy source
 COPY server.py .
+COPY src/ src/
 
 # ── Runtime Stage ───────────────────────────────────────────────
 FROM docker.io/python:3.12-slim
@@ -31,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /build/server.py .
+COPY --from=builder /build/src/ src/
 
 # Whisper model cache
 VOLUME /app/cache

@@ -22,6 +22,7 @@ import com.reedsutliff.talaria.data.repository.ThreadRepository
 import com.reedsutliff.talaria.model.AppSettings
 import com.reedsutliff.talaria.model.ChatMessage
 import com.reedsutliff.talaria.model.ConnectionState
+import com.reedsutliff.talaria.model.HermesSession
 import com.reedsutliff.talaria.model.MessageModality
 import com.reedsutliff.talaria.model.MessageStatus
 import com.reedsutliff.talaria.model.PttButtonState
@@ -89,6 +90,15 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
     private val _transcript = MutableStateFlow("")
     val transcript: StateFlow<String> = _transcript.asStateFlow()
+
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    private val _hermesSessions = MutableStateFlow<List<HermesSession>>(emptyList())
+    val hermesSessions: StateFlow<List<HermesSession>> = _hermesSessions.asStateFlow()
+
+    private val _partialTranscript = MutableStateFlow("")
+    val partialTranscript: StateFlow<String> = _partialTranscript.asStateFlow()
 
     // ── Internal ────────────────────────────────────────────
 
@@ -461,6 +471,82 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         Log.i(LOG_TAG, "loadMessagesForThread($threadId)")
     }
 
+    // ── Playback speed ───────────────────────────────────────
+
+    fun cyclePlaybackSpeed() {
+        val speeds = floatArrayOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+        val current = _playbackSpeed.value
+        val idx = speeds.indexOf(current)
+        _playbackSpeed.value = speeds[(idx + 1) % speeds.size]
+        wsClient?.applySpeed(_playbackSpeed.value)
+        viewModelScope.launch {
+            _settings.value = _settings.value.copy(playbackSpeed = _playbackSpeed.value)
+            settingsRepository.update(_settings.value)
+        }
+        Log.i(LOG_TAG, "Playback speed: ${_playbackSpeed.value}x")
+    }
+
+    // ── Hermes sessions ──────────────────────────────────────
+
+    fun listHermesSessions(limit: Int = 20) {
+        wsClient?.sendMessage(JSONObject().apply {
+            put("type", "list_sessions")
+            put("limit", limit)
+        }.toString())
+    }
+
+    fun forkHermesSession(sessionId: String) {
+        wsClient?.sendMessage(JSONObject().apply {
+            put("type", "fork_session")
+            put("session_id", sessionId)
+        }.toString())
+    }
+
+    fun getSessionHistory(sessionId: String) {
+        wsClient?.sendMessage(JSONObject().apply {
+            put("type", "get_session_history")
+            put("session_id", sessionId)
+            put("limit", 50)
+        }.toString())
+    }
+
+    fun setProfile(profile: String) {
+        wsClient?.sendMessage(JSONObject().apply {
+            put("type", "set_profile")
+            put("profile", profile)
+        }.toString())
+        viewModelScope.launch {
+            _settings.value = _settings.value.copy(selectedProfile = profile)
+            settingsRepository.update(_settings.value)
+        }
+    }
+
+    // ── File reading ─────────────────────────────────────────
+
+    fun readRemoteFile(path: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val url = _settings.value.serverUrl.replace("wss://", "https://").replace("ws://", "http://")
+                    .replace("/v1/ptt", "")
+                val client = okhttp3.OkHttpClient()
+                val request = okhttp3.Request.Builder()
+                    .url("$url/api/file?path=$path")
+                    .build()
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: ""
+                    val json = JSONObject(body)
+                    onResult(json.optString("content", null))
+                } else {
+                    onResult(null)
+                }
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "readRemoteFile failed: ${e.message}")
+                onResult(null)
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         messagesJob?.cancel()
@@ -532,6 +618,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         put("session_id", sessionId ?: "")
                         put("last_seq", lastSeq)
                         put("thread_id", _currentThread.value?.id ?: "")
+                        put("profile", _settings.value.selectedProfile)
                     }
                     val msg = handshake.toString()
                     log("I", "Sending handshake: $msg")
@@ -862,6 +949,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         val t = json.optString("text", "")
                         val clientMsgId = json.optString("client_message_id", "")
                         log("I", "STT transcript (${t.length} chars) client_message_id=$clientMsgId")
+                        _partialTranscript.value = ""
 
                         if (clientMsgId.isNotEmpty()) {
                             // Update the placeholder voice message with real transcript text
@@ -1020,6 +1108,68 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                     }
                     "ping" -> { /* keepalive */ }
                     "pong" -> { /* keepalive response */ }
+                    "stt_partial" -> {
+                        val t = json.optString("text", "")
+                        log("D", "STT partial: ${t.take(50)}")
+                        _partialTranscript.value = t
+                    }
+                    "session_list" -> {
+                        val sessionsJson = json.optJSONArray("sessions")
+                        if (sessionsJson != null) {
+                            val sessions = mutableListOf<HermesSession>()
+                            for (i in 0 until sessionsJson.length()) {
+                                val obj = sessionsJson.optJSONObject(i) ?: continue
+                                sessions.add(HermesSession.fromJson(obj))
+                            }
+                            _hermesSessions.value = sessions
+                            log("I", "Received ${sessions.size} Hermes sessions")
+                        }
+                    }
+                    "session_forked" -> {
+                        val newId = json.optString("new_session_id", "")
+                        val title = json.optString("title", "")
+                        log("I", "Session forked: $newId (title=$title)")
+                        if (newId.isNotEmpty()) {
+                            sessionId = newId
+                            _currentThread.value?.let { thread ->
+                                val updated = thread.copy(sessionId = newId)
+                                _currentThread.value = updated
+                                _threadList.value = _threadList.value.map {
+                                    if (it.id == thread.id) updated else it
+                                }
+                                viewModelScope.launch {
+                                    threadDao.update(updated.toEntity())
+                                }
+                            }
+                        }
+                    }
+                    "session_history" -> {
+                        val histSessionId = json.optString("session_id", "")
+                        val messagesJson = json.optJSONArray("messages")
+                        if (messagesJson != null && messagesJson.length() > 0) {
+                            log("I", "Received ${messagesJson.length()} history messages for $histSessionId")
+                            val history = mutableListOf<ChatMessage>()
+                            for (i in 0 until messagesJson.length()) {
+                                val msg = messagesJson.optJSONObject(i) ?: continue
+                                val role = msg.optString("role", "")
+                                val content = msg.optString("content", "")
+                                if (content.isBlank()) continue
+                                history.add(ChatMessage(
+                                    id = "hist_${histSessionId}_$i",
+                                    threadId = _currentThread.value?.id ?: "",
+                                    text = content,
+                                    isUser = role == "user",
+                                    modality = MessageModality.TEXT,
+                                    status = MessageStatus.DELIVERED,
+                                ))
+                            }
+                            _messages.value = history
+                        }
+                    }
+                    "profile_set" -> {
+                        val profile = json.optString("profile", "")
+                        log("I", "Profile set: $profile")
+                    }
                     else -> {
                         log("W", "Unknown message type: $type")
                     }
@@ -1056,8 +1206,9 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                     val mi = androidx.media3.common.MediaItem.fromUri(tempFile.toURI().toString())
                     setMediaItem(mi)
                     prepare()
+                    setPlaybackSpeed(_playbackSpeed.value)
                     playWhenReady = true
-                    log("I", "ExoPlayer prepared from temp file: ${tempFile.absolutePath}")
+                    log("I", "ExoPlayer prepared from temp file: ${tempFile.absolutePath} (speed=${_playbackSpeed.value}x)")
                 }
             } catch (e: Exception) {
                 log("E", "startPlayback failed: ${e.message}")
@@ -1085,6 +1236,10 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         private fun drainReplayBuffer() {
             // startPlayback now handles consuming the replay buffer (writes to temp file)
             startPlayback()
+        }
+
+        fun applySpeed(speed: Float) {
+            exoPlayer?.setPlaybackSpeed(speed)
         }
     }
 

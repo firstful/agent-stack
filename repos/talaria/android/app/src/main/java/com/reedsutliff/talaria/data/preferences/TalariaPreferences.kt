@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.reedsutliff.talaria.BuildConfig
@@ -22,13 +23,14 @@ class TalariaPreferences(private val context: Context) {
         val LAST_THREAD_ID = stringPreferencesKey("last_thread_id")
         val STT_ENABLED = booleanPreferencesKey("stt_enabled")
         val TTS_ENABLED = booleanPreferencesKey("tts_enabled")
+        val SELECTED_PROFILE = stringPreferencesKey("selected_profile")
+        val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
     }
 
     // ── Flow-based reads ──────────────────────────────────────
 
     val serverUrl: Flow<String> = context.dataStore.data.map { prefs ->
         val saved = prefs[SERVER_URL]
-        // Migrate old domain (Apollo -> Talaria rename)
         if (saved != null && saved.contains("apollo.ffilt.us")) {
             saved.replace("apollo.ffilt.us", "talaria.ffilt.us")
         } else {
@@ -54,6 +56,14 @@ class TalariaPreferences(private val context: Context) {
 
     val ttsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
         prefs[TTS_ENABLED] ?: true
+    }
+
+    val selectedProfile: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[SELECTED_PROFILE] ?: "default"
+    }
+
+    val playbackSpeed: Flow<Float> = context.dataStore.data.map { prefs ->
+        prefs[PLAYBACK_SPEED] ?: 1.0f
     }
 
     // ── Suspend writes ────────────────────────────────────────
@@ -82,5 +92,13 @@ class TalariaPreferences(private val context: Context) {
 
     suspend fun setTtsEnabled(value: Boolean) {
         context.dataStore.edit { prefs -> prefs[TTS_ENABLED] = value }
+    }
+
+    suspend fun setSelectedProfile(value: String) {
+        context.dataStore.edit { prefs -> prefs[SELECTED_PROFILE] = value }
+    }
+
+    suspend fun setPlaybackSpeed(value: Float) {
+        context.dataStore.edit { prefs -> prefs[PLAYBACK_SPEED] = value }
     }
 }

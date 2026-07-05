@@ -10,7 +10,7 @@
       "PORT": "8321",
       "TALARIA_DOMAIN": "talaria.ffilt.us",
       "HERMES_API_URL": "http://host.containers.internal:8642",
-      "HERMES_API_KEY": "GCAQyy2CIlnEwNa-7ykl3stA4xJ-hO2oTo_x_bmNhWw",
+      "HERMES_API_KEY": "{SECRETS.HERMES_API_KEY}",
       "STT_MODEL": "base",
       "LOG_LEVEL": "info",
       "HF_HOME": "/app/cache"

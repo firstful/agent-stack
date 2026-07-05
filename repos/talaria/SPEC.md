@@ -2,67 +2,67 @@
 
 ## Overview
 
-Talaria is a real-time voice gateway for Hermes Agent. It bridges an Android push-to-talk app with a Hermes AI agent by providing STT (speech-to-text) and TTS (text-to-speech) processing. Talaria lives in the agent-stack as a container service, exposed via Cloudflare Tunnel, and authenticates requests via Cloudflare Access service tokens.
+Talaria is a real-time voice PTT (Push-to-Talk) gateway for Hermes Agent. It handles WebSocket connections from Android clients for voice interactions with AI agents.
 
-## Status
+## Protocol
 
-- **Phase**: Spec
-- **Completion**: 0/21 deliverables
-- **Last updated**: 2026-07-04
+### WebSocket Messages
 
-## Specification Index
+#### Client → Server
+- `ptt_start`: PTT button pressed
+- `ptt_end`: PTT button released
+- `interrupt`: Barge-in mid-turn
+- `cancel`: Cancel current operation
+- `ping`: Keepalive
+- `ack`: Acknowledge receipt of sequence number
+- `text_input`: Text input (v2)
+- `switch_session`: Switch session
 
-| Document | Description |
-|----------|-------------|
-| [Overview](spec/overview.md) | System overview, functional goals, and non-goals |
-| [Architecture](spec/architecture.md) | High-level architecture diagram and primary concepts |
-| [API](spec/api.md) | WebSocket protocol, Hermes API integration, audio format |
-| [Android](spec/android.md) | Android app spec: PTT UX, audio capture, playback |
-| [Android v2](spec/android-v2.md) | Multimodal v2: text chat, threads, settings, modality switching |
-| [Deploy](spec/deploy.md) | agent-stack deployment, Cloudflare Access, slot-swap |
+#### Server → Client
+- `ptt_start_echo`: PTT start acknowledged
+- `processing`: Status update (stt, thinking, tts)
+- `stt_transcript`: Speech-to-text result
+- `tts_start`: TTS streaming started
+- `tts_end`: TTS streaming completed
+- `tts_fallback`: Text fallback for unavailable TTS
+- `session_id`: Hermes session identifier
+- `error`: Error occurred
+- `interrupted`: Barge-in acknowledged
+- `pong`: Ping response
+- `reconnect_done`: Reconnection completed
+- `session_switched`: Session switch event
 
-## Deliverables
+### Binary Messages
+- Audio data: Opus-encoded audio chunks
 
-### Phase 1 — Core Pipeline (5/5)
-- [ ] 1. **Talaria agent-stack service** — agent-stack.json, Dockerfile, backlog
-- [ ] 2. **STT pipeline** — faster-whisper local transcription on CPU
-- [ ] 3. **TTS pipeline** — EdgeTTS with ffmpeg Opus conversion
-- [ ] 4. **Hermes API client** — `/v1/runs` with SSE event streaming
-- [ ] 5. **WebSocket PTT endpoint** — binary audio in, streamed audio out
+## State Machine
 
-### Phase 2 — Android App (4/4)
-- [ ] 6. **PTT button UI** — Compose hold-to-talk with haptic feedback
-- [ ] 7. **Audio capture** — AudioRecord with press-start/release-stop
-- [ ] 8. **WebSocket client** — OkHttp WebSocket with CF-Access headers
-- [ ] 9. **Audio playback** — Media3 ExoPlayer streaming with ring buffer
+```
+IDLE → RECORDING → TRANSCRIBING → HERMES_RUNNING → TTS_STREAMING → IDLE
+                                        ↓
+                                    INTERRUPTED → IDLE
+```
 
-### Phase 3 — Production Hardening (5/5)
-- [ ] 10. **Session continuity** — Hermes X-Hermes-Session-Id via Talaria
-- [ ] 11. **Client-side CF Access** — embedded service token in Android app
-- [ ] 12. **Async replay resilience** — WebSocket reconnect, RunStore, seq tracking, audio buffering
-- [ ] 13. **Error handling** — network loss, audio errors, graceful degradation
-- [ ] 14. **Observability** — OTEL traces on Talaria, structured logging
+## Configuration
 
-### Phase 4 — Multimodal v2 (7/7)
+- `HOST`: Server host (default: 0.0.0.0)
+- `PORT`: Server port (default: 8321)
+- `HERMES_API_URL`: Hermes API URL
+- `HERMES_API_KEY`: Hermes API key
+- `STT_MODEL`: STT model name (default: base)
+- `TTS_VOICE`: TTS voice (default: en-US-ChristopherNeural)
+- `MAX_AUDIO_CHUNK_SIZE`: Max audio chunk size (default: 5MB)
+- `MAX_AUDIO_BUFFER_SIZE`: Max audio buffer size (default: 50MB)
 
-- [x] 15. **Chat controls + text mode** — TextField input, send via WebSocket, text/voice coexistence
-- [x] 16. **Settings panel / navigation drawer** — Drawer with thread list, settings, connection management
-- [x] 17. **Topics / threads** — Multiple conversation threads with local Room persistence
-- [x] 18. **Seamless modality switching** — PTT → text mid-conversation, same Hermes session
-- [x] 19. **Server protocol extensions** — text_input, switch_session, text_echo, thread-aware RunStore
-- [x] 20. **Room database layer** — Thread + Message entities, DAOs, migrations
-- [x] 21. **DataStore preferences** — User-configurable settings persisted locally
+## API
 
-See: [Android v2 Spec](spec/android-v2.md), [Implementation Backlog](backlog-v2.md)
+### Health Check
+```
+GET /health
+Response: { status, stt_loaded, tts_available, hermes_api, pending_replays }
+```
 
-## Open Questions / Blockers
-
-- Hermes API server internal URL and auth mechanism (host.containers.internal vs stack-net DNS)
-- CF-Access service token IDs to embed in Android build config
-- Whether Hermes API server runs inside agent-stack or needs separate wiring
-
-## Notes
-
-- Talaria makes NO outbound network calls except to Hermes API server (local network)
-- All audio processing (STT/TTS) is local to the Talaria container
-- Android app is the only first-party client; protocol is open for others
+### WebSocket PTT
+```
+WS /v1/ptt
+```
