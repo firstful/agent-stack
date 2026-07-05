@@ -109,7 +109,7 @@ function getMitmCAVolumeMount(): string {
           console.log(`[ca-bundle] created ${COMBINED_CA} (from host bundle, mitmproxy already trusted)`);
         }
       }
-      return ` -v ${COMBINED_CA}:/etc/ssl/certs/ca-certificates.crt:ro`;
+      return ` -v ${COMBINED_CA}:/usr/local/share/ca-certificates/mitmproxy-ca.crt:ro`;
     } catch (e: any) {
       console.warn(`[ca-bundle] failed to create combined bundle: ${e.message}`);
     }
@@ -197,7 +197,7 @@ export function buildImage(service: Service): void {
   // the mitmproxy CA, which is required for npm ci and any other
   // Node.js HTTPS fetches during the build.  Harmless for non-Node.js
   // and persists to the final image (where it also helps at runtime).
-  const nodeExtraCAs = `--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt`;
+  const nodeExtraCAs = `--env NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/mitmproxy-ca.crt`;
 
   try {
     // Resource limits: 4GB memory, 200ms CPU period quota (2 cores at 100%).
@@ -391,11 +391,11 @@ export function runContainer(
   // (httpx, certifi, requests, huggingface_hub) to use it instead of
   // their bundled CA store, so the mitmproxy CA is trusted.
   if (mitmVol) {
-    allEnv.SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+    allEnv.SSL_CERT_FILE = "/usr/local/share/ca-certificates/mitmproxy-ca.crt";
     // Node.js doesn't read the system CA store by default — needs
     // NODE_EXTRA_CA_CERTS so npm, node-fetch, axios, etc. all trust
     // the mitmproxy CA through the CF proxy.
-    allEnv.NODE_EXTRA_CA_CERTS = "/etc/ssl/certs/ca-certificates.crt";
+    allEnv.NODE_EXTRA_CA_CERTS = "/usr/local/share/ca-certificates/mitmproxy-ca.crt";
   }
   const env = Object.entries(allEnv)
     .map(([k, v]) => `-e ${k}=${v}`)
