@@ -218,4 +218,3 @@ class WebSocketConnection:
     def get_unacknowledged_count(self) -> int:
         """Get count of unacknowledged messages."""
         return self.sequence_number - self.ack_sequence
-EOF
