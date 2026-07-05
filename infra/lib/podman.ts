@@ -192,6 +192,12 @@ export function buildImage(service: Service): void {
   // Inject combined CA bundle so pip/npm/curl can verify TLS
   // through the host's mitmproxy during the build.
   const caVol = getMitmCAVolumeMount();
+  // Node.js ignores the system CA store by default — it uses its own
+  // built-in store.  NODE_EXTRA_CA_CERTS tells Node.js to also trust
+  // the mitmproxy CA, which is required for npm ci and any other
+  // Node.js HTTPS fetches during the build.  Harmless for non-Node.js
+  // and persists to the final image (where it also helps at runtime).
+  const nodeExtraCAs = `--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt`;
 
   try {
     // Resource limits: 4GB memory, 200ms CPU period quota (2 cores at 100%).
@@ -201,7 +207,7 @@ export function buildImage(service: Service): void {
     // builds or under load.
     // podman's caching layer only rebuilds Dockerfile steps whose inputs changed.
     sh(
-      `podman build ${containerfile} ${net} ${cache} ${extra} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}${caVol}`
+      `podman build ${containerfile} ${net} ${cache} ${extra} ${nodeExtraCAs} ${commitLabel} --cpu-quota=200000 --cpu-period=100000 --memory 4g -t ${imageTag(service.name)} ${service.repo}${caVol}`
     );
   } catch (e: any) {
     console.error(`[build] ${imageTag(service.name)} failed: ${e.message}`);
@@ -386,6 +392,10 @@ export function runContainer(
   // their bundled CA store, so the mitmproxy CA is trusted.
   if (mitmVol) {
     allEnv.SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+    // Node.js doesn't read the system CA store by default — needs
+    // NODE_EXTRA_CA_CERTS so npm, node-fetch, axios, etc. all trust
+    // the mitmproxy CA through the CF proxy.
+    allEnv.NODE_EXTRA_CA_CERTS = "/etc/ssl/certs/ca-certificates.crt";
   }
   const env = Object.entries(allEnv)
     .map(([k, v]) => `-e ${k}=${v}`)
