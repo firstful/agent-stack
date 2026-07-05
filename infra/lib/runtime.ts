@@ -25,6 +25,7 @@ import {
   sidecarContainerName,
   queueMarker,
   canaryMarker,
+  apkHashMarker,
 } from "./config";
 
 // ── Slot Resolution ──
@@ -189,7 +190,7 @@ export function writeRuntimeState(services: Service[]): void {
         activeSlot,
         slots,
         sidecars: Object.keys(sidecars).length > 0 ? sidecars : undefined,
-        port: slots[activeSlot]?.port || s.container?.host_port || s.container?.port,
+        port: (hasOld ? getContainerPort(s.name) : null) || slots[activeSlot]?.port || s.container?.host_port || s.container?.port,
         exposed: s.expose?.enabled ? s.expose.hostname : false,
         running: saRunning || sbRunning || hasOld,
         canary: readCanaryState(s.name) || undefined,
@@ -205,6 +206,23 @@ export function writeRuntimeState(services: Service[]): void {
         running: isSystemdRunning(s.name),
         port: s.service?.port,
         exposed: s.expose?.enabled ? s.expose.hostname : false,
+      };
+    }
+
+    // ── APK Build State ──
+    if (s.apkBuild) {
+      const apkDir = path.join("/srv/files/apk", s.apkBuild.destDir || s.apkBuild.packageName.split(".").pop()!);
+      const versionFile = path.join("/srv/files/apk", `version-${s.apkBuild.packageName}.json`);
+      let versionInfo: Record<string, any> | null = null;
+      try {
+        versionInfo = JSON.parse(fs.readFileSync(versionFile, "utf-8"));
+      } catch { /* not yet built */ }
+
+      state[s.name].apk = {
+        packageName: s.apkBuild.packageName,
+        destDir: s.apkBuild.destDir || s.apkBuild.packageName.split(".").pop()!,
+        built: fs.existsSync(apkHashMarker(s.name)),
+        version: versionInfo,
       };
     }
   }
