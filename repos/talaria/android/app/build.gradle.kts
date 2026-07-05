@@ -7,8 +7,14 @@ plugins {
 import java.io.ByteArrayOutputStream
 
 // ── Auto versioning from git + date ──────────────────────────
+// When built via agent-stack controller, version props are passed as -P flags.
+// When running standalone (e.g. Android Studio), fall back to git.
 val repoRoot: String = project.rootDir.parent  // up from android/ to talaria/
-val gitCommitCount: Int = try {
+
+val providedVersionCode = project.findProperty("versionCode")?.toString()
+val providedVersionName = project.findProperty("versionName")?.toString()
+
+val gitCommitCount: Int = providedVersionCode?.toIntOrNull() ?: try {
     ByteArrayOutputStream().use { baos ->
         project.exec {
             commandLine("git", "-C", repoRoot, "rev-list", "--count", "HEAD")
@@ -28,7 +34,7 @@ val gitCommitHash: String = try {
     }
 } catch (_: Exception) { "unknown" }
 
-val buildDate: String = try {
+val buildDate: String = project.findProperty("buildDate")?.toString() ?: try {
     ByteArrayOutputStream().use { baos ->
         project.exec {
             commandLine("git", "-C", repoRoot, "log", "-1", "--format=%cd", "--date=format:%Y%m%d")
@@ -48,6 +54,9 @@ val buildTime: String = try {
     }
 } catch (_: Exception) { "0000" }
 
+// Final version name: prefer controller-provided, else compose from git
+val versionNameStr = providedVersionName ?: "${gitCommitCount}.${buildDate}.${buildTime}-${gitCommitHash}"
+
 android {
     namespace = "com.reedsutliff.talaria"
     compileSdk = 34
@@ -57,7 +66,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = gitCommitCount
-        versionName = "${gitCommitCount}.${buildDate}.${buildTime}-${gitCommitHash}"
+        versionName = versionNameStr
 
         // Cloudflare Access service token — set via local.properties or env
         buildConfigField("String", "CF_ACCESS_CLIENT_ID", "\"${project.findProperty("cfAccessClientId") ?: ""}\"")
@@ -65,7 +74,7 @@ android {
         buildConfigField("String", "TALARIA_WS_URL", "\"${project.findProperty("talariaWsUrl") ?: "wss://talaria.ffilt.us/v1/ptt"}\"")
         // Auto versioning fields
         buildConfigField("int", "VERSION_CODE", "$gitCommitCount")
-        buildConfigField("String", "VERSION_NAME", "\"${gitCommitCount}.${buildDate}.${buildTime}-${gitCommitHash}\"")
+        buildConfigField("String", "VERSION_NAME", "\"${versionNameStr}\"")
         buildConfigField("String", "GIT_HASH", "\"$gitCommitHash\"")
         buildConfigField("String", "BUILD_DATE", "\"${buildDate}T${buildTime}\"")
     }

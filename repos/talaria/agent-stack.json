@@ -28,7 +28,10 @@
     "hostname": "talaria.ffilt.us",
     "tunnel": "ca308a1b-557a-4a18-9350-6eec27465bdf"
   },
-  "strategy": { "type": "blue-green", "queue": true },
+  "strategy": {
+    "type": "blue-green",
+    "queue": true
+  },
   "build": {
     "network": "host",
     "podman_args": "--memory 2g"
@@ -40,5 +43,16 @@
   "rateLimit": {
     "requestsPerMinute": 120,
     "blockDurationMs": 300000
+  },
+  "apkBuild": {
+    "packageName": "com.reedsutliff.talaria",
+    "type": "kotlin",
+    "path": "android",
+    "task": "assembleDebug",
+    "buildType": "debug",
+    "destDir": "Talaria",
+    "extraProps": {
+      "talariaWsUrl": "wss://talaria.ffilt.us/v1/ptt"
+    }
   }
 }
