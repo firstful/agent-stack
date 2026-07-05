@@ -60,4 +60,3 @@ class StateMachine:
         """Reset state machine to IDLE."""
         self.current_state = PTTState.IDLE
         self._history = [PTTState.IDLE]
-EOF

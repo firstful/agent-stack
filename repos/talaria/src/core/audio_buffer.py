@@ -117,4 +117,3 @@ class AudioBufferManager:
             "max_chunks": self.config.max_chunks,
             "utilization": total_size / self.config.max_size,
         }
-EOF

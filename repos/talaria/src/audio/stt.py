@@ -229,4 +229,3 @@ class StreamingSTTProcessor:
         while i < min_len and a[i] == b[i]:
             i += 1
         return a[:i]
-EOF

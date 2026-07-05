@@ -119,4 +119,3 @@ class ReplayStore:
                 await self._cleanup_task
             except asyncio.CancelledError:
                 pass
-EOF

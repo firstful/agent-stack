@@ -178,4 +178,3 @@ class TTSProcessor:
             "sample_rate": self.config.sample_rate,
             "bitrate": self.config.bitrate,
         }
-EOF

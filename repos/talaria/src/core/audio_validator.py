@@ -202,4 +202,3 @@ class AudioValidator:
             "error_messages": errors,
             "warning_messages": warnings
         }
-EOF
