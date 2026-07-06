@@ -30,6 +30,7 @@ import {
   queueMarker,
   canaryMarker,
   RUNTIME_DIR,
+  FILES_DIR,
   INFRA_DIR,
 } from "./config";
 
@@ -765,7 +766,7 @@ export function removeContainer(name: string, sidecarNames?: string[]): void {
  *   4. Updates the APK hash marker on success
  *
  * The build-apk.sh script handles everything: Gradle build, APK deployment
- * to /srv/files/apk/<app>/, and OTA version manifest writing.  This function
+ * to /srv/data/files/apk/<app>/, and OTA version manifest writing.  This function
  * is a thin trigger that ensures preconditions are met.
  *
  * Change detection uses a two-step guard:
@@ -942,7 +943,7 @@ export function ensureApkBuild(service: Service): void {
     return;
   }
 
-  const apkDestDir = path.join("/srv/files/apk", destDirName);
+  const apkDestDir = path.join(FILES_DIR, "apk", destDirName);
   fs.mkdirSync(apkDestDir, { recursive: true });
   const apkFilename = `${appShortName}-${versionName}.apk`;
   fs.copyFileSync(apkSource, path.join(apkDestDir, apkFilename));
@@ -957,7 +958,7 @@ export function ensureApkBuild(service: Service): void {
     apk: `${destDirName}/${apkFilename}`,
     updatedAt: new Date().toISOString(),
   };
-  const versionFile = path.join("/srv/files/apk", `version-${cfg.packageName}.json`);
+  const versionFile = path.join(FILES_DIR, "apk", `version-${cfg.packageName}.json`);
   fs.writeFileSync(versionFile, JSON.stringify(manifest, null, 2));
 
   // ── Step 6: Update latest symlink ──

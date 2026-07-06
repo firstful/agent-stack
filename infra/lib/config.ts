@@ -17,11 +17,16 @@ import path from "path";
 
 // ── Paths ──
 
+// Root cache/data directory — all build artifacts (clones, APKs, package caches)
+// live under this tree.  Override with CACHE_DATA_DIR env var.
+export const CACHE_DATA_DIR = process.env.CACHE_DATA_DIR || "/srv/data";
+
 // Root paths for agent-stack infrastructure (env-overridable for testing)
 export const DESIRED_DIR = process.env.STACK_DESIRED_DIR || "/srv/agent-stack/desired";
 export const REPOS_DIR = process.env.STACK_REPOS_DIR || "/srv/agent-stack/repos";
 export const RUNTIME_DIR = process.env.STACK_RUNTIME_DIR || "/srv/agent-stack/runtime";
-export const CLONES_DIR = process.env.STACK_CLONES_DIR || "/srv/clones";
+export const CLONES_DIR = process.env.STACK_CLONES_DIR || path.join(CACHE_DATA_DIR, "clones");
+export const FILES_DIR = process.env.STACK_FILES_DIR || path.join(CACHE_DATA_DIR, "files");
 export const RUNTIME_FILE = path.join(RUNTIME_DIR, "services.json");
 export const INFRA_DIR = path.resolve(__dirname, "..");
 

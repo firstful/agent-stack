@@ -196,6 +196,10 @@ async def ptt_websocket(ws: WebSocket):
                 conn_profile = handshake.get("profile", "")
                 conn_profile = conn_profile or None
 
+                if conn_session_id:
+                    conn.current_session_id = conn_session_id
+                if conn_thread_id:
+                    conn.thread_id = conn_thread_id
                 if conn_profile:
                     conn.current_profile = conn_profile
 

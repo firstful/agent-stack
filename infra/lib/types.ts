@@ -324,8 +324,8 @@ export interface ApkBuildConfig {
   buildType?: string;
 
   /**
-   * Destination directory name under /srv/files/apk/.
-   * E.g. "Talaria" -> APKs go to /srv/files/apk/Talaria/.
+   * Destination directory name under /srv/data/files/apk/.
+   * E.g. "Talaria" -> APKs go to /srv/data/files/apk/Talaria/.
    * Default: derived from packageName's last segment with original casing.
    */
   destDir?: string;

@@ -36,7 +36,7 @@ fi
 
 APK_SRC="app/build/outputs/apk/debug/app-debug.apk"
 FILENAME="talaria-${VERSION_NAME}.apk"
-DEST_DIR="/srv/files/apk/Talaria"
+DEST_DIR="/srv/data/files/apk/Talaria"
 
 echo ""
 echo "=== Deploying to $DEST_DIR/ ==="
@@ -56,7 +56,7 @@ echo "  ✅ Symlink: $DEST_DIR/talaria-latest.apk → $FILENAME"
 echo ""
 
 # Update OTA version manifest for install.ffilt.us
-VERSION_JSON="/srv/files/apk/version-com.reedsutliff.talaria.json"
+VERSION_JSON="/srv/data/files/apk/version-com.reedsutliff.talaria.json"
 cat > "$VERSION_JSON" <<EOF
 {"app":"com.reedsutliff.talaria","version":"$VERSION_CODE","apk":"Talaria/$FILENAME"}
 EOF

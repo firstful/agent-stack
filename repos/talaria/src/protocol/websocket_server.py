@@ -238,19 +238,13 @@ class MessageHandler:
                 profile=profile,
             )
             self.connection.current_run_id = result.get("run_id")
-            
-            # Hermes API doesn't return session_id, so generate one
-            # if needed and use the Hermes run_id as the session identifier.
-            new_sid = session_id or result.get("session_id") or self.connection.current_session_id
-            if not new_sid:
-                # Generate a stable session ID from the run_id prefix
-                new_sid = result.get("run_id", "")
-                self.connection.current_session_id = new_sid
-                await self.connection.send_message({
-                    "type": "session_id",
-                    "id": new_sid,
-                    "thread_id": thread_id,
-                })
+
+            # Session ID will be set after the run completes (post-stream_events)
+            # when we query Hermes for the real session ID.
+            # Track the temporary ID for reconnection fallback.
+            temp_sid = session_id or self.connection.current_session_id
+            if not temp_sid:
+                self.connection.current_session_id = result.get("run_id", "")
         except Exception as e:
             logger.exception("Hermes start_run failed (text_input)")
             await self.connection.send_message({
@@ -278,6 +272,32 @@ class MessageHandler:
             await self.connection.send_message({"type": "error", "message": "Empty response"})
             self.connection.ptt_state = PTTState.IDLE
             return
+
+        # ── Fetch real Hermes session ID for conversation continuity ──
+        # Hermes creates sessions asynchronously; we must query /api/sessions
+        # after the run completes to get the canonical session ID. Using the
+        # raw run_id as session_id is unreliable for context injection.
+        if not session_id:
+            try:
+                sessions = await hermes.list_sessions(limit=1)
+                if sessions:
+                    real_sid = sessions[0].get("id", "")
+                    if real_sid:
+                        self.connection.current_session_id = real_sid
+                        await self.connection.send_message({
+                            "type": "session_id",
+                            "id": real_sid,
+                            "thread_id": thread_id,
+                        })
+            except Exception:
+                logger.debug("Failed to fetch session list, using run_id fallback")
+                if not self.connection.current_session_id:
+                    self.connection.current_session_id = self.connection.current_run_id
+                    await self.connection.send_message({
+                        "type": "session_id",
+                        "id": self.connection.current_session_id,
+                        "thread_id": thread_id,
+                    })
 
         stored_run = StoredRun(
             run_id=self.connection.current_run_id or "",

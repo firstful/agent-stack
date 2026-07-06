@@ -20,6 +20,7 @@ import type { Service } from "./types";
 import { getStrategyType } from "./types";
 import {
   RUNTIME_DIR,
+  FILES_DIR,
   slotContainerName,
   slotMarker,
   sidecarContainerName,
@@ -211,8 +212,8 @@ export function writeRuntimeState(services: Service[]): void {
 
     // ── APK Build State ──
     if (s.apkBuild) {
-      const apkDir = path.join("/srv/files/apk", s.apkBuild.destDir || s.apkBuild.packageName.split(".").pop()!);
-      const versionFile = path.join("/srv/files/apk", `version-${s.apkBuild.packageName}.json`);
+      const apkDir = path.join(FILES_DIR, "apk", s.apkBuild.destDir || s.apkBuild.packageName.split(".").pop()!);
+      const versionFile = path.join(FILES_DIR, "apk", `version-${s.apkBuild.packageName}.json`);
       let versionInfo: Record<string, any> | null = null;
       try {
         versionInfo = JSON.parse(fs.readFileSync(versionFile, "utf-8"));

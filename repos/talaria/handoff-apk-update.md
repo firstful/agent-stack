@@ -25,7 +25,7 @@ git push -> ref mtime changes -> reconcile tick
         -> setup-cf-creds.sh injects fresh CF Access creds into local.properties
         -> build-apk.sh runs from the clone directory
           -> ./gradlew assembleDebug
-          -> APK deployed to /srv/files/apk/<destDir>/
+          -> APK deployed to /srv/data/files/apk/<destDir>/
           -> OTA version manifest written
         -> APK hash marker updated (/tmp/stack.<name>.apk-hash)
 ```
@@ -60,7 +60,7 @@ git push -> ref mtime changes -> reconcile tick
 ## What ensureApkBuild Does NOT Do
 
 - **Version manifest** -- `build-apk.sh` already writes its own to `version-com.reedsutliff.talaria.json`
-- **APK deployment** -- `build-apk.sh` copies the APK to `/srv/files/apk/<app>/`
+- **APK deployment** -- `build-apk.sh` copies the APK to `/srv/data/files/apk/<app>/`
 - **OTA manifest** -- `build-apk.sh` writes the version manifest consumed by `install.ffilt.us`
 
 These are the build script's responsibility, not the controller's.
