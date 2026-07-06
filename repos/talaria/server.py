@@ -64,6 +64,17 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Talaria starting up...")
     run_store.start_background_cleanup()
+
+    # Pre-load STT model in background (non-blocking — health check returns immediately)
+    async def _preload_stt():
+        try:
+            await stt.ensure_model_loaded()
+            logger.info("STT model pre-loaded: %s", stt.config.model)
+        except Exception as e:
+            logger.warning("STT model pre-load failed (will retry on first PTT): %s", e)
+
+    asyncio.create_task(_preload_stt())
+
     logger.info("Talaria ready on %s:%s", HOST, PORT)
     yield
     await hermes.close()

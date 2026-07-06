@@ -62,6 +62,18 @@ class MessageHandler:
             self.connection.ptt_state = PTTState.IDLE
             return
 
+        # Ensure STT model is loaded before attempting transcription
+        if not stt.is_ready():
+            logger.info("STT model not ready — loading now")
+            await self.connection.send_message({"type": "processing", "step": "loading_stt"})
+            try:
+                await stt.ensure_model_loaded()
+            except Exception as e:
+                logger.error("STT model failed to load: %s", e)
+                await self.connection.send_message({"type": "error", "message": "Speech recognition unavailable — model failed to load"})
+                self.connection.ptt_state = PTTState.IDLE
+                return
+
         # Final transcription (high accuracy)
         cancel_event.clear()
 
