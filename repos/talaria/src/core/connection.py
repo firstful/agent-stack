@@ -6,6 +6,7 @@ including state tracking, message handling, and connection lifecycle.
 """
 
 import asyncio
+import time
 import uuid
 from typing import Optional, Dict, Any, List, Set
 from enum import Enum
