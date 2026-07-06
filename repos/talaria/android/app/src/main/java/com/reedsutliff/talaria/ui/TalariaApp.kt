@@ -7,6 +7,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -88,6 +89,7 @@ import com.reedsutliff.talaria.model.MessageFeedback
 import com.reedsutliff.talaria.model.MessageModality
 import com.reedsutliff.talaria.model.MessageStatus
 import com.reedsutliff.talaria.model.PttButtonState
+import com.reedsutliff.talaria.model.TranscriptionState
 import com.reedsutliff.talaria.UpdateInfo
 import kotlinx.coroutines.launch
 
@@ -582,6 +584,7 @@ fun ChatBubble(
         MessageStatus.QUEUED -> "\u23F3"
         MessageStatus.SENDING -> "\u25CB"
         MessageStatus.SENT -> "\u2713"
+        MessageStatus.REFINING -> "\u2699\uFE0F"
         MessageStatus.DELIVERED -> "\u2713\u2713"
         MessageStatus.ERROR -> "\u274C"
     }
@@ -589,6 +592,7 @@ fun ChatBubble(
         MessageStatus.QUEUED -> Color(0xFFF59E0B)
         MessageStatus.SENDING -> Color(0xFF94A3B8)
         MessageStatus.SENT -> Color(0xFF22C55E)
+        MessageStatus.REFINING -> Color(0xFF8B5CF6)
         MessageStatus.DELIVERED -> Color(0xFF22C55E)
         MessageStatus.ERROR -> Color(0xFFEF4444)
     }
@@ -625,6 +629,15 @@ fun ChatBubble(
                 .widthIn(max = 320.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(bgColor)
+                .then(
+                    if (msg.transcriptionState == TranscriptionState.ON_DEVICE)
+                        Modifier.border(
+                            width = 1.5.dp,
+                            color = Color(0xFF8B5CF6).copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                    else Modifier
+                )
                 .combinedClickable(
                     onClick = {},
                     onLongClick = {
@@ -638,18 +651,31 @@ fun ChatBubble(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             val displayText = if (msg.interrupted) "${msg.text} \u2702\uFE0F" else msg.text
-            if (!msg.isUser) {
-                RichContentText(
-                    text = displayText,
-                    onFilePathClick = onFilePathClick,
-                    textColor = textColor,
-                )
-            } else {
-                Text(
-                    text = displayText,
-                    color = textColor,
-                    fontSize = 15.sp,
-                )
+            Column {
+                if (!msg.isUser) {
+                    RichContentText(
+                        text = displayText,
+                        onFilePathClick = onFilePathClick,
+                        textColor = textColor,
+                    )
+                } else {
+                    Text(
+                        text = displayText,
+                        color = textColor,
+                        fontSize = 15.sp,
+                    )
+                }
+                // Transcription state hint
+                if (msg.isUser && msg.modality == MessageModality.VOICE &&
+                    msg.transcriptionState == TranscriptionState.ON_DEVICE
+                ) {
+                    Text(
+                        text = if (msg.status == MessageStatus.REFINING) "⚙️ Refining with Whisper…" else "🎙️ On-device",
+                        fontSize = 10.sp,
+                        color = Color(0xFF8B5CF6).copy(alpha = 0.7f),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
 

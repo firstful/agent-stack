@@ -7,6 +7,10 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
@@ -30,6 +34,7 @@ import com.reedsutliff.talaria.model.MessageModality
 import com.reedsutliff.talaria.model.MessageStatus
 import com.reedsutliff.talaria.model.PttButtonState
 import com.reedsutliff.talaria.model.Thread
+import com.reedsutliff.talaria.model.TranscriptionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -328,14 +333,16 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             t
         }
 
-        // Create placeholder voice message immediately for status tracking
+        // Create placeholder voice message immediately — SpeechRecognizer will fill in text
+        val isOnline = connected
         val msg = ChatMessage(
             id = messageId,
             threadId = thread.id,
-            text = if (connected) "🎤 Recording…" else "🎤 Queued audio…",
+            text = if (isOnline) "" else "🎤 Queued audio…",
             isUser = true,
             modality = MessageModality.VOICE,
-            status = if (connected) MessageStatus.SENDING else MessageStatus.QUEUED,
+            status = if (isOnline) MessageStatus.SENDING else MessageStatus.QUEUED,
+            transcriptionState = if (isOnline) TranscriptionState.ON_DEVICE else TranscriptionState.NONE,
         )
         _messages.value = _messages.value + msg
         viewModelScope.launch {
@@ -672,6 +679,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
         private var ws: WebSocket? = null
         private var audioRecord: AudioRecord? = null
+        private var speechRecognizer: SpeechRecognizer? = null
         private var recordingJob: Job? = null
         private var scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         private var exoPlayer: androidx.media3.exoplayer.ExoPlayer? = null
@@ -957,6 +965,62 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
                 _pttState.value = PttButtonState.RECORDING
 
+                // Start on-device SpeechRecognizer for live transcription preview
+                try {
+                    val recognizer = SpeechRecognizer.createSpeechRecognizer(
+                        this@TalariaViewModel.getApplication()
+                    )
+                    recognizer.setRecognitionListener(object : RecognitionListener {
+                        override fun onReadyForSpeech(params: Bundle?) {}
+                        override fun onBeginningOfSpeech() {}
+                        override fun onRmsChanged(rmsdB: Float) {}
+                        override fun onBufferReceived(buffer: ByteArray?) {}
+                        override fun onEndOfSpeech() {}
+
+                        override fun onPartialResults(partials: Bundle?) {
+                            val matches = partials?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            val text = matches?.firstOrNull()?.trim() ?: return
+                            if (text.isNotEmpty()) {
+                                _messages.value = _messages.value.map {
+                                    if (it.id == clientMessageId) it.copy(
+                                        text = text,
+                                        transcriptionState = TranscriptionState.ON_DEVICE,
+                                    ) else it
+                                }
+                            }
+                        }
+
+                        override fun onResults(results: Bundle?) {
+                            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            val text = matches?.firstOrNull()?.trim() ?: ""
+                            _messages.value = _messages.value.map {
+                                if (it.id == clientMessageId && it.transcriptionState == TranscriptionState.ON_DEVICE) it.copy(
+                                    text = text.ifEmpty { it.text },
+                                    status = MessageStatus.REFINING,
+                                    transcriptionState = TranscriptionState.ON_DEVICE,
+                                ) else it
+                            }
+                        }
+
+                        override fun onError(error: Int) {
+                            log("W", "SpeechRecognizer error: $error")
+                        }
+
+                        override fun onEvent(eventType: Int, params: Bundle?) {}
+                    })
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    }
+                    recognizer.startListening(intent)
+                    speechRecognizer = recognizer
+                    log("I", "SpeechRecognizer started")
+                } catch (e: Exception) {
+                    log("W", "SpeechRecognizer unavailable (falling back to backend-only): ${e.message}")
+                    speechRecognizer = null
+                }
+
                 // If connected, announce recording start with client_message_id
                 if (connected) {
                     ws?.send(JSONObject().apply {
@@ -1008,6 +1072,12 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             log("I", "stopRecording()")
             recordingJob?.cancel()
             recordingJob = null
+
+            // Stop SpeechRecognizer (onResults callback fires asynchronously)
+            try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+
             try { audioRecord?.stop() } catch (_: Exception) {}
             audioRecord?.release()
             audioRecord = null
@@ -1060,12 +1130,13 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         _partialTranscript.value = ""
 
                         if (clientMsgId.isNotEmpty()) {
-                            // Update the placeholder voice message with real transcript text
-                            // and advance status SENDING→SENT (server fully received audio)
+                            // Replace on-device transcription with authoritative whisper result
+                            // REFINING → SENT, ON_DEVICE → BACKEND_FINAL
                             _messages.value = _messages.value.map {
                                 if (it.id == clientMsgId) it.copy(
-                                    text = t,
+                                    text = t.ifEmpty { it.text },  // keep on-device text if whisper is empty
                                     status = MessageStatus.SENT,
+                                    transcriptionState = TranscriptionState.BACKEND_FINAL,
                                 ) else it
                             }
                             viewModelScope.launch {
@@ -1083,6 +1154,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                                 isUser = true,
                                 modality = MessageModality.VOICE,
                                 status = MessageStatus.SENT,
+                                transcriptionState = TranscriptionState.BACKEND_FINAL,
                             ))
                         }
                         _transcript.value = t
@@ -1106,7 +1178,8 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         // Advance last user voice message to DELIVERED
                         _messages.value = _messages.value.map {
                             if (it.isUser && it.modality == MessageModality.VOICE &&
-                                (it.status == MessageStatus.SENT || it.status == MessageStatus.SENDING))
+                                (it.status == MessageStatus.SENT || it.status == MessageStatus.SENDING ||
+                                 it.status == MessageStatus.REFINING))
                                 it.copy(status = MessageStatus.DELIVERED) else it
                         }
                         viewModelScope.launch {
