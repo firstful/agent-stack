@@ -974,9 +974,7 @@ function withBody(req: IncomingMessage, res: ServerResponse, fn: (body: string) 
   });
 }
 
-// ──────────────────────────────────────────────────────────────
-//  PROXY / DASH UI / RATE LIMIT / CANARY METRICS
-// ──────────────────────────────────────────────────────────────
+// ── Proxy / Dash UI / Rate Limit / Canary Metrics ──
 
 const DASH_HOSTNAME = process.env.DASH_HOSTNAME || "dash.ffilt.us";
 const UPSTREAM_TIMEOUT = 30_000; // 30s timeout for upstream requests
@@ -986,6 +984,11 @@ const CANARY_METRICS_FILE = path.join(RUNTIME_DIR, "canary-metrics.json");
 
 const rateLimitBuckets = new Map<string, { hits: number[]; blockedUntil: number }>();
 
+/**
+ * Extract the client IP from the request.
+ * Prefers the X-Forwarded-For header (set by cloudflared) for real client IPs
+ * behind the Cloudflare Tunnel, falling back to the raw socket remoteAddress.
+ */
 function getClientIP(req: IncomingMessage): string {
   const xff = req.headers["x-forwarded-for"];
   if (typeof xff === "string") {
@@ -997,6 +1000,14 @@ function getClientIP(req: IncomingMessage): string {
   return req.socket?.remoteAddress || "unknown";
 }
 
+/**
+ * Check whether a request from a given IP exceeds the per-service rate limit.
+ *
+ * Uses a sliding-window counter: hits expire after a 60-second window, and the
+ * IP is blocked (via blockDurationMs, default 10 min) when the limit is exceeded.
+ * Returns a 429 response descriptor on rate-limit violation, or null if the
+ * request is within limits.
+ */
 function checkRateLimit(name: string, svc: Record<string, any>, req: IncomingMessage): { status: number; retryAfter: number; message: string } | null {
   const cfg = svc.rateLimit;
   if (!cfg || !cfg.requestsPerMinute) return null;
@@ -1060,6 +1071,11 @@ interface CanaryMetric {
 
 let canaryMetrics: Record<string, CanaryMetric> = {};
 
+/**
+ * Seed in-memory canary metrics from the runtime state snapshot.
+ * Carries over existing request/error counters when a canary is already active,
+ * so that a controller restart doesn't reset canary observation windows.
+ */
 function initCanaryMetricsFromState(runtime: Record<string, any>): void {
   const next: Record<string, CanaryMetric> = {};
   for (const [name, svc] of Object.entries(runtime)) {
@@ -1080,6 +1096,11 @@ function initCanaryMetricsFromState(runtime: Record<string, any>): void {
 // Initialize canary metrics from runtime state
 initCanaryMetricsFromState(loadRuntimeState());
 
+/**
+ * Write the current canary metrics to disk so the reconcile worker can read them
+ * across process boundaries.  Best-effort only — the proxy must never block or
+ * fail due to IO errors on the metrics file.
+ */
 function persistCanaryMetrics(): void {
   const data = JSON.stringify(canaryMetrics, null, 2);
   try {

@@ -890,6 +890,22 @@ export function ensureApkBuild(service: Service): void {
     `git -C "${origRepo}" log -1 --format=%h --abbrev=7`,
     { encoding: "utf-8", timeout: 10_000 }
   ).toString().trim();
+  const fullHash = execSync(
+    `git -C "${origRepo}" log -1 --format=%H`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+  const commitMessage = execSync(
+    `git -C "${origRepo}" log -1 --format=%s`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+  const commitAuthor = execSync(
+    `git -C "${origRepo}" log -1 --format=%an`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+  const commitDate = execSync(
+    `git -C "${origRepo}" log -1 --format=%ai`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
 
   const versionName = `${verCode}.${buildDate}.${buildTime}-${gitHash}`;
 
@@ -949,17 +965,54 @@ export function ensureApkBuild(service: Service): void {
   fs.copyFileSync(apkSource, path.join(apkDestDir, apkFilename));
   console.log(`[apk] ${name}: deployed ${apkFilename}`);
 
-  // ── Step 5: Write OTA version manifest ──
-  const manifest = {
-    app: cfg.packageName,
-    name: appShortName,
+  // ── Step 4b: Write commit metadata alongside APK ──
+  const builtAt = new Date().toISOString();
+  const commitInfo = {
+    commit: gitHash,
+    fullHash,
+    message: commitMessage,
+    author: commitAuthor,
+    date: commitDate,
+    apk: `${destDirName}/${apkFilename}`,
     version: versionName,
     versionCode: parseInt(verCode, 10),
+    builtAt,
+  };
+  const commitFile = path.join(apkDestDir, `${apkFilename.replace(".apk", "")}.commit.json`);
+  fs.writeFileSync(commitFile, JSON.stringify(commitInfo, null, 2));
+  console.log(`[apk] ${name}: commit metadata written to ${path.basename(commitFile)}`);
+
+  // ── Step 5: Write OTA version manifest ──
+  const otaManifest = {
+    app: cfg.packageName,
+    name: appShortName,
+    version: `${verCode}`,
+    versionName,
+    versionCode: parseInt(verCode, 10),
     apk: `${destDirName}/${apkFilename}`,
-    updatedAt: new Date().toISOString(),
+    updatedAt: builtAt,
+    commit: {
+      hash: gitHash,
+      fullHash,
+      message: commitMessage,
+      author: commitAuthor,
+      date: commitDate,
+    },
   };
   const versionFile = path.join(FILES_DIR, "apk", `version-${cfg.packageName}.json`);
-  fs.writeFileSync(versionFile, JSON.stringify(manifest, null, 2));
+  fs.writeFileSync(versionFile, JSON.stringify(otaManifest, null, 2));
+
+  // ── Step 5b: Update build history manifest ──
+  const buildsFile = path.join(apkDestDir, "BUILDS.json");
+  let builds: any[] = [];
+  try {
+    builds = JSON.parse(fs.readFileSync(buildsFile, "utf-8"));
+  } catch { /* first build */ }
+  // Dedupe by version name
+  builds = builds.filter((b: any) => b.version !== versionName);
+  builds.unshift(commitInfo);
+  if (builds.length > 20) builds = builds.slice(0, 20);
+  fs.writeFileSync(buildsFile, JSON.stringify(builds, null, 2));
 
   // ── Step 6: Update latest symlink ──
   const symlink = path.join(apkDestDir, `${appShortName}-latest.apk`);
@@ -974,6 +1027,9 @@ export function ensureApkBuild(service: Service): void {
     .reverse();
   for (const old of apkFiles.slice(5)) {
     fs.unlinkSync(path.join(apkDestDir, old));
+    // Also prune the associated commit metadata file
+    const oldCommitFile = path.join(apkDestDir, `${old.replace(".apk", "")}.commit.json`);
+    try { fs.unlinkSync(oldCommitFile); } catch { /* may not exist */ }
   }
 
   // ── Step 8: Update hash marker ──

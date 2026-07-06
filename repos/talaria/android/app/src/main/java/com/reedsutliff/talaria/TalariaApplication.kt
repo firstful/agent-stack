@@ -159,11 +159,21 @@ class TalariaApplication : Application() {
             sb.appendLine("━━━ Crash Reports ━━━")
             sb.appendLine("(no crashes recorded)")
         } else {
+            val currentBuild = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
             for (crashFile in crashFiles) {
-                sb.appendLine("━━━ ${crashFile.name} ━━━")
                 try {
-                    sb.append(crashFile.readText())
+                    val crashContent = crashFile.readText()
+                    // Extract build info from crash file to detect stale crashes
+                    val buildMatch = Regex("Build: (.+)").find(crashContent)
+                    val crashBuild = buildMatch?.groupValues?.get(1) ?: "unknown"
+                    val isOldBuild = crashBuild != currentBuild
+                    sb.appendLine("━━━ ${crashFile.name} ━━━")
+                    if (isOldBuild) {
+                        sb.appendLine("⚠️ OLD BUILD — crash: $crashBuild | current: $currentBuild")
+                    }
+                    sb.append(crashContent)
                 } catch (e: Exception) {
+                    sb.appendLine("━━━ ${crashFile.name} ━━━")
                     sb.appendLine("[Error reading crash file: ${e.message}]")
                 }
                 sb.appendLine()

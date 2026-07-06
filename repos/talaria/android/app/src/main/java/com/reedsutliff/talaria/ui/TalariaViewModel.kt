@@ -59,6 +59,8 @@ private const val SAMPLE_RATE = 16000
 private const val AUDIO_BUFFER_SIZE = 4096
 private const val MAX_RECONNECT_DELAY_MS = 30_000L
 private const val BASE_RECONNECT_DELAY_MS = 1_000L
+private const val SERVER_ERROR_BASE_DELAY_MS = 5_000L
+private const val SERVER_ERROR_MAX_DELAY_MS = 60_000L
 
 // ── Input mode ────────────────────────────────────────────────
 
@@ -735,7 +737,9 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                 }
 
                 override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                    log("E", "WebSocket FAILURE — ${t.message}")
+                    val httpCode = response?.code
+                    val isServerError = httpCode != null && httpCode in 500..599
+                    log("E", "WebSocket FAILURE — ${t.message}${if (isServerError) " (HTTP $httpCode)" else ""}")
                     _connectionState.value = ConnectionState.DISCONNECTED
                     _pttState.value = PttButtonState.IDLE
                     stopPlayback()
@@ -743,7 +747,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                     _messages.value = _messages.value.map {
                         if (it.status == MessageStatus.SENDING) it.copy(status = MessageStatus.ERROR) else it
                     }
-                    scheduleReconnect()
+                    scheduleReconnect(serverError = isServerError)
                 }
 
                 override fun onClosed(ws: WebSocket, code: Int, reason: String) {
@@ -861,16 +865,23 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
         // ── Auto-reconnect ───────────────────────────────────
 
-        private fun scheduleReconnect() {
+        private fun scheduleReconnect(serverError: Boolean = false) {
             reconnectJob?.cancel()
+            val baseDelay = if (serverError) SERVER_ERROR_BASE_DELAY_MS else BASE_RECONNECT_DELAY_MS
+            val maxDelay = if (serverError) SERVER_ERROR_MAX_DELAY_MS else MAX_RECONNECT_DELAY_MS
+            val maxShift = if (serverError) 4 else 5
             val delay = minOf(
-                BASE_RECONNECT_DELAY_MS * (1L shl reconnectAttempt.coerceAtMost(5)),
-                MAX_RECONNECT_DELAY_MS,
+                baseDelay * (1L shl reconnectAttempt.coerceAtMost(maxShift)),
+                maxDelay,
             )
             reconnectAttempt++
-            log("I", "scheduleReconnect() — attempt=$reconnectAttempt delay=${delay}ms")
+            // ±25% jitter to avoid thundering herd on server recovery
+            val jitter = (delay * 0.25 * (Math.random() * 2 - 1)).toLong()
+            val finalDelay = (delay + jitter).coerceAtLeast(0)
+            log("I", "scheduleReconnect() — attempt=$reconnectAttempt delay=${finalDelay}ms" +
+                if (serverError) " (server error backoff)" else "")
             reconnectJob = scope.launch {
-                delay(delay)
+                delay(finalDelay)
                 connect()
             }
         }

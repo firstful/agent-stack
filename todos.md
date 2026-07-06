@@ -6,9 +6,9 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 ## Status
 
-- **Completion**: 2/6 deliverables done
-- **Phase/Stage**: Active maintenance — infra refinements and engramic embeddings integration
-- **Last updated**: 2026-07-01
+- **Completion**: 3/8 deliverables done
+- **Phase/Stage**: Active maintenance — infra refinements and operational hardening
+- **Last updated**: 2026-07-06
 
 ## Deliverables
 
@@ -22,15 +22,21 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 ### Infra Refinement (1/2 complete)
 - [x] JSDoc and section comments added to 12 infra files
-- [ ] Split `infra/controller.ts` (931 lines) — extract MCP tools into `lib/mcp-tools.ts` and handler registrations into `lib/handlers.ts`
+- [ ] Split `infra/controller.ts` (2082 lines) — extract MCP tools into `lib/mcp-tools.ts` and handler registrations into `lib/handlers.ts`
+
+### Operational Hardening (0/3 complete)
+- [ ] Persistent marker store — migrate hash/slot/queue/canary markers from `/tmp` to `/srv/agent-stack/runtime/markers/` to survive reboots
+- [ ] Worker thread heartbeat watchdog — detect hung reconcile workers via IPC heartbeat
+- [ ] Controller request metrics middleware — per-route latency/count/error tracking at `/api/metrics`
 
 ## Open Questions / Blockers
 
-- [ ] Controller.ts suggested split is high-value but not urgent — recommended for next maintenance round
+- [ ] Controller.ts split is high-value but needs dependency injection refactor first
 - [ ] No root-level CI/CD pipeline defined beyond the controller reconciliation loop
 
 ## Notes
 
+- jerrymapping (garden.ffilt.us) is DOWN — build failing, needs manual investigation
+- 17 commits in past 24h, primarily talaria and Android fix-forward
+- Documentation discipline maintained: all new code arrives with JSDoc and section dividers
 - Most infra work tracked in individual repos; this file covers cross-cutting items only
-- Root todos.md is intentionally small — repo-specific work lives in repos/<name>/
-- See per-repo backlogs for detailed deliverable tracking
