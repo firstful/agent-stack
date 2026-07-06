@@ -57,6 +57,22 @@ object UpdateManager {
         cfClientSecret: String = BuildConfig.CF_ACCESS_CLIENT_SECRET,
     ): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
+            // Warm CF Access cookie jar — prevents 302 rejection on cold start
+            if (cfClientId.isNotBlank()) {
+                try {
+                    val preAuthUrl = URL("$UPDATE_URL?app=$APP_ID&ver=$currentVersionCode")
+                    val preConn = preAuthUrl.openConnection() as HttpURLConnection
+                    preConn.connectTimeout = 5_000
+                    preConn.readTimeout = 5_000
+                    preConn.setRequestProperty("CF-Access-Client-Id", cfClientId)
+                    preConn.setRequestProperty("CF-Access-Client-Secret", cfClientSecret)
+                    // FOLLOW redirect so CF sets the CF_AppSession cookie
+                    preConn.instanceFollowRedirects = true
+                    try { preConn.inputStream.close() } catch (_: Exception) {}
+                    preConn.disconnect()
+                } catch (_: Exception) { /* pre-auth is best-effort */ }
+            }
+
             val url = URL("$UPDATE_URL?app=$APP_ID&ver=$currentVersionCode")
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000

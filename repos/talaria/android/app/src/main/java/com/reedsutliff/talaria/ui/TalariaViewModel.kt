@@ -46,6 +46,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -54,6 +57,7 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -672,9 +676,19 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         private val cfClientId: String,
         private val cfClientSecret: String,
     ) {
+        private val cookieJar = object : CookieJar {
+            private val cookies = mutableListOf<Cookie>()
+            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+                this.cookies.addAll(cookies)
+            }
+            override fun loadForRequest(url: HttpUrl): List<Cookie> {
+                return cookies.toList()
+            }
+        }
         private val client = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(30, TimeUnit.SECONDS)
+            .cookieJar(cookieJar)
             .build()
 
         private var ws: WebSocket? = null
@@ -701,9 +715,36 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             LogBuffer.log(level, "TalariaWS", msg)
         }
 
+        /** Warm CF Access cookie jar before WebSocket handshake. */
+        private fun preAuth() {
+            if (cfClientId.isBlank()) return
+
+            val preAuthUrl = wsUrl
+                .replace("wss://", "https://")
+                .replace("ws://", "http://")
+                .replace("/v1/ptt", "/")
+
+            val request = Request.Builder()
+                .url(preAuthUrl)
+                .header("CF-Access-Client-Id", cfClientId)
+                .header("CF-Access-Client-Secret", cfClientSecret)
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                log("D", "preAuth → ${response.code}")
+                response.close()
+            } catch (e: IOException) {
+                log("D", "preAuth failed: ${e.message}")
+            }
+        }
+
         fun connect() {
             log("I", "connect() — url=$wsUrl")
             _connectionState.value = ConnectionState.CONNECTING
+
+            // Warm CF Access cookie jar — prevents "Expected HTTP 101 but was 200"
+            preAuth()
 
             val request = Request.Builder()
                 .url(wsUrl)
