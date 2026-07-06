@@ -82,6 +82,16 @@ export function commitHashMarker(name: string): string {
 }
 
 /**
+ * Path to the APK build hash marker file for a service.  Stores the content
+ * hash of the last *built* APK so the controller can skip rebuilds when
+ * source hasn't changed.  Separate from the container hash marker because
+ * APK builds have a different trigger scope (app source vs server).
+ */
+export function apkHashMarker(name: string): string {
+  return `/tmp/stack.${name}.apk-hash`;
+}
+
+/**
  * Path to the slot marker file, which records which slot ("a" or "b")
  * is currently active for a service.
  */

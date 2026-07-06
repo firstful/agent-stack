@@ -1776,8 +1776,55 @@ function renderHTML(services: any[], statusMap: Record<string, string>, health: 
 function handleRequest(req: IncomingMessage, res: ServerResponse): void {
   const hostname = (req.headers["host"] || "") as string;
 
+  // Determine if this request targets the controller itself (API surface exposed).
+  // Unix-socket requests have no Host header; treat them as local.
+  const isLocalController =
+    !hostname ||
+    hostname === "localhost" ||
+    hostname.startsWith("127.0.0.1") ||
+    hostname === "controller.ffilt.us";
+
+  const isDash = hostname === DASH_HOSTNAME;
+
+  // ── Host-based Routing (service hostnames) ──              ─┐
+  // MUST run before REST API dispatch so that requests like    │
+  // `groceries.ffilt.us/api/status` reach the groceries        │
+  // backend, not the controller API.                           │
+  // Controller-local and Dash requests skip this block and     │
+  // fall through to the API surface below.                     │
+  if (!isLocalController && !isDash && hostname) {
+    const runtime = getCachedRuntimeState();
+    const target = resolveTarget(req.url || "/", hostname, runtime);
+    if (target) {
+      const svc = runtime[target.name];
+      const rl = svc ? checkRateLimit(target.name, svc, req) : null;
+      if (rl) {
+        res.writeHead(429, {
+          "Content-Type": "application/json",
+          "Retry-After": String(rl.retryAfter),
+          "X-RateLimit-Reset": String(rl.retryAfter),
+        });
+        res.end(JSON.stringify({ error: rl.message }));
+        return;
+      }
+      proxyTo(target.path, target.port, "localhost", req, res, target.name, runtime);
+      return;
+    }
+    // Unrecognized hostname → Dash UI with warning banner
+    handleDashUI(req, res, hostname);
+    return;
+  }
+
+  // ── Controller-local ───────────────────────────────────────┐
+  // Everything below this point is only reachable via:          │
+  //   - Unix socket (no Host header)                            │
+  //   - localhost / 127.0.0.1                                  │
+  //   - controller.ffilt.us                                    │
+  //   - dash.ffilt.us (Dash UI)                                │
+  // Service hostnames are handled above and never reach here.   │
+
   // ── Dash UI (dash.ffilt.us) ──
-  if (hostname === DASH_HOSTNAME) {
+  if (isDash) {
     handleDashUI(req, res, null);
     return;
   }
@@ -1885,7 +1932,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
-  // ── Path-based Proxy (backward compat) ──
+  // ── Path-based Proxy (backward compat, controller-local only) ──
   const proxyMatch = req.url?.match(/^\/proxy\/([^/]+)(\/.*)?$/);
   if (proxyMatch) {
     const serviceName = proxyMatch[1];
@@ -1905,7 +1952,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
-  // ── REST API Route Dispatch ──
+  // ── REST API Route Dispatch (controller-local only) ──
   const parsed = url.parse(req.url!, true);
   const pathname = parsed.pathname ?? "/";
   const query = (parsed.query as Record<string, string>) || {};
@@ -1919,33 +1966,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     }
   }
 
-  // ── Host-based Routing ──
-  if (hostname) {
-    const runtime = getCachedRuntimeState();
-    const target = resolveTarget(req.url || "/", hostname, runtime);
-    if (target) {
-      const svc = runtime[target.name];
-      // Rate limiting check
-      const rl = svc ? checkRateLimit(target.name, svc, req) : null;
-      if (rl) {
-        res.writeHead(429, {
-          "Content-Type": "application/json",
-          "Retry-After": String(rl.retryAfter),
-          "X-RateLimit-Reset": String(rl.retryAfter),
-        });
-        res.end(JSON.stringify({ error: rl.message }));
-        return;
-      }
-      proxyTo(target.path, target.port, "localhost", req, res, target.name, runtime);
-      return;
-    }
-  }
-
   // ── Fallback: serve Dash UI ──
-  // When an unrecognized hostname hits the controller, show the Dash UI
-  // with an "unknown host" banner (unless it's already the dash hostname)
-  const unknownHost = hostname && hostname !== DASH_HOSTNAME ? hostname : null;
-  handleDashUI(req, res, unknownHost);
+  handleDashUI(req, res, null);
 }
 
 // ── Dash UI Request Handler ─────────────────────────────────

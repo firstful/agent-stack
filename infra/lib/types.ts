@@ -236,6 +236,19 @@ export interface BuildConfig {
 }
 
 /**
+ * Path trigger configuration for change detection.
+ * Replaces the v1–v3 whole-repo hash + .stackignore model with
+ * per-resource glob-based change detection.
+ */
+export interface WatchConfig {
+  include: string[];
+  exclude?: string[];
+}
+
+/** A watch field can be a shorthand array (include-only) or a full object. */
+export type Watch = string[] | WatchConfig;
+
+/**
  * Complete service definition as loaded from agent-stack.json or desired/*.json.
  * Internal fields (prefixed with _) are set by the services.ts loader.
  */
@@ -258,9 +271,401 @@ export interface Service {
   strategy?: DeployStrategy | StrategyConfig;
   /** Logo configuration — file from repo or absolute URL. */
   logo?: LogoConfig;
+  /**
+   * APK build module definition.
+   * When present, defines an APK build that will be auto-built when the
+   * repo's content changes. The APK is served by the install.ffilt.us
+   * service with version information.
+   */
+  apkBuild?: ApkBuildConfig;
   // Internal fields (set by services.ts loader)
   _file: string;
   _fromRepo: boolean;
   _hash: string;
   _commitHash?: string;
+  /** v4 watch config — set by normalizeManifest() for v4 services. */
+  _watch?: WatchConfig;
+}
+
+/** Configuration for an APK build module. */
+export interface ApkBuildConfig {
+  /**
+   * Project package name (e.g., "com.ffilt.us.red-thread", "com.reedsutliff.talaria").
+   * Used to derive the short app name, OTA manifest path, and APK filename.
+   */
+  packageName: string;
+
+  /**
+   * Build type — determines the build toolchain.
+   * Currently only "kotlin" (Android/Gradle) is supported.
+   * Future: "flutter", "react-native".
+   * Default: "kotlin".
+   */
+  type?: string;
+
+  /**
+   * Path within the repo where the Gradle project lives, relative to repo root.
+   * E.g. "android" if build.gradle.kts is at repo/android/.
+   * Default: the service name (e.g. "talaria").
+   */
+  path?: string;
+
+  /**
+   * Gradle task to run.  Default: "assembleDebug".
+   * For release builds: "assembleRelease" or "bundleRelease".
+   */
+  task?: string;
+
+  /**
+   * Build variant — affects the output APK path.
+   * Gradle outputs to: app/build/outputs/apk/<buildType>/app-<buildType>.apk
+   * Default: "debug".
+   */
+  buildType?: string;
+
+  /**
+   * Destination directory name under /srv/files/apk/.
+   * E.g. "Talaria" -> APKs go to /srv/files/apk/Talaria/.
+   * Default: derived from packageName's last segment with original casing.
+   */
+  destDir?: string;
+
+  /**
+   * Extra -P properties to pass to Gradle, on top of the auto-injected
+   * cfAccessClientId, cfAccessClientSecret, versionCode, versionName, buildDate.
+   */
+  extraProps?: Record<string, string>;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// v4 Schema Types — Flattened multi-unit manifest
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Normalize a Watch (shorthand or full) into a WatchConfig. */
+export function normalizeWatch(w?: Watch, fallback?: Watch): WatchConfig {
+  if (!w) {
+    if (fallback) return normalizeWatch(fallback);
+    return { include: ["**"], exclude: [] };
+  }
+  if (Array.isArray(w)) return { include: w, exclude: [] };
+  return w;
+}
+
+/** Per-unit exposure override — allows a unit to override or disable the top-level expose config. */
+export interface ExposeOverride {
+  /** Override hostname for this unit. Omit to inherit top-level. */
+  hostname?: string;
+  /** Override tunnel for this unit. null = inherit top-level. */
+  tunnel?: string | null;
+  /** Disable external exposure for this unit. */
+  disabled?: boolean;
+}
+
+/**
+ * Build configuration input for a v4 container unit.
+ * Uses camelCase (v4 JSON convention). Normalized to snake_case BuildConfig
+ * by normalizeBuild() during manifest processing.
+ */
+export interface BuildInput {
+  network?: string;
+  noCache?: boolean;
+  podmanArgs?: string;
+}
+
+// ── Unit Interfaces ──
+
+/** A container unit — builds from a Containerfile, runs as a podman container. */
+export interface ContainerUnit {
+  name: string;
+  containerfile?: string;
+  build?: BuildInput;
+  port: number;
+  autoPort?: boolean;
+  hostPort?: number;
+  env?: Record<string, string>;
+  volumes?: string[];
+  command?: string[];
+  podmanArgs?: string;
+  network?: string;
+  healthCheck?: HealthCheckConfig;
+  /** Sidecar names referencing SidecarUnit.name entries in the same manifest. */
+  sidecars?: string[];
+  watch?: Watch;
+  strategy?: StrategyConfig;
+  rateLimit?: RateLimitConfig;
+  expose?: ExposeOverride;
+}
+
+/** A systemd unit — runs as a host systemd service. */
+export interface SystemdUnit {
+  name: string;
+  watch?: Watch;
+  type?: string;
+  execStart: string;
+  execReload?: string;
+  port: number;
+  user?: string;
+  restart?: string;
+  env?: Record<string, string>;
+  expose?: ExposeOverride;
+}
+
+/** A sidecar unit — an auxiliary container (db, redis, etc.) shared project-wide. */
+export interface SidecarUnit {
+  name: string;
+  image: string;
+  watch?: Watch;
+  port?: number;
+  env?: Record<string, string>;
+  secrets?: string[];
+  volumes?: string[];
+  command?: string[];
+  canarySafe?: boolean;
+}
+
+/** An APK build unit — compiled from Gradle/Kotlin projects in the repo. */
+export interface ApkUnit {
+  name: string;
+  packageName: string;
+  watch?: Watch;
+  type?: string;
+  path?: string;
+  task?: string;
+  buildType?: string;
+  destDir?: string;
+  extraProps?: Record<string, string>;
+}
+
+/**
+ * v4 RepoManifest — the top-level schema for agent-stack.json version 4.
+ *
+ * A single manifest can define multiple containers, systemd services,
+ * sidecars, and APK builds — all as peer arrays.  Top-level fields serve
+ * as shared defaults that individual units can override.
+ */
+export interface RepoManifest {
+  version: 4;
+  name: string;
+  containers?: ContainerUnit[];
+  systemd?: SystemdUnit[];
+  sidecars?: SidecarUnit[];
+  apks?: ApkUnit[];
+  watch?: Watch;
+  strategy?: StrategyConfig;
+  rateLimit?: RateLimitConfig;
+  expose?: ExposeConfig;
+  logo?: LogoConfig;
+  secrets?: string[];
+  privileged?: boolean;
+}
+
+// ── Normalization ──
+
+/**
+ * Normalize a v4 camelCase build config (from JSON) into the internal
+ * snake_case BuildConfig that the rest of the controller expects.
+ * Also merges containerfile from the container unit into the build config.
+ */
+function normalizeBuild(
+  build: BuildInput | undefined,
+  containerfile?: string,
+): BuildConfig | undefined {
+  if (!build && !containerfile) return undefined;
+  const result: BuildConfig = {};
+  if (build?.network !== undefined) result.network = build.network;
+  if (build?.noCache !== undefined) result.no_cache = build.noCache;
+  if (build?.podmanArgs !== undefined) result.podman_args = build.podmanArgs;
+  if (containerfile) result.containerfile = containerfile;
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
+ * Merge a unit-level expose override with the top-level expose config.
+ * Returns null if exposure is disabled at either level.
+ */
+function mergeExpose(
+  topLevel: RepoManifest["expose"],
+  override?: ExposeOverride,
+): ExposeConfig | null {
+  if (override?.disabled === true) return null;
+  if (!topLevel || topLevel.enabled === false) return null;
+  return {
+    enabled: true,
+    hostname: override?.hostname ?? topLevel.hostname,
+    hostnames: topLevel.hostnames,
+    tunnel: override?.tunnel === null ? topLevel.tunnel : (override?.tunnel ?? topLevel.tunnel),
+  };
+}
+
+/**
+ * Convert a v4 RepoManifest into an array of Service objects
+ * consumable by the existing controller pipeline.
+ *
+ * Handles:
+ *   - Convenience naming (single-container repos collapse to project name)
+ *   - Sidecar name resolution (string refs → SidecarConfig objects)
+ *   - Default/override merging for strategy, rateLimit, expose, watch
+ *   - APK units become containerless Services
+ *   - Systemd units become containerless Services
+ *   - Standalone sidecars become their own Services
+ */
+export function normalizeManifest(
+  manifest: RepoManifest,
+  repoPath: string,
+): Service[] {
+  const services: Service[] = [];
+
+  // Build a sidecar index for name resolution
+  const sidecarMap = new Map<string, SidecarUnit>();
+  for (const sc of manifest.sidecars || []) {
+    sidecarMap.set(sc.name, sc);
+  }
+
+  // Resolve sidecar references: string[] names → SidecarConfig[]
+  function resolveSidecarConfigs(names: string[] | undefined): SidecarConfig[] {
+    if (!names || names.length === 0) return [];
+    return names.map((name) => {
+      const sc = sidecarMap.get(name);
+      if (!sc) throw new Error(`[manifest] sidecar "${name}" referenced but not defined in manifest`);
+      return {
+        name: sc.name,
+        image: sc.image,
+        port: sc.port,
+        env: sc.env,
+        secrets: sc.secrets,
+        volumes: sc.volumes,
+        command: sc.command,
+        canarySafe: sc.canarySafe,
+      };
+    });
+  }
+
+  // Determine the convenience key for a container
+  function containerServiceKey(c: ContainerUnit): string {
+    const totalContainers = (manifest.containers || []).length;
+    if (totalContainers === 1 && c.name === manifest.name) return manifest.name;
+    return `${manifest.name}--${c.name}`;
+  }
+
+  // ── Normalize containers → Service[] ──
+  for (const c of manifest.containers || []) {
+    const serviceKey = containerServiceKey(c);
+    const resolvedSidecars = resolveSidecarConfigs(c.sidecars);
+
+    services.push({
+      name: serviceKey,
+      repo: repoPath,
+      version: 4,
+      container: {
+        port: c.port,
+        auto_port: c.autoPort,
+        host_port: c.hostPort,
+        env: c.env,
+        volumes: c.volumes,
+        command: c.command,
+        healthCheck: c.healthCheck,
+        sidecars: resolvedSidecars.length > 0 ? resolvedSidecars : undefined,
+        network: c.network,
+      },
+      service: null,
+      expose: mergeExpose(manifest.expose, c.expose),
+      build: normalizeBuild(c.build, c.containerfile),
+      strategy: c.strategy || manifest.strategy,
+      rateLimit: c.rateLimit || manifest.rateLimit,
+      logo: manifest.logo,
+      secrets: manifest.secrets,
+      privileged: manifest.privileged,
+      _file: "agent-stack.json",
+      _fromRepo: true,
+      _hash: "", // set by caller (services.ts) after loading
+      _watch: normalizeWatch(c.watch, manifest.watch),
+    });
+  }
+
+  // ── Normalize systemd units → Service[] ──
+  for (const sd of manifest.systemd || []) {
+    services.push({
+      name: `${manifest.name}--${sd.name}`,
+      repo: repoPath,
+      version: 4,
+      container: null,
+      service: {
+        type: sd.type || "simple",
+        exec_start: sd.execStart,
+        exec_reload: sd.execReload,
+        port: sd.port,
+        user: sd.user || "root",
+        restart: sd.restart || "always",
+        env: sd.env,
+      },
+      expose: mergeExpose(manifest.expose, sd.expose),
+      _file: "agent-stack.json",
+      _fromRepo: true,
+      _hash: "",
+    });
+  }
+
+  // ── Normalize APK units → containerless Service[] ──
+  for (const apk of manifest.apks || []) {
+    services.push({
+      name: `${manifest.name}--apk-${apk.name}`,
+      repo: repoPath,
+      version: 4,
+      container: null,
+      service: null,
+      expose: null,
+      apkBuild: {
+        packageName: apk.packageName,
+        type: apk.type,
+        path: apk.path || apk.name,
+        task: apk.task,
+        buildType: apk.buildType,
+        destDir: apk.destDir,
+        extraProps: apk.extraProps,
+      },
+      _file: "agent-stack.json",
+      _fromRepo: true,
+      _hash: "",
+    });
+  }
+
+  // ── Normalize standalone sidecars (not referenced by any container) → Service[] ──
+  const referencedSidecars = new Set<string>();
+  for (const c of manifest.containers || []) {
+    for (const name of c.sidecars || []) {
+      referencedSidecars.add(name);
+    }
+  }
+
+  for (const sc of manifest.sidecars || []) {
+    if (referencedSidecars.has(sc.name)) continue; // already inlined into a container
+
+    // Standalone sidecar — wrap as a container Service with the sidecar as its only unit
+    services.push({
+      name: `${manifest.name}--${sc.name}`,
+      repo: repoPath,
+      version: 4,
+      container: {
+        port: sc.port || 0,
+        sidecars: [{
+          name: sc.name,
+          image: sc.image,
+          port: sc.port,
+          env: sc.env,
+          secrets: sc.secrets,
+          volumes: sc.volumes,
+          command: sc.command,
+          canarySafe: sc.canarySafe,
+        }],
+      },
+      service: null,
+      expose: null,
+      build: undefined,
+      _file: "agent-stack.json",
+      _fromRepo: true,
+      _hash: "",
+    });
+  }
+
+  return services;
 }

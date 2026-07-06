@@ -24,6 +24,7 @@ import {
 } from "./lib/services";
 import {
   ensureContainer,
+  ensureApkBuild,
   removeContainer,
   tick,
   getBuildErrors,
@@ -348,6 +349,24 @@ function reconcile(): void {
           error: e.message,
           time: new Date().toISOString(),
         });
+      }
+    }
+
+    // ── Step 3b: Ensure APK builds for services that have apkBuild config ──
+    for (const service of desired) {
+      if (service.apkBuild) {
+        try {
+          ensureApkBuild(service);
+        } catch (e: any) {
+          console.error(
+            `[reconcile] failed to build APK for ${service.name}: ${e.message}`
+          );
+          reconcileErrors.push({
+            service: service.name,
+            error: e.message,
+            time: new Date().toISOString(),
+          });
+        }
       }
     }
 

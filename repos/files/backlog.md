@@ -6,9 +6,9 @@ Simple file hosting service for `file.ffilt.us`. Serves files from `/srv/files/`
 
 ## Status
 
-- **Completion**: 6/8 deliverables done
+- **Completion**: 7/9 deliverables done
 - **Phase/Stage**: Active — deployed, initial release complete, features pending
-- **Last updated**: 2026-06-24
+- **Last updated**: 2026-07-05
 
 ## Deliverables
 
@@ -19,6 +19,9 @@ Simple file hosting service for `file.ffilt.us`. Serves files from `/srv/files/`
 - [x] Path traversal protection
 - [x] Systemd service unit (`agent-stack-files.service`)
 - [x] Register with agent-stack + slot-proxy routing
+
+### Phase 1.5 — Preview Pages (1/1 complete)
+- [x] HTML preview pages with JS download for direct curl access — renders files in-browser with proper Content-Type handling
 
 ### Phase 2 — Enhancements (0/2 complete)
 - [ ] Upload endpoint (`POST /upload`)

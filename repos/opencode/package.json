@@ -1,7 +1,0 @@
-{
-  "name": "opencode-runtime",
-  "private": true,
-  "dependencies": {
-    "opencode-ai": "latest"
-  }
-}

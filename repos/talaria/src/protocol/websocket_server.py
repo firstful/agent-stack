@@ -232,10 +232,13 @@ class MessageHandler:
             echo_msg["client_message_id"] = client_msg_id
         await self.connection.send_message(echo_msg)
 
-        await self.connection.send_message({"type": "processing", "step": "thinking"})
+        # NOTE: deliberately skipping the processing message send
+        # to avoid WebSocket send-queue backpressure deadlock.
+        logger.debug("Skipping processing send, going straight to Hermes")
 
         self.connection.ptt_state = PTTState.HERMES_RUNNING
         try:
+            logger.info("Calling hermes.start_run...")
             result = await hermes.start_run(
                 text,
                 session_id=session_id,

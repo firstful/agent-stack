@@ -16,7 +16,8 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { execSync } from "child_process";
-import type { Service } from "./types";
+import type { Service, RepoManifest } from "./types";
+import { normalizeManifest } from "./types";
 import { DESIRED_DIR, REPOS_DIR, CLONES_DIR, INFRA_DIR, RUNTIME_FILE } from "./config";
 
 // ── .stackignore ───────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ function parseStackignore(content: string): { patterns: RegExp[]; negations: Reg
  * Convert a gitignore-style glob to a RegExp.
  * Supports: *, **, ?, [...], leading / (anchor to root), trailing / (dirs only)
  */
-function globToRegex(glob: string): RegExp {
+export function globToRegex(glob: string): RegExp {
   let source = "";
 
   // Anchored at root if starts with /
@@ -131,8 +132,10 @@ function convertGlobPart(part: string): string {
       } else {
         result += "\\" + ch;
       }
-    } else {
+    } else if ("^$.|?*+(){}[]\\".includes(ch)) {
       result += "\\" + ch;
+    } else {
+      result += ch;
     }
   }
   return result;
@@ -151,6 +154,29 @@ function isIgnored(relativePath: string, patterns: RegExp[], negations: RegExp[]
     if (pat.test(relativePath)) return true;
   }
   return false;
+}
+
+/**
+ * Check whether any file in `changedFiles` matches the given watch patterns.
+ * Uses gitignore-style glob matching (same as .stackignore).  Only the
+ * `include` and `exclude` fields of WatchConfig are evaluated here;
+ * negations (!) in include patterns are not supported in watch configs.
+ *
+ * @returns true if at least one changed file is matched by include patterns
+ *          and not matched by any exclude pattern.
+ */
+export function matchesWatch(
+  changedFiles: string[],
+  include: string[],
+  exclude: string[] = [],
+): boolean {
+  const includeRegexes = include.map(globToRegex);
+  const excludeRegexes = exclude.map(globToRegex);
+
+  return changedFiles.some((file) =>
+    includeRegexes.some((re) => re.test(file)) &&
+    !excludeRegexes.some((re) => re.test(file)),
+  );
 }
 
 /**
@@ -303,6 +329,22 @@ export function resolveEnvSecrets(
   return fetchSecrets(serviceName, keys);
 }
 
+// ── APK Build ──
+
+/**
+ /**
+  * Resolve the build root directory for an APK build within a repo snapshot.
+  * Returns the path to the directory containing the Gradle project, or null
+  * if the service has no apkBuild config or no repo.
+  */
+ export function resolveApkBuildRoot(service: Service): string | null {
+   if (!service.apkBuild || !service.repo) return null;
+   const pkgDir = service.apkBuild.path || service.name;
+   const buildRoot = path.join(service.repo, pkgDir);
+   return fs.existsSync(buildRoot) ? buildRoot : null;
+ }
+
+ // ── Hashing ──
 // ── Hashing ──
 
 /**
@@ -532,7 +574,26 @@ function scanRepoAgentConfigs(): Service[] {
       const agentPath = path.join(repoDir, configFile);
       try {
         const raw = fs.readFileSync(agentPath, "utf-8");
-        const service = JSON.parse(raw) as Service;
+        const parsed = JSON.parse(raw);
+
+        // ── v4 Manifest: normalize into Service[] ──
+        if (parsed.version === 4) {
+          const manifest = parsed as RepoManifest;
+          if (!manifest.name) {
+            console.error(`[services] ${agentPath} has no "name" field — skipping`);
+            continue;
+          }
+          const normalized = normalizeManifest(manifest, repoDir);
+          const hash = repoHashForPath(repoDir);
+          for (const svc of normalized) {
+            svc._hash = hash;
+            results.push(svc);
+          }
+          continue;
+        }
+
+        // ── v1–v3: treat as a single Service ──
+        const service = parsed as Service;
         if (!service.name) {
           console.error(`[services] ${agentPath} has no "name" field — skipping`);
           continue;
@@ -552,10 +613,7 @@ function scanRepoAgentConfigs(): Service[] {
   return results;
 }
 
-/**
- * Load the desired set of services from repo agent-stack.json files
- * and desired/*.json.  Repo-based services take precedence.
- */
+
 export function loadDesired(): Service[] {
   const services: Service[] = [];
   const nameIndex: Record<string, Service> = {};

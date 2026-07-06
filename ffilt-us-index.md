@@ -25,7 +25,6 @@
 | groupthink.ffilt.us | Groupthink | `repos/groupthink/` | AI discussion/chat platform with LLM integration. PostgreSQL + Redis sidecars. Blue-green with canary deploys. |
 | hermes.ffilt.us | Hermes Dashboard | `desired/hermes.json` | Hermes Agent web dashboard (systemd-managed). Wildcard `*.hermes.ffilt.us`. |
 | install.ffilt.us | Install Server | `repos/install/` | Serves installation/media files from `/srv/files`. |
-| kilocode.ffilt.us | Kilocode Web | `repos/kilocode-web/` | Code review platform. Auth.js with passkeys. Blue-green. |
 | life.ffilt.us | AppFlowy | `repos/appflowy/` | Self-hosted workspace/project management (Notion-like). Docker Compose managed. |
 | observability.ffilt.us | Observability | `repos/observability/` | Grafana dashboards + OpenTelemetry collector + Quickwit log storage. Blue-green. |
 | opencode.ffilt.us | OpenCode | `repos/opencode/` | OpenCode AI coding agent (containerized). Privileged access. Blue-green. |

@@ -211,3 +211,77 @@ describe("repoHashForPath", () => {
     assert.ok(typeof h === "string");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════
+// matchesWatch — v4 watch-based change detection
+// ═══════════════════════════════════════════════════════════════════════
+
+import { matchesWatch, globToRegex } from "./services";
+
+describe("globToRegex", () => {
+  it("matches simple file globs", () => {
+    const re = globToRegex("*.ts");
+    assert.ok(re.test("file.ts"));
+    assert.ok(!re.test("file.js"));
+  });
+
+  it("matches ** for any depth", () => {
+    const re = globToRegex("src/**");
+    assert.ok(re.test("src/index.ts"));
+    assert.ok(re.test("src/sub/deep/file.ts"));
+    assert.ok(!re.test("lib/index.ts"));
+  });
+
+  it("matches leading / as root-anchored", () => {
+    const re = globToRegex("/src");
+    assert.ok(re.test("src"));
+    assert.ok(!re.test("lib/src"));
+  });
+});
+
+describe("matchesWatch", () => {
+  it("returns true when a changed file matches an include pattern", () => {
+    assert.ok(matchesWatch(["src/index.ts"], ["src/**"]));
+  });
+
+  it("returns false when no changed file matches any include pattern", () => {
+    assert.ok(!matchesWatch(["README.md", "docs/guide.md"], ["src/**"]));
+  });
+
+  it("excludes files matching exclude patterns", () => {
+    assert.ok(!matchesWatch(
+      ["src/index.test.ts"],
+      ["src/**"],
+      ["**/*.test.ts"],
+    ));
+  });
+
+  it("matches files that pass include but not exclude", () => {
+    assert.ok(matchesWatch(
+      ["src/index.ts", "src/utils.test.ts"],
+      ["src/**"],
+      ["**/*.test.ts"],
+    ));
+  });
+
+  it("handles multiple include patterns", () => {
+    assert.ok(matchesWatch(
+      ["package.json"],
+      ["src/**", "package.json", "Containerfile"],
+    ));
+  });
+
+  it("handles empty changed files list", () => {
+    assert.ok(!matchesWatch([], ["src/**"]));
+  });
+
+  it("uses ** to match everything", () => {
+    assert.ok(matchesWatch(["README.md"], ["**"]));
+    assert.ok(matchesWatch(["deep/nested/file.ts"], ["**"]));
+  });
+
+  it("respects leading / anchor", () => {
+    // /src should only match src at root
+    assert.ok(!matchesWatch(["lib/src/file.ts"], ["/src/**"]));
+  });
+});

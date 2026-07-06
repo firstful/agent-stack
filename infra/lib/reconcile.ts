@@ -13,9 +13,9 @@ import {
   sh,
 } from "./podman";
 import { ensureSidecars, removeSidecars } from "./sidecar";
-import { ensureServiceClone, repoContentHashForPath, resolveApkBuildRoot } from "./services";
+import { ensureServiceClone, repoContentHashForPath, resolveApkBuildRoot, matchesWatch } from "./services";
 import type { Service } from "./types";
-import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe } from "./types";
+import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe, normalizeWatch } from "./types";
 import {
   AUTO_PORT_START,
   AUTO_PORT_END,
@@ -43,6 +43,73 @@ const buildErrors: Record<
 > = {};
 let cycle = 0;
 
+// ── v4 Watch-Based Change Detection ──
+
+/** Cached list of changed files since last reconciliation (null = not available / non-git). */
+let changedFiles: string[] | null = null;
+
+/** Path to the HEAD commit marker file. */
+const HEAD_MARKER = "/tmp/stack._head-commit";
+
+/**
+ * Refresh the changed-files list by running git diff between the last
+ * known HEAD and the current HEAD.  Called once per reconciliation cycle.
+ * Sets changedFiles to null when git is unavailable (fall back to hashing).
+ */
+function refreshChangedFiles(): void {
+  changedFiles = null;
+  if (!fs.existsSync(MONOREPO_GIT)) return;
+
+  let prevCommit = "";
+  try { prevCommit = fs.readFileSync(HEAD_MARKER, "utf-8").trim(); } catch { /* first run */ }
+
+  let currCommit: string;
+  try {
+    currCommit = execSync(
+      `git -C ${MONOREPO_ROOT} log -1 --format=%H`,
+      { encoding: "utf-8", timeout: 5000 },
+    ).trim();
+  } catch {
+    return;
+  }
+
+  if (prevCommit && prevCommit === currCommit) {
+    changedFiles = []; // no changes
+    return;
+  }
+
+  // Diff between previous HEAD (or parent of current) and current HEAD
+  const base = prevCommit || `${currCommit}~1`;
+  try {
+    const diff = execSync(
+      `git -C ${MONOREPO_ROOT} diff --name-only ${base} ${currCommit}`,
+      { encoding: "utf-8", timeout: 5000 },
+    ).trim();
+    changedFiles = diff ? diff.split("\n") : [];
+    fs.writeFileSync(HEAD_MARKER, currCommit);
+  } catch {
+    changedFiles = null; // git diff failed, fall back to hash
+  }
+}
+
+/**
+ * Check whether a v4 service's watch patterns match any of the files
+ * changed since the last reconciliation cycle.
+ *
+ * Returns true when:
+ *   - changedFiles is null (non-git — caller should fall back to hash)
+ *   - changedFiles is non-empty and at least one matches the watch
+ *   - changedFiles is empty (no git changes — skip)
+ *
+ * Returns false only when changedFiles is available and none match.
+ */
+function serviceWatchChanged(service: Service): boolean {
+  if (changedFiles === null) return true; // non-git — always pass (let hash decide)
+  if (!service._watch) return true;       // v1–v3 — pass through to hash
+  const w = service._watch;
+  return matchesWatch(changedFiles, w.include, w.exclude || []);
+}
+
 // ── Tick & Error Tracking ──
 
 /**
@@ -50,6 +117,7 @@ let cycle = 0;
  */
 export function tick(): void {
   cycle++;
+  refreshChangedFiles();
 }
 
 /**
@@ -309,9 +377,8 @@ export function ensureContainer(
   }
 
   // ── Stage 3: Content eval ──
-  // Compute the .stackignore-filtered content hash and compare against
-  // the last *built* hash.  If only ignored files changed (README, docs,
-  // config metadata) the content hash won't differ and no rebuild occurs.
+  // v4 services: use watch patterns (git diff) for fast O(changed-files) detection.
+  // v1–v3 services: fall back to full-repo content hash + .stackignore filtering.
   //
   // When queue mode is active, the queue counter drives the build trigger
   // instead of the content change delta.
@@ -328,17 +395,36 @@ export function ensureContainer(
       console.log(`[queue] ${name}: processing build #${q}`);
     }
   } else if (commitChanged) {
-    contentHash = repoContentHashForPath(service.repo!);
-    contentChanged =
-      !fs.existsSync(marker) ||
-      fs.readFileSync(marker, "utf-8") !== contentHash;
-    fs.writeFileSync(commitMarker, commitHash);
-    if (!contentChanged) {
-      console.log(
-        `[noop] ${name}: commit changed but content unchanged (ignored files)`
-      );
+    // ── v4 watch-based fast path ──
+    if (service._watch) {
+      if (!serviceWatchChanged(service)) {
+        // No watched files changed — skip the expensive hash entirely
+        console.log(
+          `[noop] ${name}: commit changed but no watched files changed`,
+        );
+        fs.writeFileSync(commitMarker, commitHash);
+        needsBuild = false;
+      } else {
+        // Watched files changed — need to build. Compute hash for the marker.
+        contentHash = repoContentHashForPath(service.repo!);
+        contentChanged = true;
+        fs.writeFileSync(commitMarker, commitHash);
+        needsBuild = true;
+      }
+    } else {
+      // ── v1–v3: full-repo content hash ──
+      contentHash = repoContentHashForPath(service.repo!);
+      contentChanged =
+        !fs.existsSync(marker) ||
+        fs.readFileSync(marker, "utf-8") !== contentHash;
+      fs.writeFileSync(commitMarker, commitHash);
+      if (!contentChanged) {
+        console.log(
+          `[noop] ${name}: commit changed but content unchanged (ignored files)`,
+        );
+      }
+      needsBuild = needsBuild || contentChanged;
     }
-    needsBuild = needsBuild || contentChanged;
   }
 
   // ── Build ─────────────────────────────────────────────────
@@ -702,18 +788,32 @@ export function ensureApkBuild(service: Service): void {
     fs.readFileSync(commitMarker, "utf-8") !== commitHash;
 
   if (commitChanged && service.repo) {
-    const contentHash = repoContentHashForPath(service.repo);
-    const hashChanged =
-      !fs.existsSync(apkMarker) ||
-      fs.readFileSync(apkMarker, "utf-8") !== contentHash;
-
-    if (hashChanged) {
+    // ── v4 watch-based fast path ──
+    if (service._watch) {
+      if (!serviceWatchChanged(service)) {
+        console.log(`[apk] ${name}: commit changed but no watched files changed`);
+        fs.writeFileSync(commitMarker, commitHash);
+        return;
+      }
+      // Watched files changed — build APK
       needsBuild = true;
       fs.writeFileSync(commitMarker, commitHash);
-      console.log(`[apk] ${name}: source changed, queuing APK build`);
+      console.log(`[apk] ${name}: watched files changed, queuing APK build`);
     } else {
-      fs.writeFileSync(commitMarker, commitHash);
-      console.log(`[apk] ${name}: commit changed but content unchanged (ignored files)`);
+      // ── v1–v3: full-repo content hash ──
+      const contentHash = repoContentHashForPath(service.repo);
+      const hashChanged =
+        !fs.existsSync(apkMarker) ||
+        fs.readFileSync(apkMarker, "utf-8") !== contentHash;
+
+      if (hashChanged) {
+        needsBuild = true;
+        fs.writeFileSync(commitMarker, commitHash);
+        console.log(`[apk] ${name}: source changed, queuing APK build`);
+      } else {
+        fs.writeFileSync(commitMarker, commitHash);
+        console.log(`[apk] ${name}: commit changed but content unchanged (ignored files)`);
+      }
     }
   }
 
