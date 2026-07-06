@@ -13,6 +13,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.reedsutliff.talaria.TalariaApplication
 import com.reedsutliff.talaria.LogBuffer
+import com.reedsutliff.talaria.UpdateInfo
+import com.reedsutliff.talaria.UpdateManager
 import com.reedsutliff.talaria.data.AppDatabase
 import com.reedsutliff.talaria.data.entities.MessageEntity
 import com.reedsutliff.talaria.data.entities.ThreadEntity
@@ -112,6 +114,13 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
     private val _playbackDuration = MutableStateFlow(0L)
     val playbackDuration: StateFlow<Long> = _playbackDuration.asStateFlow()
+
+    // ── Update management ────────────────────────────────────
+    private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
+    val updateInfo: StateFlow<UpdateInfo?> = _updateInfo.asStateFlow()
+
+    private val _updateDownloading = MutableStateFlow(false)
+    val updateDownloading: StateFlow<Boolean> = _updateDownloading.asStateFlow()
 
     // ── Internal ────────────────────────────────────────────
 
@@ -438,6 +447,49 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         Log.i(LOG_TAG, "Share logs requested")
         val app = getApplication<TalariaApplication>()
         app.shareLogs(context)
+    }
+
+    // ── Update management ──────────────────────────────────────
+
+    /**
+     * Check install.ffilt.us for a newer APK version.
+     * Updates [_updateInfo] with the result — null means up to date.
+     */
+    fun checkForUpdate() {
+        viewModelScope.launch {
+            try {
+                val info = UpdateManager.checkForUpdate()
+                _updateInfo.value = info
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "checkForUpdate failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Download the APK and launch the system installer.
+     * Called when the user taps "Download & Install" in the update dialog.
+     */
+    fun downloadAndInstall(context: Context) {
+        viewModelScope.launch {
+            try {
+                _updateDownloading.value = true
+                val apkFile = UpdateManager.downloadApk(context.applicationContext)
+                UpdateManager.installApk(context.applicationContext, apkFile)
+                _updateInfo.value = null  // dismiss dialog after launching installer
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "downloadAndInstall failed: ${e.message}")
+            } finally {
+                _updateDownloading.value = false
+            }
+        }
+    }
+
+    /**
+     * Dismiss the update dialog (user tapped "Later").
+     */
+    fun dismissUpdate() {
+        _updateInfo.value = null
     }
 
     // ── Internal helpers ────────────────────────────────────

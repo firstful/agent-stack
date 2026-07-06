@@ -45,8 +45,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private const val APP_VERSION = "2.0.0"
-
 /**
  * Content for the modal navigation drawer.
  *
@@ -129,7 +127,7 @@ private fun DrawerHeader() {
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "v$APP_VERSION",
+            text = "v${com.reedsutliff.talaria.BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
         )

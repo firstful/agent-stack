@@ -43,8 +43,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.reedsutliff.talaria.model.AppSettings
 
-private const val APP_VERSION = "2.0.0"
-
 /**
  * Full-screen settings page for Talaria.
  *
@@ -55,6 +53,7 @@ private const val APP_VERSION = "2.0.0"
  * @param settings Current [AppSettings] from the ViewModel.
  * @param onUpdateSettings Callback invoked with the modified settings on save.
  * @param onBack Callback to navigate back (e.g. close the settings screen).
+ * @param onCheckForUpdate Callback to trigger a manual update check.
  * @param hermesProfiles Available Hermes profile names from the server.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +62,7 @@ fun SettingsScreen(
     settings: AppSettings,
     onUpdateSettings: (AppSettings) -> Unit,
     onBack: () -> Unit,
+    onCheckForUpdate: () -> Unit = {},
     hermesProfiles: List<String> = emptyList(),
 ) {
     var serverUrl by rememberSaveable { mutableStateOf(settings.serverUrl) }
@@ -263,11 +263,21 @@ fun SettingsScreen(
 
             // ── Version info ────────────────────────────────
             Text(
-                text = "Talaria v$APP_VERSION",
+                text = "Talaria v${com.reedsutliff.talaria.BuildConfig.VERSION_NAME}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onCheckForUpdate,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("Check for Updates")
+            }
 
             Spacer(Modifier.height(24.dp))
         }

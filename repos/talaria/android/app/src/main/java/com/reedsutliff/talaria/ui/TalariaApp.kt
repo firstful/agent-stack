@@ -88,30 +88,39 @@ import com.reedsutliff.talaria.model.MessageFeedback
 import com.reedsutliff.talaria.model.MessageModality
 import com.reedsutliff.talaria.model.MessageStatus
 import com.reedsutliff.talaria.model.PttButtonState
+import com.reedsutliff.talaria.UpdateInfo
 import kotlinx.coroutines.launch
 
 // ── Haptic helpers ────────────────────────────────────────────
 
 fun hapticLightClick(context: android.content.Context) {
-    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vm = context.getSystemService(VibratorManager::class.java)
-        vm.defaultVibrator
-    } else {
-        @Suppress("DEPRECATION")
-        context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(VibratorManager::class.java)
+            vm.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        vibrator.vibrate(VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE))
+    } catch (_: SecurityException) {
+        // VIBRATE permission not available — haptics silently disabled
     }
-    vibrator.vibrate(VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE))
 }
 
 fun hapticHeavyClick(context: android.content.Context) {
-    val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vm = context.getSystemService(VibratorManager::class.java)
-        vm.defaultVibrator
-    } else {
-        @Suppress("DEPRECATION")
-        context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+    try {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vm = context.getSystemService(VibratorManager::class.java)
+            vm.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+    } catch (_: SecurityException) {
+        // VIBRATE permission not available — haptics silently disabled
     }
-    vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
 }
 
 /**
@@ -137,6 +146,8 @@ fun TalariaApp(
     val partialTranscript by viewModel.partialTranscript.collectAsState()
     val hermesSessions by viewModel.hermesSessions.collectAsState()
     val latencyMs by viewModel.latencyMs.collectAsState()
+    val updateInfo by viewModel.updateInfo.collectAsState()
+    val updateDownloading by viewModel.updateDownloading.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -166,6 +177,11 @@ fun TalariaApp(
                 listState.animateScrollToItem(messages.size - 1)
             }
         }
+    }
+
+    // Check for updates on first composition
+    LaunchedEffect(Unit) {
+        viewModel.checkForUpdate()
     }
 
     // ── Connection dot color ──────────────────────────────────
@@ -205,6 +221,7 @@ fun TalariaApp(
                 settings = settings,
                 onUpdateSettings = { viewModel.updateSettings(it) },
                 onBack = { showSettings = false },
+                onCheckForUpdate = { viewModel.checkForUpdate() },
                 hermesProfiles = hermesSessions.map { it.title }.distinct(),
             )
         } else {
@@ -379,6 +396,88 @@ fun TalariaApp(
                 }
             }
         }
+    }
+
+    // ── Update Available Dialog ─────────────────────────────────
+    if (updateInfo != null) {
+        val info = updateInfo!!
+        val currentVersion = com.reedsutliff.talaria.BuildConfig.VERSION_NAME
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissUpdate() },
+            title = {
+                Text(
+                    text = "Update Available",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "A new version of Talaria is available.",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    // Version info block
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(12.dp),
+                    ) {
+                        Text(
+                            text = "Current: $currentVersion",
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Latest:   ${info.versionName}",
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = Color(0xFF22C55E),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (info.contentLength > 0) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Size:     ${formatFileSize(info.contentLength)}",
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.downloadAndInstall(context) },
+                    enabled = !updateDownloading,
+                ) {
+                    if (updateDownloading) {
+                        Text(
+                            text = "Downloading…",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                        )
+                    } else {
+                        Text(
+                            text = "Download & Install",
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissUpdate() }) {
+                    Text("Later")
+                }
+            },
+        )
     }
 
     // ── File Viewer Dialog ──────────────────────────────────────
@@ -858,6 +957,14 @@ private fun formatDuration(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%d:%02d".format(minutes, seconds)
+}
+
+private fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+    }
 }
 
 // ── Theme ────────────────────────────────────────────────────
