@@ -13,7 +13,7 @@ import {
   sh,
 } from "./podman";
 import { ensureSidecars, removeSidecars } from "./sidecar";
-import { ensureServiceClone, repoContentHashForPath } from "./services";
+import { ensureServiceClone, repoContentHashForPath, resolveApkBuildRoot } from "./services";
 import type { Service } from "./types";
 import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe } from "./types";
 import {
@@ -21,6 +21,7 @@ import {
   AUTO_PORT_END,
   hashMarker,
   commitHashMarker,
+  apkHashMarker,
   slotMarker,
   slotContainerName,
   oppositeSlot,
@@ -29,6 +30,7 @@ import {
   queueMarker,
   canaryMarker,
   RUNTIME_DIR,
+  INFRA_DIR,
 } from "./config";
 
 // ── State ──
@@ -459,10 +461,11 @@ export function ensureContainer(
 
   // ── First deploy ──────────────────────────────────────────
   if (!hasOldContainer && !hasSlotA && !hasSlotB) {
-    console.log(`[deploy] ${name} — first deploy on slot a`);
+    console.log(`[deploy] ${name} — first deploy`);
     const port = allocateFreshPort(service, allServices, "a");
     service.container!.host_port = port;
-    runContainer(service, allServices, { containerName: slotA, hostPort: port });
+    const slotName = slotContainerName(name, "a");
+    runContainer(service, allServices, { containerName: slotName, hostPort: port });
     writeSlot(name, "a");
     // Compute content hash for marker if we didn't need it earlier
     if (!contentHash) contentHash = repoContentHashForPath(service.repo!);
@@ -518,11 +521,9 @@ export function ensureContainer(
         service.container!.host_port = idlePort;
         writeSlot(name, idleSlot);
         fs.writeFileSync(marker, contentHash!);
-        if (hasOldContainer) {
-          stopAndRemove(name);
-        } else {
-          stopAndRemove(slotContainerName(name, activeSlot));
-        }
+        // Remove old active container (bare name or old-style slot name)
+        const oldActive = hasOldContainer ? name : slotContainerName(name, activeSlot);
+        stopAndRemove(oldActive);
       }
     } else {
       console.error(
@@ -581,7 +582,12 @@ export function ensureContainer(
         const ch = repoContentHashForPath(service.repo);
         fs.writeFileSync(marker, ch);
       }
-      stopAndRemove(slotContainerName(name, oppositeSlot(cSlot)));
+      // Remove old active container: check bare name first, fall back to slot name
+      if (containerExists(name)) {
+        stopAndRemove(name);
+      } else {
+        stopAndRemove(slotContainerName(name, oppositeSlot(cSlot)));
+      }
       clearCanaryState(name);
     } else {
       writeCanaryState(name, canaryState);
@@ -655,6 +661,225 @@ export function removeContainer(name: string, sidecarNames?: string[]): void {
   if (fs.existsSync(qm)) fs.unlinkSync(qm);
   const canaryFile = canaryMarker(name);
   if (fs.existsSync(canaryFile)) fs.unlinkSync(canaryFile);
+  const apkMarker = apkHashMarker(name);
+  if (fs.existsSync(apkMarker)) fs.unlinkSync(apkMarker);
   delete buildBackoffs[name];
   delete buildErrors[name];
 }
+
+// ── APK Build Integration ──
+
+/**
+ * Ensure a service's APK is built and deployed when the source changes.
+ *
+ * Uses the same clone infrastructure as container builds:
+ *   1. Snapshots the repo at the current commit via ensureServiceClone()
+ *   2. Runs setup-cf-creds.sh to inject fresh CF Access credentials
+ *   3. Locates and runs build-apk.sh from the clone directory
+ *   4. Updates the APK hash marker on success
+ *
+ * The build-apk.sh script handles everything: Gradle build, APK deployment
+ * to /srv/files/apk/<app>/, and OTA version manifest writing.  This function
+ * is a thin trigger that ensures preconditions are met.
+ *
+ * Change detection uses a two-step guard:
+ *   - Fast: git commit hash (O(1) marker compare)
+ *   - Precise: .stackignore-filtered content hash
+ */
+export function ensureApkBuild(service: Service): void {
+  if (!service.apkBuild || !service.repo) return;
+
+  const name = service.name;
+  const apkMarker = apkHashMarker(name);
+  const commitMarker = commitHashMarker(name);
+
+  // ── Change detection ──
+  let needsBuild = false;
+  const commitHash = service._hash;
+
+  const commitChanged =
+    !fs.existsSync(commitMarker) ||
+    fs.readFileSync(commitMarker, "utf-8") !== commitHash;
+
+  if (commitChanged && service.repo) {
+    const contentHash = repoContentHashForPath(service.repo);
+    const hashChanged =
+      !fs.existsSync(apkMarker) ||
+      fs.readFileSync(apkMarker, "utf-8") !== contentHash;
+
+    if (hashChanged) {
+      needsBuild = true;
+      fs.writeFileSync(commitMarker, commitHash);
+      console.log(`[apk] ${name}: source changed, queuing APK build`);
+    } else {
+      fs.writeFileSync(commitMarker, commitHash);
+      console.log(`[apk] ${name}: commit changed but content unchanged (ignored files)`);
+    }
+  }
+
+  if (!needsBuild) return;
+
+  // ── Backoff check ──
+  const apkBackoffKey = `apk-${name}`;
+  const backoff = (buildBackoffs as Record<string, { retryCycle: number; failures: number }>)[apkBackoffKey];
+  if (backoff && cycle < backoff.retryCycle) {
+    console.log(`[apk] ${name}: skip build (${backoff.retryCycle - cycle} cycles remaining)`);
+    return;
+  }
+
+  // ── Clone the repo at this commit ──
+  const clonePath = ensureServiceClone(service);
+  if (!clonePath) {
+    console.log(`[apk] ${name}: could not create service clone`);
+    return;
+  }
+  const cloneRoot = clonePath;
+
+  // ── Resolve build root within the clone ──
+  // Temporarily swap service.repo so resolveApkBuildRoot works against the clone
+  const origRepo = service.repo;
+  service.repo = cloneRoot;
+  const buildRoot = resolveApkBuildRoot(service);
+  if (!buildRoot) {
+    service.repo = origRepo;
+    console.log(`[apk] ${name}: build root not found in clone`);
+    return;
+  }
+  service.repo = origRepo;
+
+  // ── Step 1: Inject CF Access credentials ──
+  let cfClientId = "";
+  let cfClientSecret = "";
+  try {
+    const setupScript = path.join(INFRA_DIR, "scripts", "setup-cf-creds.sh");
+    if (fs.existsSync(setupScript)) {
+      execSync(`bash "${setupScript}"`, { timeout: 15_000, encoding: "utf-8", stdio: "pipe" });
+      console.log(`[apk] ${name}: CF credentials synced`);
+
+      // Read them back from local.properties inside the clone
+      const localPropsPath = path.join(buildRoot, "local.properties");
+      if (fs.existsSync(localPropsPath)) {
+        const props = fs.readFileSync(localPropsPath, "utf-8");
+        const idMatch = props.match(/^cfAccessClientId=(.+)$/m);
+        const secretMatch = props.match(/^cfAccessClientSecret=(.+)$/m);
+        if (idMatch) cfClientId = idMatch[1].trim();
+        if (secretMatch) cfClientSecret = secretMatch[1].trim();
+      }
+    } else {
+      console.log(`[apk] ${name}: setup-cf-creds.sh not found`);
+    }
+  } catch (e: any) {
+    console.error(`[apk] ${name}: CF credential sync failed: ${e.message}`);
+  }
+
+  // ── Step 2: Compute version from git ──
+  const verCode = execSync(
+    `git -C "${origRepo}" rev-list --count HEAD`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+  const buildDate = execSync(
+    `git -C "${origRepo}" log -1 --format=%ad --date=format:%Y%m%d`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+  const buildTime = execSync(
+    `git -C "${origRepo}" log -1 --format=%ad --date=format:%H%M`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+  const gitHash = execSync(
+    `git -C "${origRepo}" log -1 --format=%h --abbrev=7`,
+    { encoding: "utf-8", timeout: 10_000 }
+  ).toString().trim();
+
+  const versionName = `${verCode}.${buildDate}.${buildTime}-${gitHash}`;
+
+  const cfg = service.apkBuild!;
+  const appShortName = cfg.packageName.split(".").pop() || name;
+  const destDirName = cfg.destDir || appShortName.replace(/\b\w/g, c => c.toUpperCase());
+  const gradleTask = cfg.task || "assembleDebug";
+  const gradleBuildType = cfg.buildType || "debug";
+
+  // ── Step 3: Run Gradle ──
+  const gradleArgs = [
+    `-PversionCode=${verCode}`,
+    `-PversionName=${versionName}`,
+    `-PbuildDate=${buildDate}`,
+  ];
+  if (cfClientId) gradleArgs.push(`-PcfAccessClientId=${cfClientId}`);
+  if (cfClientSecret) gradleArgs.push(`-PcfAccessClientSecret=${cfClientSecret}`);
+  if (cfg.extraProps) {
+    for (const [k, v] of Object.entries(cfg.extraProps)) {
+      gradleArgs.push(`-P${k}=${v}`);
+    }
+  }
+
+  console.log(`[apk] ${name}: building ${versionName} (${gradleTask})`);
+
+  try {
+    execSync(`./gradlew ${gradleTask} ${gradleArgs.join(" ")}`, {
+      cwd: buildRoot,
+      timeout: 300_000,
+      encoding: "utf-8",
+      stdio: "pipe",
+    });
+    console.log(`[apk] ${name}: Gradle build succeeded`);
+  } catch (e: any) {
+    const failures = (backoff?.failures || 0) + 1;
+    const wait = 5 * Math.pow(2, failures - 1);
+    (buildBackoffs as Record<string, { retryCycle: number; failures: number }>)[apkBackoffKey] = {
+      retryCycle: cycle + wait, failures,
+    };
+    buildErrors[name + "-apk"] = {
+      error: e.message, time: new Date().toISOString(), failures, retryIn: wait * 5,
+    };
+    console.error(`[apk] ${name}: Gradle build #${failures} failed, retry in ${wait} cycles`);
+    return;
+  }
+
+  // ── Step 4: Locate and deploy the output APK ──
+  const apkSource = path.join(buildRoot, "app", "build", "outputs", "apk", gradleBuildType, `app-${gradleBuildType}.apk`);
+  if (!fs.existsSync(apkSource)) {
+    console.error(`[apk] ${name}: output APK not found at ${apkSource}`);
+    return;
+  }
+
+  const apkDestDir = path.join("/srv/files/apk", destDirName);
+  fs.mkdirSync(apkDestDir, { recursive: true });
+  const apkFilename = `${appShortName}-${versionName}.apk`;
+  fs.copyFileSync(apkSource, path.join(apkDestDir, apkFilename));
+  console.log(`[apk] ${name}: deployed ${apkFilename}`);
+
+  // ── Step 5: Write OTA version manifest ──
+  const manifest = {
+    app: cfg.packageName,
+    name: appShortName,
+    version: versionName,
+    versionCode: parseInt(verCode, 10),
+    apk: `${destDirName}/${apkFilename}`,
+    updatedAt: new Date().toISOString(),
+  };
+  const versionFile = path.join("/srv/files/apk", `version-${cfg.packageName}.json`);
+  fs.writeFileSync(versionFile, JSON.stringify(manifest, null, 2));
+
+  // ── Step 6: Update latest symlink ──
+  const symlink = path.join(apkDestDir, `${appShortName}-latest.apk`);
+  const relativeTarget = `./${apkFilename}`;
+  try { fs.unlinkSync(symlink); } catch { /* ok */ }
+  fs.symlinkSync(relativeTarget, symlink);
+
+  // ── Step 7: Prune old builds (keep 5) ──
+  const apkFiles = fs.readdirSync(apkDestDir)
+    .filter(f => f.startsWith(appShortName) && f.endsWith(".apk") && !f.includes("-latest"))
+    .sort()
+    .reverse();
+  for (const old of apkFiles.slice(5)) {
+    fs.unlinkSync(path.join(apkDestDir, old));
+  }
+
+  // ── Step 8: Update hash marker ──
+  fs.writeFileSync(apkMarker, repoContentHashForPath(origRepo!));
+
+  delete (buildBackoffs as Record<string, { retryCycle: number; failures: number }>)[apkBackoffKey];
+  clearBuildError(name + "-apk");
+  console.log(`[apk] ${name}: build complete (${versionName})`);
+}
+
