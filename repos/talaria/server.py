@@ -312,6 +312,13 @@ async def ptt_websocket(ws: WebSocket):
                         conn.update_ack(ack_seq)
 
                     elif cmd_type == "text_input":
+                        # Send echo immediately from main loop (avoids WS send hang in background tasks)
+                        echo_msg = {"type": "text_echo", "text": cmd.get("text", "")}
+                        client_msg_id = cmd.get("client_message_id")
+                        if client_msg_id:
+                            echo_msg["client_message_id"] = client_msg_id
+                        await send_json(echo_msg)
+                        
                         task = asyncio.create_task(
                             handler.handle_text_input(cmd, hermes, run_store)
                         )

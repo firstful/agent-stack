@@ -105,9 +105,7 @@ class WebSocketConnection:
         """
         if seq is None:
             seq = self._get_next_sequence()
-        
         message["seq"] = seq
-        
         try:
             await self.websocket.send_json(message)
             self.messages_sent += 1

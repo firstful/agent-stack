@@ -92,10 +92,11 @@ class MessageHandler:
                 profile=self.connection.current_profile,
             )
             self.connection.current_run_id = result.get("run_id")
-            session_id = result.get("session_id")
-            if session_id:
-                self.connection.current_session_id = session_id
-                await self.connection.send_message({"type": "session_id", "id": session_id})
+            new_sid = result.get("session_id") or self.connection.current_session_id
+            if not new_sid:
+                new_sid = result.get("run_id", "")
+                self.connection.current_session_id = new_sid
+                await self.connection.send_message({"type": "session_id", "id": new_sid})
         except Exception as e:
             logger.exception("Hermes start_run failed")
             await self.connection.send_message({"type": "error", "message": f"Hermes API error: {e}"})
@@ -226,31 +227,28 @@ class MessageHandler:
 
         logger.info("text_input: session=%s thread=%s profile=%s text=%.100s", session_id, thread_id, profile, text)
 
-        echo_msg = {"type": "text_echo", "text": text}
-        client_msg_id = cmd.get("client_message_id")
-        if client_msg_id:
-            echo_msg["client_message_id"] = client_msg_id
-        await self.connection.send_message(echo_msg)
-
-        # NOTE: deliberately skipping the processing message send
-        # to avoid WebSocket send-queue backpressure deadlock.
-        logger.debug("Skipping processing send, going straight to Hermes")
+        # Echo is sent from the main loop in server.py to avoid
+        # WebSocket send backpressure deadlock in background tasks.
 
         self.connection.ptt_state = PTTState.HERMES_RUNNING
         try:
-            logger.info("Calling hermes.start_run...")
             result = await hermes.start_run(
                 text,
                 session_id=session_id,
                 profile=profile,
             )
             self.connection.current_run_id = result.get("run_id")
-            session_id = result.get("session_id")
-            if session_id:
-                self.connection.current_session_id = session_id
+            
+            # Hermes API doesn't return session_id, so generate one
+            # if needed and use the Hermes run_id as the session identifier.
+            new_sid = session_id or result.get("session_id") or self.connection.current_session_id
+            if not new_sid:
+                # Generate a stable session ID from the run_id prefix
+                new_sid = result.get("run_id", "")
+                self.connection.current_session_id = new_sid
                 await self.connection.send_message({
                     "type": "session_id",
-                    "id": session_id,
+                    "id": new_sid,
                     "thread_id": thread_id,
                 })
         except Exception as e:
