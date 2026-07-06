@@ -289,15 +289,25 @@ class MessageHandler:
                             "id": real_sid,
                             "thread_id": thread_id,
                         })
-            except Exception:
-                logger.debug("Failed to fetch session list, using run_id fallback")
+                # Fallback: use run_id if session list is empty
                 if not self.connection.current_session_id:
                     self.connection.current_session_id = self.connection.current_run_id
-                    await self.connection.send_message({
-                        "type": "session_id",
-                        "id": self.connection.current_session_id,
-                        "thread_id": thread_id,
-                    })
+                    if self.connection.current_session_id:
+                        await self.connection.send_message({
+                            "type": "session_id",
+                            "id": self.connection.current_session_id,
+                            "thread_id": thread_id,
+                        })
+            except Exception:
+                logger.warning("Failed to fetch session list, using run_id fallback", exc_info=True)
+                if not self.connection.current_session_id:
+                    self.connection.current_session_id = self.connection.current_run_id
+                    if self.connection.current_session_id:
+                        await self.connection.send_message({
+                            "type": "session_id",
+                            "id": self.connection.current_session_id,
+                            "thread_id": thread_id,
+                        })
 
         stored_run = StoredRun(
             run_id=self.connection.current_run_id or "",

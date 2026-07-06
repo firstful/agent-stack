@@ -219,7 +219,7 @@ class HermesClient:
             )
             resp.raise_for_status()
             data = resp.json()
-            return data if isinstance(data, list) else data.get("sessions", [])
+            return data if isinstance(data, list) else data.get("data", data.get("sessions", []))
         except Exception as e:
             logger.warning("list_sessions failed: %s", e)
             return []
