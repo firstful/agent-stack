@@ -297,27 +297,15 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         Log.i(LOG_TAG, "startPtt() — conn=${_connectionState.value}")
         val connected = _connectionState.value == ConnectionState.CONNECTED
 
-        // If bot is speaking or thinking, interrupt and send /steer to redirect
+        // If bot is speaking or thinking, interrupt and start recording.
+        // No /steer text_input — the interrupt cancels the current run, and
+        // the new PTT recording starts a fresh run. Sending /steer as text_input
+        // would start a NEW Hermes run (double response bug).
         val botActive = _pttState.value == PttButtonState.PROCESSING ||
                 _pttState.value == PttButtonState.PLAYING
         if (botActive) {
             interrupt()
-            // Send /steer command to redirect the agent's focus
-            val thread = _currentThread.value ?: run {
-                val t = createDefaultThread()
-                t
-            }
-            val steerId = UUID.randomUUID().toString()
-            val steerPayload = JSONObject().apply {
-                put("type", "text_input")
-                put("thread_id", thread.id)
-                put("session_id", sessionId ?: "")
-                put("text", "/steer ")
-                put("client_message_id", steerId)
-            }
-            wsClient?.sendMessage(steerPayload.toString())
-            Log.i(LOG_TAG, "startPtt: sent /steer (client_message_id=$steerId)")
-            // Small delay for the interrupt/steer to propagate before recording
+            // Small delay for the interrupt to propagate before recording
             viewModelScope.launch {
                 delay(200)
                 doStartPttRecording()
@@ -1411,8 +1399,16 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
         // ── Audio playback ─────────────────────────────────
 
-        @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+        /** Post to main thread — ExoPlayer requires a Looper.
+         *  Called from OkHttp callback thread (via handleText → drainReplayBuffer). */
         private fun startPlayback() {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                startPlaybackInternal()
+            }
+        }
+
+        @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+        private fun startPlaybackInternal() {
             log("I", "startPlayback()")
             if (isPlaying) return
             isPlaying = true
