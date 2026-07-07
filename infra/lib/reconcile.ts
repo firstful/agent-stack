@@ -1320,6 +1320,7 @@ export function ensureApkBuild(service: Service): void {
     nextQueued.error = "Could not create service clone";
     nextQueued.completedAt = new Date().toISOString();
     writeApkQueue(name, current);
+    resetApkMarkerIfAllTerminal(name, current);
     return;
   }
 
@@ -1333,6 +1334,7 @@ export function ensureApkBuild(service: Service): void {
     nextQueued.error = "Build root not found in clone";
     nextQueued.completedAt = new Date().toISOString();
     writeApkQueue(name, current);
+    resetApkMarkerIfAllTerminal(name, current);
     return;
   }
 
