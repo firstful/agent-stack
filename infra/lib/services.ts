@@ -459,11 +459,10 @@ function submoduleUrl(submoduleName: string, repoPath: string): string | null {
 
 export function ensureServiceClone(service: Service): string | null {
   const repoPath = service.repo;
-  console.log(`[clone] ${service.name}: ensureServiceClone repoPath=${repoPath} startsWith REPOS_DIR=${repoPath?.startsWith(REPOS_DIR)} _hash=${service._hash}`);
-  if (!repoPath) { console.log(`[clone] ${service.name}: no repoPath`); return null; }
+  if (!repoPath) return null;
 
-  if (!repoPath.startsWith(REPOS_DIR)) { console.log(`[clone] ${service.name}: repoPath ${repoPath} not in REPOS_DIR ${REPOS_DIR}`); return null; }
-  if (!fs.existsSync(MONOREPO_GIT)) { console.log(`[clone] ${service.name}: MONOREPO_GIT not found`); return null; }
+  if (!repoPath.startsWith(REPOS_DIR)) return null;
+  if (!fs.existsSync(MONOREPO_GIT)) return null;
 
   try {
     const relPath = path.relative(MONOREPO_ROOT, repoPath);
@@ -472,8 +471,6 @@ export function ensureServiceClone(service: Service): string | null {
       encoding: "utf-8",
       timeout: 5000,
     }).toString().trim();
-
-    console.log(`[clone] ${service.name}: commitHash=${commitHash} relPath=${relPath} cloneDir would be=${path.join(CLONES_DIR, service.name, commitHash)}`);
 
     if (!commitHash) return null;
 
