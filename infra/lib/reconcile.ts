@@ -1336,24 +1336,20 @@ export function ensureApkBuild(service: Service): void {
     return;
   }
 
-  // Inject CF Access credentials
+  // Inject CF Access credentials from local.properties in the clone
   let cfClientId = "";
   let cfClientSecret = "";
   try {
-    const setupScript = path.join(INFRA_DIR, "scripts", "setup-cf-creds.sh");
-    if (fs.existsSync(setupScript)) {
-      execSync(`bash "${setupScript}"`, { timeout: 15_000, encoding: "utf-8", stdio: "pipe" });
-      const localPropsPath = path.join(buildRoot, "local.properties");
-      if (fs.existsSync(localPropsPath)) {
-        const props = fs.readFileSync(localPropsPath, "utf-8");
-        const idMatch = props.match(/^cfAccessClientId=(.+)$/m);
-        const secretMatch = props.match(/^cfAccessClientSecret=(.+)$/m);
-        if (idMatch) cfClientId = idMatch[1].trim();
-        if (secretMatch) cfClientSecret = secretMatch[1].trim();
-      }
+    const localPropsPath = path.join(buildRoot, "local.properties");
+    if (fs.existsSync(localPropsPath)) {
+      const props = fs.readFileSync(localPropsPath, "utf-8");
+      const idMatch = props.match(/^cfAccessClientId=(.+)$/m);
+      const secretMatch = props.match(/^cfAccessClientSecret=(.+)$/m);
+      if (idMatch) cfClientId = idMatch[1].trim();
+      if (secretMatch) cfClientSecret = secretMatch[1].trim();
     }
   } catch (e: any) {
-    console.error(`[apk] ${name}: CF credential sync failed: ${e.message}`);
+    console.error(`[apk] ${name}: CF credential read failed: ${e.message}`);
   }
 
   // Build gradle args
