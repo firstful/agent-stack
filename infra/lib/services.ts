@@ -524,8 +524,12 @@ export function ensureServiceClone(service: Service): string | null {
 
       for (const entry of entries.slice(4)) {
         const oldDir = path.join(parentDir, entry.name);
-        fs.rmSync(oldDir, { recursive: true, force: true });
-        console.log(`[services] pruned old clone: ${oldDir}`);
+        try {
+          fs.rmSync(oldDir, { recursive: true, force: true });
+          console.log(`[services] pruned old clone: ${oldDir}`);
+        } catch (pruneErr: any) {
+          console.error(`[services] failed to prune old clone ${oldDir}: ${pruneErr.message} (non-fatal)`);
+        }
       }
     }
 
