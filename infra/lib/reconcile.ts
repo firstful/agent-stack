@@ -512,6 +512,7 @@ export function ensureContainer(
         `[backoff] ${name} — skip build (${remaining}s remaining)`
       );
     } else {
+      const origRepo = service.repo;
       try {
         const clonePath = ensureServiceClone(service);
         if (clonePath) service.repo = clonePath;
@@ -543,6 +544,8 @@ export function ensureContainer(
           `[backoff] ${name} — build #${failures} failed, retry in ${wait * 5}s`
         );
         return;
+      } finally {
+        service.repo = origRepo; // restore — ensureApkBuild() needs the original repo path
       }
     }
   }
