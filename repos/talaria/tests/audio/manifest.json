@@ -1,0 +1,38 @@
+{
+  "hello": {
+    "text": "Hello, this is a test of the voice gateway.",
+    "file": "/srv/agent-stack/repos/talaria/tests/audio/hello.wav",
+    "duration": 3.384,
+    "sha256": "978be59929b5"
+  },
+  "weather": {
+    "text": "What is the weather like today?",
+    "file": "/srv/agent-stack/repos/talaria/tests/audio/weather.wav",
+    "duration": 2.424,
+    "sha256": "df575b5532af"
+  },
+  "reminder": {
+    "text": "Remind me to check the server logs at five PM.",
+    "file": "/srv/agent-stack/repos/talaria/tests/audio/reminder.wav",
+    "duration": 3.696,
+    "sha256": "e5520e7cee2f"
+  },
+  "count": {
+    "text": "One, two, three, four, five.",
+    "file": "/srv/agent-stack/repos/talaria/tests/audio/count.wav",
+    "duration": 3.864,
+    "sha256": "f2e3adb9de8a"
+  },
+  "question": {
+    "text": "How many services are currently running?",
+    "file": "/srv/agent-stack/repos/talaria/tests/audio/question.wav",
+    "duration": 2.928,
+    "sha256": "6c546f55ee9a"
+  },
+  "short": {
+    "text": "Test.",
+    "file": "/srv/agent-stack/repos/talaria/tests/audio/short.wav",
+    "duration": 1.584,
+    "sha256": "e9e896cf0324"
+  }
+}
