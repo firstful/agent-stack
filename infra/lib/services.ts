@@ -473,6 +473,8 @@ export function ensureServiceClone(service: Service): string | null {
       timeout: 5000,
     }).toString().trim();
 
+    console.log(`[clone] ${service.name}: commitHash=${commitHash} relPath=${relPath} cloneDir would be=${path.join(CLONES_DIR, service.name, commitHash)}`);
+
     if (!commitHash) return null;
 
     service._commitHash = commitHash;
