@@ -1112,6 +1112,8 @@ export function ensureApkBuild(service: Service): void {
           retryIn: wait * 5,
         };
         saveBackoffState();
+        // Reset markers so Phase 1 re-detects and re-queues after backoff
+        resetApkMarkerIfAllTerminal(name, queue);
       }
       writeApkQueue(name, queue);
     } else {
