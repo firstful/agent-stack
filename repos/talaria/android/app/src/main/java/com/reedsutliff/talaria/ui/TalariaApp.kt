@@ -146,6 +146,7 @@ fun TalariaApp(
     val settings by viewModel.settings.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val partialTranscript by viewModel.partialTranscript.collectAsState()
+    val liveTranscript by viewModel.liveTranscript.collectAsState()
     val hermesSessions by viewModel.hermesSessions.collectAsState()
     val latencyMs by viewModel.latencyMs.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
@@ -328,6 +329,20 @@ fun TalariaApp(
                     )
 
                     Spacer(Modifier.height(16.dp))
+
+                    // Live on-device transcript preview (during recording)
+                    if (pttState == PttButtonState.RECORDING && liveTranscript.isNotEmpty()) {
+                        Text(
+                            text = liveTranscript,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            fontSize = 14.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .animateContentSize(),
+                        )
+                    }
 
                     // Audio playback controls (during TTS)
                     val isPaused by viewModel.isPaused.collectAsState()

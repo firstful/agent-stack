@@ -75,6 +75,7 @@ class WebSocketConnection:
         self.current_run_id: Optional[str] = None
         self.current_session_id: Optional[str] = None
         self.current_profile: Optional[str] = None
+        self.current_client_message_id: Optional[str] = None
         self.cancel_event: asyncio.Event = asyncio.Event()
         
         # Metrics

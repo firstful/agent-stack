@@ -32,6 +32,7 @@ class MessageHandler:
         """Handle PTT start command."""
         client_msg_id = cmd.get("client_message_id")
         if client_msg_id:
+            self.connection.current_client_message_id = client_msg_id
             await self.connection.send_message({
                 "type": "ptt_start_echo",
                 "client_message_id": client_msg_id,
@@ -87,11 +88,14 @@ class MessageHandler:
             self.connection.ptt_state = PTTState.IDLE
             return
 
-        await self.connection.send_message({
+        stt_msg: dict = {
             "type": "stt_transcript",
             "text": transcript,
             "final": True,
-        })
+        }
+        if self.connection.current_client_message_id:
+            stt_msg["client_message_id"] = self.connection.current_client_message_id
+        await self.connection.send_message(stt_msg)
         await self.connection.send_message({"type": "processing", "step": "thinking"})
 
         # Send to Hermes

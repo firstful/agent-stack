@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
@@ -125,6 +126,12 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
 
     private val _playbackDuration = MutableStateFlow(0L)
     val playbackDuration: StateFlow<Long> = _playbackDuration.asStateFlow()
+
+    /** Live on-device transcription preview (not a message — visual only).
+     *  Updated by SpeechRecognizer partial results, cleared on stopRecording.
+     *  The server's stt_transcript creates the actual voice message. */
+    private val _liveTranscript = MutableStateFlow("")
+    val liveTranscript: StateFlow<String> = _liveTranscript.asStateFlow()
 
     // ── Update management ────────────────────────────────────
     private val _updateInfo = MutableStateFlow<UpdateInfo?>(null)
@@ -325,23 +332,24 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             t
         }
 
-        // Create placeholder voice message immediately — SpeechRecognizer will fill in text
-        val isOnline = connected
+        // Create placeholder voice message for on-device STT preview (italic/temporary)
+        // Updated by SpeechRecognizer partials, replaced by server stt_transcript.
         val msg = ChatMessage(
             id = messageId,
             threadId = thread.id,
-            text = if (isOnline) "" else "🎤 Queued audio…",
+            text = "",
             isUser = true,
             modality = MessageModality.VOICE,
-            status = if (isOnline) MessageStatus.SENDING else MessageStatus.QUEUED,
-            transcriptionState = if (isOnline) TranscriptionState.ON_DEVICE else TranscriptionState.NONE,
+            status = MessageStatus.SENDING,
+            transcriptionState = TranscriptionState.ON_DEVICE,
         )
         _messages.value = _messages.value + msg
         viewModelScope.launch {
-            // Ensure thread exists in Room before inserting message (foreign key)
             threadDao.insert(thread.toEntity())
             messageDao.insert(msg.toEntity())
         }
+
+        _liveTranscript.value = ""
 
         wsClient?.startRecording(messageId, connected)
     }
@@ -686,6 +694,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         private var scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         private var exoPlayer: androidx.media3.exoplayer.ExoPlayer? = null
         private var isPlaying = false
+        private var ttsEngine: TextToSpeech? = null
 
         // Async replay state
         private var lastSeq: Int = 0
@@ -733,6 +742,17 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
         fun connect() {
             log("I", "connect() — url=$wsUrl")
             _connectionState.value = ConnectionState.CONNECTING
+            
+            // Initialize Android TTS engine for fallback audio
+            if (ttsEngine == null) {
+                ttsEngine = TextToSpeech(this@TalariaViewModel.getApplication()) { status ->
+                    if (status == TextToSpeech.SUCCESS) {
+                        log("I", "Android TTS engine ready")
+                    } else {
+                        log("W", "Android TTS engine init failed: $status")
+                    }
+                }
+            }
 
             // Warm CF Access cookie jar — prevents "Expected HTTP 101 but was 200"
             preAuth()
@@ -811,6 +831,9 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             reconnectJob = null
             ws?.close(1000, "User disconnect")
             ws = null
+            // Shutdown Android TTS
+            try { ttsEngine?.stop(); ttsEngine?.shutdown() } catch (_: Exception) {}
+            ttsEngine = null
             scope.cancel()
         }
 
@@ -1013,6 +1036,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                             val matches = partials?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             val text = matches?.firstOrNull()?.trim() ?: return
                             if (text.isNotEmpty()) {
+                                _liveTranscript.value = text
                                 _messages.value = _messages.value.map {
                                     if (it.id == clientMessageId) it.copy(
                                         text = text,
@@ -1025,12 +1049,14 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         override fun onResults(results: Bundle?) {
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             val text = matches?.firstOrNull()?.trim() ?: ""
-                            _messages.value = _messages.value.map {
-                                if (it.id == clientMessageId && it.transcriptionState == TranscriptionState.ON_DEVICE) it.copy(
-                                    text = text.ifEmpty { it.text },
-                                    status = MessageStatus.REFINING,
-                                    transcriptionState = TranscriptionState.ON_DEVICE,
-                                ) else it
+                            if (text.isNotEmpty()) {
+                                _liveTranscript.value = text
+                                _messages.value = _messages.value.map {
+                                    if (it.id == clientMessageId && it.transcriptionState == TranscriptionState.ON_DEVICE) it.copy(
+                                        text = text.ifEmpty { it.text },
+                                        transcriptionState = TranscriptionState.ON_DEVICE,
+                                    ) else it
+                                }
                             }
                         }
 
@@ -1104,6 +1130,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             log("I", "stopRecording()")
             recordingJob?.cancel()
             recordingJob = null
+            _liveTranscript.value = ""  // clear on-device preview
 
             // Stop SpeechRecognizer (onResults callback fires asynchronously)
             try { speechRecognizer?.stopListening() } catch (_: Exception) {}
@@ -1160,13 +1187,13 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         val clientMsgId = json.optString("client_message_id", "")
                         log("I", "STT transcript (${t.length} chars) client_message_id=$clientMsgId")
                         _partialTranscript.value = ""
+                        _liveTranscript.value = ""  // clear on-device preview
 
                         if (clientMsgId.isNotEmpty()) {
-                            // Replace on-device transcription with authoritative whisper result
-                            // REFINING → SENT, ON_DEVICE → BACKEND_FINAL
+                            // Replace on-device placeholder with authoritative server transcript
                             _messages.value = _messages.value.map {
                                 if (it.id == clientMsgId) it.copy(
-                                    text = t.ifEmpty { it.text },  // keep on-device text if whisper is empty
+                                    text = t.ifEmpty { it.text },
                                     status = MessageStatus.SENT,
                                     transcriptionState = TranscriptionState.BACKEND_FINAL,
                                 ) else it
@@ -1178,7 +1205,7 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                                 }
                             }
                         } else {
-                            // Fallback: add as new message (legacy path)
+                            // Fallback: add as new message (legacy path — server didn't propagate client_message_id)
                             addMessage(ChatMessage(
                                 id = UUID.randomUUID().toString(),
                                 threadId = _currentThread.value?.id ?: "",
@@ -1192,37 +1219,14 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         _transcript.value = t
                     }
                     "ptt_start_echo" -> {
-                        // Server acknowledged ptt_start — update SENDING→SENT
+                        // Server acknowledged ptt_start
                         val clientMsgId = json.optString("client_message_id", "")
                         log("D", "ptt_start_echo: client_message_id=$clientMsgId")
-                        if (clientMsgId.isNotEmpty()) {
-                            _messages.value = _messages.value.map {
-                                if (it.id == clientMsgId && it.status == MessageStatus.SENDING)
-                                    it.copy(status = MessageStatus.SENT) else it
-                            }
-                        }
                     }
                     "tts_start" -> {
                         val t = json.optString("text", "")
                         log("I", "TTS start (${t.length} chars)")
                         _pttState.value = PttButtonState.PLAYING
-
-                        // Advance last user voice message to DELIVERED
-                        _messages.value = _messages.value.map {
-                            if (it.isUser && it.modality == MessageModality.VOICE &&
-                                (it.status == MessageStatus.SENT || it.status == MessageStatus.SENDING ||
-                                 it.status == MessageStatus.REFINING))
-                                it.copy(status = MessageStatus.DELIVERED) else it
-                        }
-                        viewModelScope.launch {
-                            val deliveredVoice = _messages.value.find {
-                                it.isUser && it.modality == MessageModality.VOICE &&
-                                    it.status == MessageStatus.DELIVERED
-                            }
-                            if (deliveredVoice != null) {
-                                messageDao.insert(deliveredVoice.toEntity())
-                            }
-                        }
 
                         addMessage(ChatMessage(
                             id = UUID.randomUUID().toString(),
@@ -1241,27 +1245,17 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
                         _pttState.value = PttButtonState.IDLE
                     }
                     "tts_fallback" -> {
-                        val t = json.optString("text", "") + " 🔇"
-                        log("I", "TTS fallback")
+                        val fullText = json.optString("text", "")
+                        log("I", "TTS fallback (${fullText.length} chars)")
                         _pttState.value = PttButtonState.IDLE
 
-                        // Mark last user SENT message as DELIVERED (Hermes processed it)
-                        // Covers both text (SENT) and voice (SENT/SENDING) messages
-                        _messages.value = _messages.value.map {
-                            if (it.isUser && it.status == MessageStatus.SENT) it.copy(status = MessageStatus.DELIVERED) else it
-                        }
-                        // Persist status changes
-                        val userMsg = _messages.value.find { it.isUser && it.status == MessageStatus.DELIVERED }
-                        if (userMsg != null) {
-                            viewModelScope.launch {
-                                messageDao.insert(userMsg.toEntity())
-                            }
-                        }
+                        // Speak via Android TTS
+                        ttsEngine?.speak(fullText, TextToSpeech.QUEUE_FLUSH, null, "talaria_tts_fallback_${System.currentTimeMillis()}")
 
                         addMessage(ChatMessage(
                             id = UUID.randomUUID().toString(),
                             threadId = _currentThread.value?.id ?: "",
-                            text = t,
+                            text = fullText,
                             isUser = false,
                             modality = MessageModality.VOICE,
                             status = MessageStatus.DELIVERED,
@@ -1415,16 +1409,21 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             _isPaused.value = false
 
             try {
+                // If no audio was buffered (server TTS unavailable), skip playback
+                if (replayAudioBuffer.isEmpty()) {
+                    log("I", "startPlayback: no audio data — skipping (server TTS unavailable)")
+                    isPlaying = false
+                    return
+                }
+
                 val tempFile = java.io.File(
                     appContext.cacheDir, "talaria_audio_${System.currentTimeMillis()}.ogg"
                 )
-                if (replayAudioBuffer.isNotEmpty()) {
-                    val fos = java.io.FileOutputStream(tempFile)
-                    while (replayAudioBuffer.isNotEmpty()) {
-                        fos.write(replayAudioBuffer.removeFirst())
-                    }
-                    fos.close()
+                val fos = java.io.FileOutputStream(tempFile)
+                while (replayAudioBuffer.isNotEmpty()) {
+                    fos.write(replayAudioBuffer.removeFirst())
                 }
+                fos.close()
 
                 exoPlayer = androidx.media3.exoplayer.ExoPlayer.Builder(appContext).build().apply {
                     val mi = androidx.media3.common.MediaItem.fromUri(tempFile.toURI().toString())
@@ -1489,11 +1488,14 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             _isPaused.value = false
             _playbackPosition.value = 0
             _playbackDuration.value = 0
-            try {
-                exoPlayer?.stop()
-                exoPlayer?.release()
-            } catch (_: Exception) {}
-            exoPlayer = null
+            // Post to main thread — ExoPlayer must be released on the same thread it was created on
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                try {
+                    exoPlayer?.stop()
+                    exoPlayer?.release()
+                } catch (_: Exception) {}
+                exoPlayer = null
+            }
         }
 
         private fun drainReplayBuffer() {
