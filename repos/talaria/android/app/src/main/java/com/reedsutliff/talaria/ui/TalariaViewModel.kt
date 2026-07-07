@@ -715,27 +715,30 @@ class TalariaViewModel(application: Application) : AndroidViewModel(application)
             LogBuffer.log(level, "TalariaWS", msg)
         }
 
-        /** Warm CF Access cookie jar before WebSocket handshake. */
+        /** Warm CF Access cookie jar before WebSocket handshake.
+         *  Runs on Dispatchers.IO to avoid blocking the main thread. */
         private fun preAuth() {
             if (cfClientId.isBlank()) return
 
-            val preAuthUrl = wsUrl
-                .replace("wss://", "https://")
-                .replace("ws://", "http://")
-                .replace("/v1/ptt", "/")
+            scope.launch(Dispatchers.IO) {
+                val preAuthUrl = wsUrl
+                    .replace("wss://", "https://")
+                    .replace("ws://", "http://")
+                    .replace("/v1/ptt", "/")
 
-            val request = Request.Builder()
-                .url(preAuthUrl)
-                .header("CF-Access-Client-Id", cfClientId)
-                .header("CF-Access-Client-Secret", cfClientSecret)
-                .build()
+                val request = Request.Builder()
+                    .url(preAuthUrl)
+                    .header("CF-Access-Client-Id", cfClientId)
+                    .header("CF-Access-Client-Secret", cfClientSecret)
+                    .build()
 
-            try {
-                val response = client.newCall(request).execute()
-                log("D", "preAuth → ${response.code}")
-                response.close()
-            } catch (e: IOException) {
-                log("D", "preAuth failed: ${e.message}")
+                try {
+                    val response = client.newCall(request).execute()
+                    log("D", "preAuth → ${response.code}")
+                    response.close()
+                } catch (e: IOException) {
+                    log("D", "preAuth failed: ${e.message}")
+                }
             }
         }
 
