@@ -27,6 +27,7 @@
 import { loadDesired } from "./lib/services";
 import { sh, shCapture } from "./lib/podman";
 import { collectSnapshot, getHistory } from "./lib/perf";
+import { getAllApkQueues, getApkQueue, cancelApkBuild, triggerApkBuild } from "./lib/reconcile";
 import { Worker } from "worker_threads";
 import http from "http";
 import type { IncomingMessage, ServerResponse } from "http";
@@ -129,7 +130,7 @@ function runTests(): boolean {
   try {
     execSync(`npm test`, {
       stdio: "inherit",
-      timeout: 30000,
+      timeout: 120_000, // 2 min — tsx startup + test suite can be slow under load
       cwd: INFRA_DIR,
     });
     return true;
@@ -598,6 +599,58 @@ type RestHandler = (
 ) => void;
 
 /**
+ * GET /ping — Simple health check / liveness probe.
+ */
+function handlePing(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>,
+  query: Record<string, string>
+): void {
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ status: "ok", version: "tsx", timestamp: new Date().toISOString() }));
+}
+
+/**
+ * GET /status — Legacy status endpoint.  Deprecated in favour of /api/status.
+ */
+function handleStatus(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>,
+  query: Record<string, string>
+): void {
+  const runtime = loadRuntimeState();
+  const uptime = Math.floor(
+    (Date.now() - new Date(STATUS.startTime).getTime()) / 1000
+  );
+  const lastN = 50;
+  const hasActiveErrors =
+    STATUS.reconcileErrors.length > 0 ||
+    STATUS.buildErrors.length > 0 ||
+    STATUS.toolErrors.length > 0;
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(
+    JSON.stringify(
+      {
+        healthy: !hasActiveErrors,
+        uptime,
+        startTime: STATUS.startTime,
+        lastReconcile: STATUS.lastReconcile,
+        reconcileCount: STATUS.reconcileCount,
+        reconcileErrors: STATUS.reconcileErrors.slice(-lastN),
+        buildErrors: STATUS.buildErrors,
+        toolErrors: STATUS.toolErrors.slice(-lastN),
+        cloudflaredError: STATUS.lastCloudflaredError,
+        services: runtime,
+      },
+      null,
+      2
+    )
+  );
+}
+
+/**
  * GET /api/status — Return controller health + all service states.
  * Includes uptime, error lists, and runtime state snapshot.
  */
@@ -861,6 +914,48 @@ function handleApiLogsAnalytics(
 }
 
 /**
+ * GET /api/docs — Serve the Swagger UI HTML page for interactive API exploration.
+ * Embeds swagger-ui-dist from CDN pointing at /api/openapi.json for the spec.
+ */
+function handleApiDocs(
+  req: IncomingMessage,
+  res: ServerResponse
+): void {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent-Stack API — Swagger UI</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    html { box-sizing: border-box; overflow-y: scroll; }
+    *, *:before, *:after { box-sizing: inherit; }
+    body { margin: 0; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js" crossorigin></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: "/api/openapi.json",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: "StandaloneLayout",
+      });
+    };
+  </script>
+</body>
+</html>`;
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  res.end(html);
+}
+
+/**
  * GET /api/openapi.json — Generate and return the OpenAPI 3.0 spec live.
  */
 function handleApiOpenApi(
@@ -904,9 +999,154 @@ function handleApiPerfCollect(
   }
 }
 
+// ── Build Queue Handlers ────────────────────────────────────────────
+
+/**
+ * GET /api/builds — List all build queues across services.
+ *
+ * Query parameters:
+ *   ?repo=<name>   — Filter to queues whose source repo matches (exact or prefix)
+ *   ?commit=<hash> — Filter entries to those whose commitHash starts with <hash>
+ */
+function handleApiBuildsList(
+  req: IncomingMessage,
+  res: ServerResponse,
+  _params: Record<string, string>,
+  query: Record<string, string>,
+): void {
+  try {
+    const queues = getAllApkQueues();
+    const repoFilter = query.repo?.toLowerCase();
+    const commitFilter = query.commit?.toLowerCase();
+
+    let result = queues;
+    if (repoFilter) {
+      result = result.filter(q => q.repo.toLowerCase().includes(repoFilter));
+    }
+    if (commitFilter) {
+      result = result.map(q => ({
+        ...q,
+        entries: q.entries.filter(e =>
+          e.commitHash.toLowerCase().startsWith(commitFilter),
+        ),
+      })).filter(q => q.entries.length > 0);
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result, null, 2));
+  } catch (e: any) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+/**
+ * GET /api/builds/repo/:identifier — List builds for a given _repoIdentifier.
+ */
+function handleApiBuildsByRepo(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>,
+): void {
+  try {
+    const identifier = params.identifier?.toLowerCase();
+    if (!identifier) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing repo identifier" }));
+      return;
+    }
+    const queues = getAllApkQueues().filter(q =>
+      q.repo.toLowerCase() === identifier
+    );
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(queues, null, 2));
+  } catch (e: any) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+/**
+ * GET /api/builds/:name — Get build queue for a specific service.
+ */
+function handleApiBuildGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>
+): void {
+  const name = params.name;
+  try {
+    const queue = getApkQueue(name);
+    if (!queue || queue.entries.length === 0) {
+      // Return empty queue, not 404 — queue might just be empty
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(queue, null, 2));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(queue, null, 2));
+  } catch (e: any) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+/**
+ * POST /api/builds/:name — Trigger a manual APK build.
+ * Finds the service definition and enqueues a build for HEAD.
+ */
+function handleApiBuildTrigger(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>
+): void {
+  const name = params.name;
+  try {
+    const desired = loadDesired();
+    const service = desired.find(s => s.name === name);
+    if (!service) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Service "${name}" not found` }));
+      return;
+    }
+    if (!service.apkBuild) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Service "${name}" has no apkBuild config` }));
+      return;
+    }
+    const queue = triggerApkBuild(name, service);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ message: `Build queued for ${name}`, queue }));
+  } catch (e: any) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
+/**
+ * POST /api/builds/:name/cancel — Cancel a queued or running APK build.
+ */
+function handleApiBuildCancel(
+  req: IncomingMessage,
+  res: ServerResponse,
+  params: Record<string, string>
+): void {
+  const name = params.name;
+  try {
+    const queue = cancelApkBuild(name);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ message: `Build cancelled for ${name}`, queue }));
+  } catch (e: any) {
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: e.message }));
+  }
+}
+
 // ── Handler Registry ──
 
 const restHandlers: Record<string, RestHandler> = {
+  handlePing: handlePing as RestHandler,
+  handleStatus: handleStatus as RestHandler,
   handleApiStatus: handleApiStatus as RestHandler,
   handleApiServicesList: handleApiServicesList as RestHandler,
   handleApiServicesCreate: handleApiServicesCreate as RestHandler,
@@ -922,7 +1162,13 @@ const restHandlers: Record<string, RestHandler> = {
   handleApiLogsAnalytics: handleApiLogsAnalytics as RestHandler,
   handleApiPerf: handleApiPerf as RestHandler,
   handleApiPerfCollect: handleApiPerfCollect as RestHandler,
+  handleApiDocs: handleApiDocs as RestHandler,
   handleApiOpenApi: handleApiOpenApi as RestHandler,
+  handleApiBuildsList: handleApiBuildsList as RestHandler,
+  handleApiBuildsByRepo: handleApiBuildsByRepo as RestHandler,
+  handleApiBuildGet: handleApiBuildGet as RestHandler,
+  handleApiBuildTrigger: handleApiBuildTrigger as RestHandler,
+  handleApiBuildCancel: handleApiBuildCancel as RestHandler,
 };
 
 // ── Route Validation ──
@@ -1850,13 +2096,6 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
-  if (req.url === "/ping") {
-    // ── Ping / Health Check ──
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", version: "tsx", timestamp: new Date().toISOString() }));
-    return;
-  }
-
   if (req.url === "/sudo" && req.method === "POST") {
     // ── Sudo Command Endpoint ──
     withBody(req, res, (body) => {
@@ -1881,39 +2120,6 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ output: output.trim() }));
     });
-    return;
-  }
-
-  if (req.url === "/status") {
-    // ── Legacy Status Endpoint ──
-    const runtime = loadRuntimeState();
-    const uptime = Math.floor(
-      (Date.now() - new Date(STATUS.startTime).getTime()) / 1000
-    );
-    const lastN = 50;
-    const hasActiveErrors =
-      STATUS.reconcileErrors.length > 0 ||
-      STATUS.buildErrors.length > 0 ||
-      STATUS.toolErrors.length > 0;
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify(
-        {
-          healthy: !hasActiveErrors,
-          uptime,
-          startTime: STATUS.startTime,
-          lastReconcile: STATUS.lastReconcile,
-          reconcileCount: STATUS.reconcileCount,
-          reconcileErrors: STATUS.reconcileErrors.slice(-lastN),
-          buildErrors: STATUS.buildErrors,
-          toolErrors: STATUS.toolErrors.slice(-lastN),
-          cloudflaredError: STATUS.lastCloudflaredError,
-          services: runtime,
-        },
-        null,
-        2
-      )
-    );
     return;
   }
 

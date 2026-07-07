@@ -278,6 +278,12 @@ export interface Service {
    * service with version information.
    */
   apkBuild?: ApkBuildConfig;
+  /**
+   * Stable identifier for the source repository, declared in agent-stack.json.
+   * Used to group builds across services that share a repo. Agents can search
+   * via GET /api/builds/repo/:identifier. Falls back to repo dir basename.
+   */
+  _repoIdentifier?: string;
   // Internal fields (set by services.ts loader)
   _file: string;
   _fromRepo: boolean;
@@ -335,6 +341,68 @@ export interface ApkBuildConfig {
    * cfAccessClientId, cfAccessClientSecret, versionCode, versionName, buildDate.
    */
   extraProps?: Record<string, string>;
+
+  /**
+   * Optional test gate — runs after a successful build, before deployment.
+   * If tests fail and `required` is true (default), the build is marked failed
+   * and the APK is not deployed.
+   */
+  test?: {
+    /** Shell command to run (e.g., "./gradlew test", "pytest"). */
+    command: string;
+    /** Working directory relative to clone root. Default: apkBuild.path. */
+    workdir?: string;
+    /** Timeout in milliseconds. Default: 120000 (2 min). */
+    timeout?: number;
+    /** If false, test failure logs a warning but does not block deployment. Default: true. */
+    required?: boolean;
+  };
+}
+
+// ── APK Build Queue ────────────────────────────────────────────────────
+
+/** Status of a single queued APK build entry. */
+export type ApkBuildStatus = "queued" | "building" | "completed" | "cancelled" | "failed";
+
+/** A single entry in the APK build queue for a service. */
+export interface ApkQueueEntry {
+  /** Monotonic queue entry ID (increments per enqueue). */
+  id: number;
+  /** Git commit hash this build targets. */
+  commitHash: string;
+  /** Human-readable version string (from git). */
+  versionName: string;
+  /** Numeric version code (git rev-list count). */
+  versionCode: number;
+  /** Current status of this build entry. */
+  status: ApkBuildStatus;
+  /** ISO timestamp when this entry was enqueued. */
+  queuedAt: string;
+  /** ISO timestamp when building started, or null if not yet started. */
+  startedAt: string | null;
+  /** ISO timestamp when build completed/failed/cancelled, or null. */
+  completedAt: string | null;
+  /** Error message if status is "failed", or null. */
+  error: string | null;
+  /** Test result if a test gate was configured and ran. */
+  testResult?: {
+    /** Whether all tests passed. */
+    passed: boolean;
+    /** Combined stdout+stderr (truncated to last 2000 chars). */
+    output?: string;
+    /** Wall-clock duration in milliseconds. */
+    duration?: number;
+  };
+}
+
+/** Full APK build queue state for a single service. */
+export interface ApkBuildQueue {
+  service: string;
+  /** Source repo name (basename of service.repo), for cross-repo search. */
+  repo: string;
+  entries: ApkQueueEntry[];
+  /** Monotonic counter for generating new entry IDs. */
+  nextId: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

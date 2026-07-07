@@ -56,6 +56,52 @@ export interface RouteMatch {
 }
 
 const routes: RouteDef[] = [
+  // ── Ping / Health ────────────────────────────────────────
+  {
+    method: "GET",
+    pattern: "/ping",
+    params: [],
+    handlerName: "handlePing",
+    openapi: {
+      summary: "Simple health check ping",
+      tags: ["Status"],
+      responses: {
+        "200": {
+          description: "OK response with version info",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  status: { type: "string" },
+                  version: { type: "string" },
+                  timestamp: { type: "string", format: "date-time" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    method: "GET",
+    pattern: "/status",
+    params: [],
+    handlerName: "handleStatus",
+    openapi: {
+      summary: "Legacy status endpoint (deprecated — use /api/status)",
+      tags: ["Status"],
+      deprecated: true,
+      responses: {
+        "200": {
+          description: "Full controller health status",
+          content: { "application/json": { schema: { type: "object" } } },
+        },
+      },
+    },
+  },
+
   // ── Status ──────────────────────────────────────────────
   {
     method: "GET",
@@ -443,6 +489,24 @@ const routes: RouteDef[] = [
     },
   },
 
+  // ── OpenAPI docs / Swagger UI ──────────────────────────
+  {
+    method: "GET",
+    pattern: "/api/docs",
+    params: [],
+    handlerName: "handleApiDocs",
+    openapi: {
+      summary: "Swagger UI for exploring the API",
+      tags: ["Meta"],
+      responses: {
+        "200": {
+          description: "Swagger UI HTML page",
+          content: { "text/html": { schema: { type: "string" } } },
+        },
+      },
+    },
+  },
+
   // ── OpenAPI spec ────────────────────────────────────────
   {
     method: "GET",
@@ -455,6 +519,112 @@ const routes: RouteDef[] = [
       responses: {
         "200": { description: "OpenAPI 3.0 JSON spec" },
         "404": { description: "Spec file not found" },
+      },
+    },
+  },
+
+  // ── Build Queue ─────────────────────────────────────────
+  {
+    method: "GET",
+    pattern: "/api/builds",
+    params: [],
+    handlerName: "handleApiBuildsList",
+    openapi: {
+      summary: "List all build queues across services, optionally filtered by repo or commit",
+      tags: ["Builds"],
+      parameters: [
+        { name: "repo", in: "query", required: false, schema: { type: "string" }, description: "Filter by source repo name" },
+        { name: "commit", in: "query", required: false, schema: { type: "string" }, description: "Filter by commit hash (prefix match)" },
+      ],
+      responses: {
+        "200": {
+          description: "Array of build queue states",
+          content: {
+            "application/json": {
+              schema: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    service: { type: "string" },
+                    repo: { type: "string" },
+                    entries: { type: "array" },
+                    nextId: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    method: "GET",
+    pattern: "/api/builds/repo/:identifier",
+    params: ["identifier"],
+    handlerName: "handleApiBuildsByRepo",
+    openapi: {
+      summary: "List all build queues for a given _repoIdentifier",
+      tags: ["Builds"],
+      parameters: [
+        { name: "identifier", in: "path", required: true, schema: { type: "string" }, description: "The _repoIdentifier from agent-stack.json" },
+      ],
+      responses: {
+        "200": { description: "Array of build queue states for matching services" },
+        "404": { description: "No builds found for this identifier" },
+      },
+    },
+  },
+  {
+    method: "GET",
+    pattern: "/api/builds/:name",
+    params: ["name"],
+    handlerName: "handleApiBuildGet",
+    openapi: {
+      summary: "Get build queue for a specific service",
+      tags: ["Builds"],
+      parameters: [
+        { name: "name", in: "path", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        "200": { description: "Service build queue state" },
+        "404": { description: "No build queue found" },
+      },
+    },
+  },
+  {
+    method: "POST",
+    pattern: "/api/builds/:name",
+    params: ["name"],
+    handlerName: "handleApiBuildTrigger",
+    openapi: {
+      summary: "Trigger a manual APK build for a service",
+      tags: ["Builds"],
+      parameters: [
+        { name: "name", in: "path", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        "200": { description: "Build queued" },
+        "400": { description: "Service has no APK build config" },
+        "500": { description: "Failed to trigger build" },
+      },
+    },
+  },
+  {
+    method: "POST",
+    pattern: "/api/builds/:name/cancel",
+    params: ["name"],
+    handlerName: "handleApiBuildCancel",
+    openapi: {
+      summary: "Cancel a queued or running APK build",
+      tags: ["Builds"],
+      parameters: [
+        { name: "name", in: "path", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        "200": { description: "Build cancelled" },
+        "404": { description: "No active build found" },
       },
     },
   },

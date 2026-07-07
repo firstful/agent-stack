@@ -355,6 +355,7 @@ function reconcile(): void {
     // ── Step 3b: Ensure APK builds for services that have apkBuild config ──
     for (const service of desired) {
       if (service.apkBuild) {
+        console.log(`[apk] ${service.name}: apkBuild found — ${service.apkBuild.packageName}`);
         try {
           ensureApkBuild(service);
         } catch (e: any) {

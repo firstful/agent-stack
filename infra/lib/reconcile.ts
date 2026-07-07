@@ -1,3 +1,21 @@
+/**
+ * reconcile.ts — Container reconciliation engine for the agent-stack controller.
+ *
+ * Core orchestration module that ensures container services match their desired
+ * state. On each reconciliation tick, for every service, it:
+ *   - Checks for source/config changes via content hashing or v4 watch triggers
+ *   - Manages build queues, backoff, and canary deployments
+ *   - Builds container images, allocates ports, runs containers
+ *   - Performs blue-green slot swaps for zero-downtime deploys
+ *   - Handles recreate-strategy services (stop-and-recreate)
+ *   - Orchestrates APK builds for Android services
+ *
+ * State is tracked via slot markers (/tmp), hash markers (/tmp), queue markers,
+ * and runtime/services.json.  All podman operations are delegated to podman.ts.
+ */
+
+// ── Imports ──
+
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
@@ -14,7 +32,7 @@ import {
 } from "./podman";
 import { ensureSidecars, removeSidecars } from "./sidecar";
 import { ensureServiceClone, repoContentHashForPath, resolveApkBuildRoot, matchesWatch } from "./services";
-import type { Service } from "./types";
+import type { Service, ApkBuildQueue, ApkQueueEntry, ApkBuildStatus } from "./types";
 import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe, normalizeWatch } from "./types";
 import {
   AUTO_PORT_START,
@@ -22,6 +40,9 @@ import {
   hashMarker,
   commitHashMarker,
   apkHashMarker,
+  apkCommitHashMarker,
+  apkQueueFile,
+  apkBuildPidFile,
   slotMarker,
   slotContainerName,
   oppositeSlot,
@@ -36,13 +57,56 @@ import {
 
 // ── State ──
 
-const buildBackoffs: Record<string, { retryCycle: number; failures: number }> =
+/** Build backoff state keyed by service name (or `apk-<name>` for APK builds).
+ *  Uses wall-clock timestamps so backoffs survive controller restarts. */
+const buildBackoffs: Record<string, { retryAfter: number; failures: number }> =
   {};
 const buildErrors: Record<
   string,
   { error: string; time: string; failures: number; retryIn: number }
 > = {};
 let cycle = 0;
+let _backoffLoaded = false;
+
+/** Path to the persisted backoff/error state file. */
+const BACKOFF_STATE_FILE = "/tmp/stack._build-backoffs.json";
+
+/** Persist current backoffs and errors to disk (atomic tmp+rename). */
+function saveBackoffState(): void {
+  const data = { backoffs: buildBackoffs, errors: buildErrors };
+  const tmp = BACKOFF_STATE_FILE + ".tmp";
+  try { fs.writeFileSync(tmp, JSON.stringify(data)); fs.renameSync(tmp, BACKOFF_STATE_FILE); } catch {}
+}
+
+/** Load persisted backoff/error state from disk. Called once on first tick. */
+function loadBackoffState(): void {
+  if (_backoffLoaded) return;
+  _backoffLoaded = true;
+  try {
+    const raw = fs.readFileSync(BACKOFF_STATE_FILE, "utf-8");
+    const data = JSON.parse(raw);
+    if (data.backoffs && typeof data.backoffs === "object") {
+      for (const [k, v] of Object.entries(data.backoffs)) {
+        if (v && typeof (v as any).retryAfter === "number" && typeof (v as any).failures === "number") {
+          buildBackoffs[k] = { retryAfter: (v as any).retryAfter, failures: (v as any).failures };
+        }
+      }
+    }
+    if (data.errors && typeof data.errors === "object") {
+      for (const [k, v] of Object.entries(data.errors)) {
+        if (v && typeof (v as any).error === "string") {
+          buildErrors[k] = v as any;
+        }
+      }
+    }
+    const now = Date.now();
+    let pruned = false;
+    for (const [k, v] of Object.entries(buildBackoffs)) {
+      if (now >= v.retryAfter) { delete buildBackoffs[k]; delete buildErrors[k]; pruned = true; }
+    }
+    if (pruned) saveBackoffState();
+  } catch {}
+}
 
 // ── v4 Watch-Based Change Detection ──
 
@@ -118,11 +182,13 @@ function serviceWatchChanged(service: Service): boolean {
  */
 export function tick(): void {
   cycle++;
+  loadBackoffState();
   refreshChangedFiles();
 }
 
 /**
  * Return a snapshot of current build errors for the controller's status endpoint.
+ * retryIn is computed from wall-clock backoff time when available.
  */
 export function getBuildErrors(): {
   service: string;
@@ -131,13 +197,20 @@ export function getBuildErrors(): {
   failures: number;
   retryIn: number;
 }[] {
-  return Object.entries(buildErrors).map(([name, err]) => ({
-    service: name,
-    error: err.error,
-    time: err.time,
-    failures: err.failures,
-    retryIn: err.retryIn,
-  }));
+  return Object.entries(buildErrors).map(([name, err]) => {
+    // Compute live retryIn from backoff if one exists
+    const backoff = buildBackoffs[name];
+    const retryIn = backoff
+      ? Math.max(0, Math.ceil((backoff.retryAfter - Date.now()) / 1000))
+      : err.retryIn;
+    return {
+      service: name,
+      error: err.error,
+      time: err.time,
+      failures: err.failures,
+      retryIn,
+    };
+  });
 }
 
 /** Remove the build error tracking entry for a service (on successful build). */
@@ -433,11 +506,10 @@ export function ensureContainer(
   let built = false;
 
   if (needsBuild) {
-    if (backoff && cycle < backoff.retryCycle) {
+    if (backoff && Date.now() < backoff.retryAfter) {
+      const remaining = Math.ceil((backoff.retryAfter - Date.now()) / 1000);
       console.log(
-        `[backoff] ${name} — skip build (${
-          backoff.retryCycle - cycle
-        } cycles remaining)`
+        `[backoff] ${name} — skip build (${remaining}s remaining)`
       );
     } else {
       try {
@@ -446,6 +518,7 @@ export function ensureContainer(
         buildImage(service);
         delete buildBackoffs[name];
         clearBuildError(name);
+        saveBackoffState();
         built = true;
         // Decrement the queue counter on successful build
         if (isQueueEnabled(service.strategy)) {
@@ -458,15 +531,16 @@ export function ensureContainer(
       } catch (e: any) {
         const failures = (backoff?.failures || 0) + 1;
         const wait = 5 * Math.pow(2, failures - 1);
-        buildBackoffs[name] = { retryCycle: cycle + wait, failures };
+        buildBackoffs[name] = { retryAfter: Date.now() + wait * 5000, failures };
         buildErrors[name] = {
           error: e.message,
           time: new Date().toISOString(),
           failures,
           retryIn: wait * 5,
         };
+        saveBackoffState();
         console.error(
-          `[backoff] ${name} — build #${failures} failed, retry in ${wait} cycles (${wait * 5}s)`
+          `[backoff] ${name} — build #${failures} failed, retry in ${wait * 5}s`
         );
         return;
       }
@@ -750,114 +824,523 @@ export function removeContainer(name: string, sidecarNames?: string[]): void {
   if (fs.existsSync(canaryFile)) fs.unlinkSync(canaryFile);
   const apkMarker = apkHashMarker(name);
   if (fs.existsSync(apkMarker)) fs.unlinkSync(apkMarker);
+  const apkChash = apkCommitHashMarker(name);
+  if (fs.existsSync(apkChash)) fs.unlinkSync(apkChash);
+  const apkQfile = apkQueueFile(name);
+  if (fs.existsSync(apkQfile)) fs.unlinkSync(apkQfile);
+  const apkPid = apkBuildPidFile(name);
+  if (fs.existsSync(apkPid)) fs.unlinkSync(apkPid);
+  const apkExit = `/tmp/stack.${name}.apk-build-exit`;
+  if (fs.existsSync(apkExit)) fs.unlinkSync(apkExit);
+  const apkLog = `/tmp/stack.${name}.apk-build.log`;
+  if (fs.existsSync(apkLog)) fs.unlinkSync(apkLog);
   delete buildBackoffs[name];
   delete buildErrors[name];
 }
 
-// ── APK Build Integration ──
+// ── APK Build Queue ────────────────────────────────────────────────────
+
+/** In-memory set of PIDs for currently running APK builds (for cancellation). */
+const runningApkBuilds = new Map<string, number>();
+
+/**
+ * Read the APK build queue from disk for a service.
+ * Returns an empty queue if no file exists or it's corrupt.
+ */
+function readApkQueue(name: string): ApkBuildQueue {
+  const qFile = apkQueueFile(name);
+  try {
+    const raw = fs.readFileSync(qFile, "utf-8");
+    const parsed = JSON.parse(raw);
+    return {
+      service: parsed.service || name,
+      repo: parsed.repo || name,
+      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+      nextId: typeof parsed.nextId === "number" ? parsed.nextId : 1,
+    };
+  } catch {
+    return { service: name, repo: name, entries: [], nextId: 1 };
+  }
+}
+
+/**
+ * Write the APK build queue to disk.  Atomically via temp + rename.
+ */
+function writeApkQueue(name: string, queue: ApkBuildQueue): void {
+  const qFile = apkQueueFile(name);
+  const tmpFile = qFile + ".tmp";
+  fs.writeFileSync(tmpFile, JSON.stringify(queue, null, 2));
+  fs.renameSync(tmpFile, qFile);
+}
+
+/**
+ * Check whether a background APK build process is currently running.
+ * Uses the PID file + kill -0 to verify the process is alive.
+ */
+function isApkBuildRunning(name: string): boolean {
+  const pidFile = apkBuildPidFile(name);
+  try {
+    const pid = parseInt(fs.readFileSync(pidFile, "utf-8").trim(), 10);
+    if (!pid || pid <= 0) return false;
+    // kill -0 checks if process exists without sending a signal
+    execSync(`kill -0 ${pid} 2>/dev/null`, { timeout: 1000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Kill a running APK build for a service.  Sends TERM, waits briefly,
+ * then sends KILL.  Cleans up the PID file.
+ */
+function killApkBuild(name: string): void {
+  const pidFile = apkBuildPidFile(name);
+  try {
+    const pid = parseInt(fs.readFileSync(pidFile, "utf-8").trim(), 10);
+    if (pid && pid > 0) {
+      console.log(`[apk] ${name}: cancelling build (PID ${pid})`);
+      try { execSync(`kill -TERM ${pid} 2>/dev/null`, { timeout: 3000 }); } catch {}
+      // Give it a moment to clean up
+      try { execSync(`sleep 1`, { timeout: 2000 }); } catch {}
+      try { execSync(`kill -KILL ${pid} 2>/dev/null`, { timeout: 3000 }); } catch {}
+    }
+  } catch {}
+  try { fs.unlinkSync(pidFile); } catch {}
+  runningApkBuilds.delete(name);
+}
+
+/**
+ * Check if a completed background build's exit code file exists and
+ * read the result.  Returns null if the build hasn't finished yet.
+ */
+function checkApkBuildResult(name: string): { exitCode: number } | null {
+  const exitFile = `/tmp/stack.${name}.apk-build-exit`;
+  try {
+    const code = parseInt(fs.readFileSync(exitFile, "utf-8").trim(), 10);
+    // Clean up
+    try { fs.unlinkSync(exitFile); } catch {}
+    try { fs.unlinkSync(apkBuildPidFile(name)); } catch {}
+    return { exitCode: code };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * If all entries in the queue are in terminal states (completed, failed,
+ * cancelled), reset the APK commit-hash marker so Phase 1 re-detects
+ * the change and enqueues a fresh build on the next cycle.  This handles
+ * the case where builds were cancelled but the marker still points at
+ * the current commit, blocking re-enqueuing.
+ */
+function resetApkMarkerIfAllTerminal(name: string, queue: ApkBuildQueue): void {
+  const terminal: ApkBuildStatus[] = ["completed", "failed", "cancelled"];
+  const allTerminal = queue.entries.every(e => terminal.includes(e.status));
+  if (allTerminal && queue.entries.length > 0) {
+    const marker = apkCommitHashMarker(name);
+    try { fs.unlinkSync(marker); } catch {}
+    const hashMarker = apkHashMarker(name);
+    try { fs.unlinkSync(hashMarker); } catch {}
+  }
+}
+
+/**
+ * Run the optional test gate for an APK build.  Called after a successful
+ * gradle build, before deploying the APK.  Returns a testResult object
+ * and whether the build should proceed (true if tests passed or not required).
+ */
+function runApkTests(
+  service: Service,
+  entry: ApkQueueEntry,
+  clonePath: string,
+): { proceed: boolean; testResult?: ApkQueueEntry["testResult"] } {
+  const cfg = service.apkBuild?.test;
+  if (!cfg) return { proceed: true };
+
+  const required = cfg.required !== false; // default true
+  const timeout = cfg.timeout ?? 120_000;
+  const workdir = cfg.workdir
+    ? path.resolve(clonePath, cfg.workdir)
+    : path.resolve(clonePath, service.apkBuild?.path ?? "");
+
+  console.log(`[apk] ${service.name}: running tests — ${cfg.command}`);
+
+  const start = Date.now();
+  try {
+    const output = execSync(cfg.command, {
+      cwd: workdir,
+      timeout,
+      encoding: "utf-8",
+      stdio: "pipe",
+      maxBuffer: 1024 * 1024,
+    });
+    const duration = Date.now() - start;
+    const trimmed = output.slice(-2000);
+    console.log(`[apk] ${service.name}: tests passed (${duration}ms)`);
+    return {
+      proceed: true,
+      testResult: { passed: true, output: trimmed || undefined, duration },
+    };
+  } catch (e: any) {
+    const duration = Date.now() - start;
+    const output = (e.stdout || e.stderr || e.message || "").slice(-2000);
+    console.error(`[apk] ${service.name}: tests ${required ? "FAILED" : "failed (advisory)"} (${duration}ms)`);
+    if (output) console.error(output.slice(-500));
+    return {
+      proceed: !required,
+      testResult: { passed: false, output: output || undefined, duration },
+    };
+  }
+}
+
+// ── APK Build Integration ──────────────────────────────────────────────
 
 /**
  * Ensure a service's APK is built and deployed when the source changes.
  *
- * Uses the same clone infrastructure as container builds:
- *   1. Snapshots the repo at the current commit via ensureServiceClone()
- *   2. Runs setup-cf-creds.sh to inject fresh CF Access credentials
- *   3. Locates and runs build-apk.sh from the clone directory
- *   4. Updates the APK hash marker on success
+ * TWO-PHASE DESIGN (scan → build):
  *
- * The build-apk.sh script handles everything: Gradle build, APK deployment
- * to /srv/data/files/apk/<app>/, and OTA version manifest writing.  This function
- * is a thin trigger that ensures preconditions are met.
+ *   Phase 1 — SCAN: Detect source changes via the APK-specific commit hash
+ *   marker (separate from the container commit marker).  When a change is
+ *   detected, cancel any in-flight build, cancel any pending queued items,
+ *   and enqueue a new build targeting the latest commit.
  *
- * Change detection uses a two-step guard:
- *   - Fast: git commit hash (O(1) marker compare)
- *   - Precise: .stackignore-filtered content hash
+ *   Phase 2 — BUILD: Process the queue.  If a build is currently running
+ *   in the background, check whether it has completed and update the queue
+ *   entry.  If no build is running and the queue has a "queued" item,
+ *   start a background gradle build (non-blocking) so the reconcile loop
+ *   continues processing other services.
+ *
+ * AUTO-CANCEL: When a new change arrives (Phase 1) while a build is
+ * running, the running gradle process is killed and its queue entry
+ * marked "cancelled".  The new commit is then queued and will be built
+ * on the next cycle.
+ *
+ * BACKGROUND BUILDS: Gradle runs as a detached background process (via
+ * nohup).  The PID is recorded for cancellation.  Exit status is written
+ * to a marker file that Phase 2 checks on subsequent cycles.
  */
 export function ensureApkBuild(service: Service): void {
   if (!service.apkBuild || !service.repo) return;
 
   const name = service.name;
-  const apkMarker = apkHashMarker(name);
-  const commitMarker = commitHashMarker(name);
+  const apkCommitMarker = apkCommitHashMarker(name);
+  const apkHashMkr = apkHashMarker(name);
 
-  // ── Change detection ──
-  let needsBuild = false;
   const commitHash = service._hash;
 
+  // ═══════════════════════════════════════════════════════════════════
+  // PHASE 2: Check for completed background builds FIRST
+  // (before scanning for new changes, so we finalize the previous build)
+  // ═══════════════════════════════════════════════════════════════════
+
+  const queue = readApkQueue(name);
+  // Keep repo in sync with reality (handles migration from older queue files).
+  // Prefer the declared _repoIdentifier, fall back to repo dir basename.
+  if (service.repo) {
+    const repoName = service._repoIdentifier || path.basename(service.repo);
+    if (queue.repo !== repoName) queue.repo = repoName;
+  }
+  const buildingEntry = queue.entries.find(e => e.status === "building");
+  if (buildingEntry) {
+    const result = checkApkBuildResult(name);
+    if (result !== null) {
+      // Build finished
+      buildingEntry.completedAt = new Date().toISOString();
+      if (result.exitCode === 0) {
+        buildingEntry.status = "completed";
+        console.log(`[apk] ${name}: build #${buildingEntry.id} completed (${buildingEntry.versionName})`);
+
+        // ── Optional test gate ──
+        if (service.apkBuild?.test) {
+          const clonePath = ensureServiceClone(service);
+          if (clonePath) {
+            const { proceed, testResult } = runApkTests(service, buildingEntry, clonePath);
+            buildingEntry.testResult = testResult;
+            if (!proceed) {
+              // Tests required and failed — mark build as failed, don't deploy
+              buildingEntry.status = "failed";
+              buildingEntry.error = "tests failed";
+              buildingEntry.completedAt = new Date().toISOString();
+              writeApkQueue(name, queue);
+              // Set backoff
+              const apkBackoffKey = `apk-${name}`;
+              const bk = buildBackoffs[apkBackoffKey];
+              const failures = (bk?.failures || 0) + 1;
+              const wait = 5 * Math.pow(2, failures - 1);
+              buildBackoffs[apkBackoffKey] = { retryAfter: Date.now() + wait * 5000, failures };
+              buildErrors[name + "-apk"] = {
+                error: buildingEntry.error,
+                time: new Date().toISOString(),
+                failures,
+                retryIn: wait * 5,
+              };
+              saveBackoffState();
+              return;
+            }
+          }
+        }
+
+        // Deploy the built APK
+        deployBuiltApk(service, buildingEntry);
+
+        // Update APK hash marker on success
+        try {
+          fs.writeFileSync(apkHashMkr, repoContentHashForPath(service.repo!));
+        } catch {}
+        // Clear backoff on success
+        delete buildBackoffs[`apk-${name}`];
+        clearBuildError(name + "-apk");
+        saveBackoffState();
+      } else {
+        buildingEntry.status = "failed";
+        buildingEntry.error = `Gradle exit code ${result.exitCode}`;
+        console.error(`[apk] ${name}: build #${buildingEntry.id} failed (exit ${result.exitCode})`);
+        // Set backoff
+        const apkBackoffKey = `apk-${name}`;
+        const backoff = buildBackoffs[apkBackoffKey];
+        const failures = (backoff?.failures || 0) + 1;
+        const wait = 5 * Math.pow(2, failures - 1);
+        buildBackoffs[apkBackoffKey] = {
+          retryAfter: Date.now() + wait * 5000, failures,
+        };
+        buildErrors[name + "-apk"] = {
+          error: buildingEntry.error,
+          time: new Date().toISOString(),
+          failures,
+          retryIn: wait * 5,
+        };
+        saveBackoffState();
+      }
+      writeApkQueue(name, queue);
+    } else {
+      // Build still running — check for staleness before skipping
+      if (!isApkBuildRunning(name)) {
+        // PID dead — build process died (controller restart, OOM, etc)
+        buildingEntry.status = "cancelled";
+        buildingEntry.error = "stale (build process died)";
+        buildingEntry.completedAt = new Date().toISOString();
+        console.log(`[apk] ${name}: build #${buildingEntry.id} cancelled (stale — process died)`);
+        writeApkQueue(name, queue);
+        resetApkMarkerIfAllTerminal(name, queue);
+        // Fall through to Phase 1 below (don't return)
+      } else if (buildingEntry.startedAt) {
+        const elapsed = Date.now() - new Date(buildingEntry.startedAt).getTime();
+        if (elapsed > 30 * 60 * 1000) {
+          // Build running too long — kill it and mark cancelled
+          killApkBuild(name);
+          buildingEntry.status = "cancelled";
+          buildingEntry.error = "stale (build timed out after 30 min)";
+          buildingEntry.completedAt = new Date().toISOString();
+          console.log(`[apk] ${name}: build #${buildingEntry.id} cancelled (stale — timeout after 30 min)`);
+          writeApkQueue(name, queue);
+          resetApkMarkerIfAllTerminal(name, queue);
+          // Fall through to Phase 1
+        } else {
+          // Build still running legitimately — skip this cycle
+          return;
+        }
+      } else {
+        // No startedAt timestamp but also no result — treat as stale
+        buildingEntry.status = "cancelled";
+        buildingEntry.error = "stale (no start timestamp)";
+        buildingEntry.completedAt = new Date().toISOString();
+        console.log(`[apk] ${name}: build #${buildingEntry.id} cancelled (stale — no start timestamp)`);
+        writeApkQueue(name, queue);
+        resetApkMarkerIfAllTerminal(name, queue);
+        // Fall through to Phase 1
+      }
+    }
+  }
+
+  // Evict stale queued entries (been queued too long with no activity)
+  let queuedStale = false;
+  for (const e of queue.entries) {
+    if (e.status === "queued" && e.queuedAt) {
+      const elapsed = Date.now() - new Date(e.queuedAt).getTime();
+      if (elapsed > 10 * 60 * 1000) {
+        e.status = "cancelled";
+        e.error = "stale (queued too long)";
+        e.completedAt = new Date().toISOString();
+        queuedStale = true;
+        console.log(`[apk] ${name}: build #${e.id} cancelled (stale — queued > 10 min)`);
+      }
+    }
+  }
+  if (queuedStale) {
+    writeApkQueue(name, queue);
+    resetApkMarkerIfAllTerminal(name, queue);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PHASE 1: SCAN — detect source changes, enqueue builds
+  // ═══════════════════════════════════════════════════════════════════
+
   const commitChanged =
-    !fs.existsSync(commitMarker) ||
-    fs.readFileSync(commitMarker, "utf-8") !== commitHash;
+    !fs.existsSync(apkCommitMarker) ||
+    fs.readFileSync(apkCommitMarker, "utf-8") !== commitHash;
 
   if (commitChanged && service.repo) {
     // ── v4 watch-based fast path ──
     if (service._watch) {
       if (!serviceWatchChanged(service)) {
         console.log(`[apk] ${name}: commit changed but no watched files changed`);
-        fs.writeFileSync(commitMarker, commitHash);
-        return;
+        fs.writeFileSync(apkCommitMarker, commitHash);
+      } else {
+        // Watched files changed — enqueue build
+        fs.writeFileSync(apkCommitMarker, commitHash);
+        console.log(`[apk] ${name}: watched files changed, queuing APK build`);
+
+        // Cancel any running build first
+        if (isApkBuildRunning(name)) {
+          killApkBuild(name);
+          // Update the building entry to cancelled
+          const fresh = readApkQueue(name);
+          const bld = fresh.entries.find(e => e.status === "building");
+          if (bld) {
+            bld.status = "cancelled";
+            bld.completedAt = new Date().toISOString();
+            writeApkQueue(name, fresh);
+          }
+        }
+        // Cancel any remaining queued items (stale)
+        const fresh = readApkQueue(name);
+        let changed = false;
+        for (const e of fresh.entries) {
+          if (e.status === "queued") {
+            e.status = "cancelled";
+            e.completedAt = new Date().toISOString();
+            changed = true;
+          }
+        }
+        // Compute version info for the new entry
+        const { verCode, versionName: vName } = computeApkVersion(service.repo);
+        const entry: ApkQueueEntry = {
+          id: fresh.nextId++,
+          commitHash,
+          versionName: vName,
+          versionCode: parseInt(verCode, 10),
+          status: "queued",
+          queuedAt: new Date().toISOString(),
+          startedAt: null,
+          completedAt: null,
+          error: null,
+        };
+        fresh.entries.push(entry);
+        if (fresh.entries.length > 50) {
+          // Prune old completed/cancelled/failed entries, keep newest 50
+          const keep = fresh.entries.slice(-50);
+          fresh.entries = keep;
+        }
+        writeApkQueue(name, fresh);
       }
-      // Watched files changed — build APK
-      needsBuild = true;
-      fs.writeFileSync(commitMarker, commitHash);
-      console.log(`[apk] ${name}: watched files changed, queuing APK build`);
     } else {
       // ── v1–v3: full-repo content hash ──
       const contentHash = repoContentHashForPath(service.repo);
       const hashChanged =
-        !fs.existsSync(apkMarker) ||
-        fs.readFileSync(apkMarker, "utf-8") !== contentHash;
+        !fs.existsSync(apkHashMkr) ||
+        fs.readFileSync(apkHashMkr, "utf-8") !== contentHash;
+
+      fs.writeFileSync(apkCommitMarker, commitHash);
 
       if (hashChanged) {
-        needsBuild = true;
-        fs.writeFileSync(commitMarker, commitHash);
         console.log(`[apk] ${name}: source changed, queuing APK build`);
+
+        // Cancel any running build
+        if (isApkBuildRunning(name)) {
+          killApkBuild(name);
+          const fresh = readApkQueue(name);
+          const bld = fresh.entries.find(e => e.status === "building");
+          if (bld) {
+            bld.status = "cancelled";
+            bld.completedAt = new Date().toISOString();
+            writeApkQueue(name, fresh);
+          }
+        }
+        const fresh = readApkQueue(name);
+        for (const e of fresh.entries) {
+          if (e.status === "queued") {
+            e.status = "cancelled";
+            e.completedAt = new Date().toISOString();
+          }
+        }
+        const { verCode, versionName: vName } = computeApkVersion(service.repo);
+        const entry: ApkQueueEntry = {
+          id: fresh.nextId++,
+          commitHash,
+          versionName: vName,
+          versionCode: parseInt(verCode, 10),
+          status: "queued",
+          queuedAt: new Date().toISOString(),
+          startedAt: null,
+          completedAt: null,
+          error: null,
+        };
+        fresh.entries.push(entry);
+        if (fresh.entries.length > 50) {
+          fresh.entries = fresh.entries.slice(-50);
+        }
+        writeApkQueue(name, fresh);
       } else {
-        fs.writeFileSync(commitMarker, commitHash);
         console.log(`[apk] ${name}: commit changed but content unchanged (ignored files)`);
       }
     }
   }
 
-  if (!needsBuild) return;
+  // ═══════════════════════════════════════════════════════════════════
+  // PHASE 3: PROCESS — start next queued build if idle
+  // ═══════════════════════════════════════════════════════════════════
 
-  // ── Backoff check ──
+  const current = readApkQueue(name);
+  const nextQueued = current.entries.find(e => e.status === "queued");
+  if (!nextQueued) return;
+
+  // Don't start if a build is already running
+  if (isApkBuildRunning(name)) return;
+
+  // Check backoff
   const apkBackoffKey = `apk-${name}`;
-  const backoff = (buildBackoffs as Record<string, { retryCycle: number; failures: number }>)[apkBackoffKey];
-  if (backoff && cycle < backoff.retryCycle) {
-    console.log(`[apk] ${name}: skip build (${backoff.retryCycle - cycle} cycles remaining)`);
+  const backoff = buildBackoffs[apkBackoffKey];
+  if (backoff && Date.now() < backoff.retryAfter) {
+    const remaining = Math.ceil((backoff.retryAfter - Date.now()) / 1000);
+    console.log(`[apk] ${name}: skip build (${remaining}s remaining)`);
     return;
   }
 
-  // ── Clone the repo at this commit ──
+  // ── Start the build ──
+  console.log(`[apk] ${name}: starting build #${nextQueued.id} (${nextQueued.versionName})`);
+
+  // Clone the repo at the target commit
   const clonePath = ensureServiceClone(service);
   if (!clonePath) {
-    console.log(`[apk] ${name}: could not create service clone`);
+    nextQueued.status = "failed";
+    nextQueued.error = "Could not create service clone";
+    nextQueued.completedAt = new Date().toISOString();
+    writeApkQueue(name, current);
     return;
   }
-  const cloneRoot = clonePath;
 
-  // ── Resolve build root within the clone ──
-  // Temporarily swap service.repo so resolveApkBuildRoot works against the clone
+  // Resolve build root
   const origRepo = service.repo;
-  service.repo = cloneRoot;
+  service.repo = clonePath;
   const buildRoot = resolveApkBuildRoot(service);
+  service.repo = origRepo;
   if (!buildRoot) {
-    service.repo = origRepo;
-    console.log(`[apk] ${name}: build root not found in clone`);
+    nextQueued.status = "failed";
+    nextQueued.error = "Build root not found in clone";
+    nextQueued.completedAt = new Date().toISOString();
+    writeApkQueue(name, current);
     return;
   }
-  service.repo = origRepo;
 
-  // ── Step 1: Inject CF Access credentials ──
+  // Inject CF Access credentials
   let cfClientId = "";
   let cfClientSecret = "";
   try {
     const setupScript = path.join(INFRA_DIR, "scripts", "setup-cf-creds.sh");
     if (fs.existsSync(setupScript)) {
       execSync(`bash "${setupScript}"`, { timeout: 15_000, encoding: "utf-8", stdio: "pipe" });
-      console.log(`[apk] ${name}: CF credentials synced`);
-
-      // Read them back from local.properties inside the clone
       const localPropsPath = path.join(buildRoot, "local.properties");
       if (fs.existsSync(localPropsPath)) {
         const props = fs.readFileSync(localPropsPath, "utf-8");
@@ -866,60 +1349,19 @@ export function ensureApkBuild(service: Service): void {
         if (idMatch) cfClientId = idMatch[1].trim();
         if (secretMatch) cfClientSecret = secretMatch[1].trim();
       }
-    } else {
-      console.log(`[apk] ${name}: setup-cf-creds.sh not found`);
     }
   } catch (e: any) {
     console.error(`[apk] ${name}: CF credential sync failed: ${e.message}`);
   }
 
-  // ── Step 2: Compute version from git ──
-  const verCode = execSync(
-    `git -C "${origRepo}" rev-list --count HEAD`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const buildDate = execSync(
-    `git -C "${origRepo}" log -1 --format=%ad --date=format:%Y%m%d`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const buildTime = execSync(
-    `git -C "${origRepo}" log -1 --format=%ad --date=format:%H%M`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const gitHash = execSync(
-    `git -C "${origRepo}" log -1 --format=%h --abbrev=7`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const fullHash = execSync(
-    `git -C "${origRepo}" log -1 --format=%H`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const commitMessage = execSync(
-    `git -C "${origRepo}" log -1 --format=%s`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const commitAuthor = execSync(
-    `git -C "${origRepo}" log -1 --format=%an`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-  const commitDate = execSync(
-    `git -C "${origRepo}" log -1 --format=%ai`,
-    { encoding: "utf-8", timeout: 10_000 }
-  ).toString().trim();
-
-  const versionName = `${verCode}.${buildDate}.${buildTime}-${gitHash}`;
-
+  // Build gradle args
   const cfg = service.apkBuild!;
-  const appShortName = cfg.packageName.split(".").pop() || name;
-  const destDirName = cfg.destDir || appShortName.replace(/\b\w/g, c => c.toUpperCase());
   const gradleTask = cfg.task || "assembleDebug";
   const gradleBuildType = cfg.buildType || "debug";
-
-  // ── Step 3: Run Gradle ──
   const gradleArgs = [
-    `-PversionCode=${verCode}`,
-    `-PversionName=${versionName}`,
-    `-PbuildDate=${buildDate}`,
+    `-PversionCode=${nextQueued.versionCode}`,
+    `-PversionName=${nextQueued.versionName}`,
+    `-PbuildDate=${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`,
   ];
   if (cfClientId) gradleArgs.push(`-PcfAccessClientId=${cfClientId}`);
   if (cfClientSecret) gradleArgs.push(`-PcfAccessClientSecret=${cfClientSecret}`);
@@ -929,43 +1371,126 @@ export function ensureApkBuild(service: Service): void {
     }
   }
 
-  console.log(`[apk] ${name}: building ${versionName} (${gradleTask})`);
+  // Mark as building
+  nextQueued.status = "building";
+  nextQueued.startedAt = new Date().toISOString();
+  writeApkQueue(name, current);
+
+  // ── Start background gradle build ──
+  // Wrapper script that: writes PID, runs gradle, writes exit code
+  const pidFile = apkBuildPidFile(name);
+  const logFile = `/tmp/stack.${name}.apk-build.log`;
+  const exitFile = `/tmp/stack.${name}.apk-build-exit`;
+  const wrapperScript = [
+    `echo $$ > "${pidFile}"`,
+    `echo "[apk] ${name}: gradle PID=$$" >> "${logFile}"`,
+    `cd "${buildRoot}"`,
+    `./gradlew ${gradleTask} ${gradleArgs.join(" ")} >> "${logFile}" 2>&1`,
+    `echo $? > "${exitFile}"`,
+    `rm -f "${pidFile}"`,
+  ].join("\n");
 
   try {
-    execSync(`./gradlew ${gradleTask} ${gradleArgs.join(" ")}`, {
-      cwd: buildRoot,
-      timeout: 300_000,
-      encoding: "utf-8",
-      stdio: "pipe",
+    // Write wrapper to temp script and launch in background.
+    // Service now has MemoryMax=4G so gradle runs fine in this cgroup.
+    const tmpScript = `/tmp/stack.${name}.apk-build.sh`;
+    fs.writeFileSync(tmpScript, `#!/bin/bash\n${wrapperScript}`, { mode: 0o755 });
+    execSync(`nohup ${tmpScript} </dev/null >/dev/null 2>&1 &`, {
+      timeout: 5000,
     });
-    console.log(`[apk] ${name}: Gradle build succeeded`);
+    console.log(`[apk] ${name}: build #${nextQueued.id} started in background`);
   } catch (e: any) {
-    const failures = (backoff?.failures || 0) + 1;
-    const wait = 5 * Math.pow(2, failures - 1);
-    (buildBackoffs as Record<string, { retryCycle: number; failures: number }>)[apkBackoffKey] = {
-      retryCycle: cycle + wait, failures,
-    };
-    buildErrors[name + "-apk"] = {
-      error: e.message, time: new Date().toISOString(), failures, retryIn: wait * 5,
-    };
-    console.error(`[apk] ${name}: Gradle build #${failures} failed, retry in ${wait} cycles`);
+    nextQueued.status = "failed";
+    nextQueued.error = `Failed to start: ${e.message}`;
+    nextQueued.completedAt = new Date().toISOString();
+    writeApkQueue(name, current);
+  }
+}
+
+/**
+ * Compute APK version info from the service's git repo.
+ * Returns version code (rev-list count) and human-readable version name.
+ */
+function computeApkVersion(repoPath: string): { verCode: string; versionName: string } {
+  let verCode = "0";
+  let buildDate = "";
+  let buildTime = "";
+  let gitHash = "";
+  try {
+    verCode = execSync(
+      `git -C "${repoPath}" rev-list --count HEAD`,
+      { encoding: "utf-8", timeout: 10_000 }
+    ).toString().trim();
+    buildDate = execSync(
+      `git -C "${repoPath}" log -1 --format=%ad --date=format:%Y%m%d`,
+      { encoding: "utf-8", timeout: 10_000 }
+    ).toString().trim();
+    buildTime = execSync(
+      `git -C "${repoPath}" log -1 --format=%ad --date=format:%H%M`,
+      { encoding: "utf-8", timeout: 10_000 }
+    ).toString().trim();
+    gitHash = execSync(
+      `git -C "${repoPath}" log -1 --format=%h --abbrev=7`,
+      { encoding: "utf-8", timeout: 10_000 }
+    ).toString().trim();
+  } catch {}
+  const versionName = `${verCode}.${buildDate}.${buildTime}-${gitHash}`;
+  return { verCode, versionName };
+}
+
+/**
+ * Deploy a successfully built APK from the clone's build output to the
+ * files directory.  Copies the APK, writes commit metadata, updates the
+ * OTA version manifest, build history, and latest symlink.
+ *
+ * Called after a background gradle build completes successfully.
+ */
+function deployBuiltApk(service: Service, entry: ApkQueueEntry): void {
+  const name = service.name;
+  const cfg = service.apkBuild!;
+  const origRepo = service.repo;
+  if (!origRepo) return;
+
+  // Need to re-clone to find the build output
+  const clonePath = ensureServiceClone(service);
+  if (!clonePath) {
+    console.error(`[apk] ${name}: could not re-clone for deployment`);
     return;
   }
 
-  // ── Step 4: Locate and deploy the output APK ──
+  const gradleBuildType = cfg.buildType || "debug";
+  const buildRoot = resolveApkBuildRoot({ ...service, repo: clonePath });
+  if (!buildRoot) {
+    console.error(`[apk] ${name}: build root not found for deployment`);
+    return;
+  }
+  service.repo = origRepo;
+
   const apkSource = path.join(buildRoot, "app", "build", "outputs", "apk", gradleBuildType, `app-${gradleBuildType}.apk`);
   if (!fs.existsSync(apkSource)) {
     console.error(`[apk] ${name}: output APK not found at ${apkSource}`);
     return;
   }
 
+  const appShortName = cfg.packageName.split(".").pop() || name;
+  const destDirName = cfg.destDir || appShortName.replace(/\b\w/g, c => c.toUpperCase());
   const apkDestDir = path.join(FILES_DIR, "apk", destDirName);
   fs.mkdirSync(apkDestDir, { recursive: true });
-  const apkFilename = `${appShortName}-${versionName}.apk`;
+
+  const apkFilename = `${appShortName}-${entry.versionName}.apk`;
   fs.copyFileSync(apkSource, path.join(apkDestDir, apkFilename));
   console.log(`[apk] ${name}: deployed ${apkFilename}`);
 
-  // ── Step 4b: Write commit metadata alongside APK ──
+  // ── Commit metadata ──
+  let fullHash = "", commitMessage = "", commitAuthor = "", commitDate = "", gitHash = "";
+  try {
+    fullHash = execSync(`git -C "${origRepo}" log -1 --format=%H`, { encoding: "utf-8", timeout: 5000 }).toString().trim();
+    commitMessage = execSync(`git -C "${origRepo}" log -1 --format=%s`, { encoding: "utf-8", timeout: 5000 }).toString().trim();
+    commitAuthor = execSync(`git -C "${origRepo}" log -1 --format=%an`, { encoding: "utf-8", timeout: 5000 }).toString().trim();
+    commitDate = execSync(`git -C "${origRepo}" log -1 --format=%ai`, { encoding: "utf-8", timeout: 5000 }).toString().trim();
+    gitHash = execSync(`git -C "${origRepo}" log -1 --format=%h --abbrev=7`, { encoding: "utf-8", timeout: 5000 }).toString().trim();
+  } catch {}
+
   const builtAt = new Date().toISOString();
   const commitInfo = {
     commit: gitHash,
@@ -974,69 +1499,157 @@ export function ensureApkBuild(service: Service): void {
     author: commitAuthor,
     date: commitDate,
     apk: `${destDirName}/${apkFilename}`,
-    version: versionName,
-    versionCode: parseInt(verCode, 10),
+    version: entry.versionName,
+    versionCode: entry.versionCode,
     builtAt,
   };
   const commitFile = path.join(apkDestDir, `${apkFilename.replace(".apk", "")}.commit.json`);
   fs.writeFileSync(commitFile, JSON.stringify(commitInfo, null, 2));
-  console.log(`[apk] ${name}: commit metadata written to ${path.basename(commitFile)}`);
 
-  // ── Step 5: Write OTA version manifest ──
+  // ── OTA version manifest ──
   const otaManifest = {
     app: cfg.packageName,
     name: appShortName,
-    version: `${verCode}`,
-    versionName,
-    versionCode: parseInt(verCode, 10),
+    version: `${entry.versionCode}`,
+    versionName: entry.versionName,
+    versionCode: entry.versionCode,
     apk: `${destDirName}/${apkFilename}`,
     updatedAt: builtAt,
-    commit: {
-      hash: gitHash,
-      fullHash,
-      message: commitMessage,
-      author: commitAuthor,
-      date: commitDate,
-    },
+    commit: { hash: gitHash, fullHash, message: commitMessage, author: commitAuthor, date: commitDate },
   };
   const versionFile = path.join(FILES_DIR, "apk", `version-${cfg.packageName}.json`);
   fs.writeFileSync(versionFile, JSON.stringify(otaManifest, null, 2));
 
-  // ── Step 5b: Update build history manifest ──
+  // ── Build history ──
   const buildsFile = path.join(apkDestDir, "BUILDS.json");
   let builds: any[] = [];
-  try {
-    builds = JSON.parse(fs.readFileSync(buildsFile, "utf-8"));
-  } catch { /* first build */ }
-  // Dedupe by version name
-  builds = builds.filter((b: any) => b.version !== versionName);
+  try { builds = JSON.parse(fs.readFileSync(buildsFile, "utf-8")); } catch {}
+  builds = builds.filter((b: any) => b.version !== entry.versionName);
   builds.unshift(commitInfo);
   if (builds.length > 20) builds = builds.slice(0, 20);
   fs.writeFileSync(buildsFile, JSON.stringify(builds, null, 2));
 
-  // ── Step 6: Update latest symlink ──
+  // ── Latest symlink ──
   const symlink = path.join(apkDestDir, `${appShortName}-latest.apk`);
-  const relativeTarget = `./${apkFilename}`;
-  try { fs.unlinkSync(symlink); } catch { /* ok */ }
-  fs.symlinkSync(relativeTarget, symlink);
+  try { fs.unlinkSync(symlink); } catch {}
+  fs.symlinkSync(`./${apkFilename}`, symlink);
 
-  // ── Step 7: Prune old builds (keep 5) ──
+  // ── Prune old builds (keep 5) ──
   const apkFiles = fs.readdirSync(apkDestDir)
     .filter(f => f.startsWith(appShortName) && f.endsWith(".apk") && !f.includes("-latest"))
     .sort()
     .reverse();
   for (const old of apkFiles.slice(5)) {
-    fs.unlinkSync(path.join(apkDestDir, old));
-    // Also prune the associated commit metadata file
-    const oldCommitFile = path.join(apkDestDir, `${old.replace(".apk", "")}.commit.json`);
-    try { fs.unlinkSync(oldCommitFile); } catch { /* may not exist */ }
+    try { fs.unlinkSync(path.join(apkDestDir, old)); } catch {}
+    try { fs.unlinkSync(path.join(apkDestDir, `${old.replace(".apk", "")}.commit.json`)); } catch {}
+  }
+}
+
+/**
+ * Read the APK build queue for a service (exported for HTTP controller).
+ */
+export function getApkQueue(name: string): ApkBuildQueue {
+  return readApkQueue(name);
+}
+
+/**
+ * List all APK build queue files on disk and return their contents.
+ * Scans /tmp/ for stack.*.apk-queue files.
+ */
+export function getAllApkQueues(): ApkBuildQueue[] {
+  const queues: ApkBuildQueue[] = [];
+  try {
+    const files = fs.readdirSync("/tmp");
+    for (const f of files) {
+      const m = f.match(/^stack\.(.+)\.apk-queue$/);
+      if (m) {
+        queues.push(readApkQueue(m[1]));
+      }
+    }
+  } catch {}
+  return queues;
+}
+
+/**
+ * Cancel a queued or running APK build for a service.
+ * If a build is running, kills the gradle process.
+ * Returns the updated queue state.
+ */
+export function cancelApkBuild(name: string): ApkBuildQueue {
+  const queue = readApkQueue(name);
+
+  if (isApkBuildRunning(name)) {
+    killApkBuild(name);
   }
 
-  // ── Step 8: Update hash marker ──
-  fs.writeFileSync(apkMarker, repoContentHashForPath(origRepo!));
+  for (const entry of queue.entries) {
+    if (entry.status === "queued" || entry.status === "building") {
+      entry.status = "cancelled";
+      entry.completedAt = new Date().toISOString();
+    }
+  }
+  writeApkQueue(name, queue);
+  return queue;
+}
 
-  delete (buildBackoffs as Record<string, { retryCycle: number; failures: number }>)[apkBackoffKey];
-  clearBuildError(name + "-apk");
-  console.log(`[apk] ${name}: build complete (${versionName})`);
+/**
+ * Trigger a manual APK build for a service (from HTTP API).
+ * Enqueues a build for the current HEAD commit.
+ * Cancels any in-flight build first.
+ */
+export function triggerApkBuild(name: string, service: Service): ApkBuildQueue {
+  if (!service.repo) throw new Error(`Service ${name} has no repo`);
+
+  // Cancel any running build
+  if (isApkBuildRunning(name)) {
+    killApkBuild(name);
+  }
+
+  const queue = readApkQueue(name);
+
+  // Cancel pending items
+  for (const entry of queue.entries) {
+    if (entry.status === "queued" || entry.status === "building") {
+      entry.status = "cancelled";
+      entry.completedAt = new Date().toISOString();
+    }
+  }
+
+  // Resolve current commit hash
+  let commitHash = "";
+  try {
+    commitHash = execSync(
+      `git -C "${service.repo}" log -1 --format=%H`,
+      { encoding: "utf-8", timeout: 5000 }
+    ).toString().trim();
+  } catch {
+    throw new Error(`Could not resolve HEAD commit for ${name}`);
+  }
+
+  // Update APK commit marker so reconcile doesn't double-enqueue
+  const apkCommitMarker = apkCommitHashMarker(name);
+  fs.writeFileSync(apkCommitMarker, commitHash);
+
+  const { verCode, versionName } = computeApkVersion(service.repo);
+
+  const entry: ApkQueueEntry = {
+    id: queue.nextId++,
+    commitHash,
+    versionName,
+    versionCode: parseInt(verCode, 10),
+    status: "queued",
+    queuedAt: new Date().toISOString(),
+    startedAt: null,
+    completedAt: null,
+    error: null,
+  };
+  queue.entries.push(entry);
+  if (queue.entries.length > 50) {
+    queue.entries = queue.entries.slice(-50);
+  }
+  writeApkQueue(name, queue);
+
+  console.log(`[apk] ${name}: manual build triggered (#${entry.id}, ${versionName})`);
+  return queue;
 }
 
