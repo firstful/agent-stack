@@ -1175,6 +1175,18 @@ export function ensureApkBuild(service: Service): void {
     resetApkMarkerIfAllTerminal(name, queue);
   }
 
+  // If all entries are terminal (completed/failed/cancelled) and we're
+  // not in backoff, reset markers so Phase 1 re-detects and re-queues.
+  const terminal: ApkBuildStatus[] = ["completed", "failed", "cancelled"];
+  const allTerminal = queue.entries.length > 0 &&
+    queue.entries.every(e => terminal.includes(e.status));
+  if (allTerminal) {
+    const bk = buildBackoffs[`apk-${name}`];
+    if (!bk || Date.now() >= bk.retryAfter) {
+      resetApkMarkerIfAllTerminal(name, queue);
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   // PHASE 1: SCAN — detect source changes, enqueue builds
   // ═══════════════════════════════════════════════════════════════════
