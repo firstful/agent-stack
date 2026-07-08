@@ -97,6 +97,34 @@ export function apkHashMarker(name: string): string {
 }
 
 /**
+ * Path to the APK commit hash marker file for a service.  Separate from
+ * the container commit hash marker (commitHashMarker) so that APK builds
+ * and container builds have independent change detection.  Without this
+ * separation, the container build would write the marker first, causing
+ * the APK build to see "no change" and skip every time.
+ */
+export function apkCommitHashMarker(name: string): string {
+  return `/tmp/stack.${name}.apk-chash`;
+}
+
+/**
+ * Path to the APK build queue file for a service.  Stores a JSON array
+ * of queued, building, completed, cancelled, and failed build entries.
+ * Each entry includes the commit hash, version info, status, and timestamps.
+ */
+export function apkQueueFile(name: string): string {
+  return `/tmp/stack.${name}.apk-queue`;
+}
+
+/**
+ * Path to the PID file for a running APK build.  Used to kill the gradle
+ * process when a new change arrives and the current build must be cancelled.
+ */
+export function apkBuildPidFile(name: string): string {
+  return `/tmp/stack.${name}.apk-build-pid`;
+}
+
+/**
  * Path to the slot marker file, which records which slot ("a" or "b")
  * is currently active for a service.
  */

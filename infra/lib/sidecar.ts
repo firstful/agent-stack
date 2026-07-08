@@ -1,3 +1,18 @@
+/**
+ * sidecar.ts — Sidecar container lifecycle management for the agent-stack controller.
+ *
+ * Manages sidecar containers that run alongside a primary service container.
+ * Each sidecar is defined in agent-stack.json under container.sidecars[] and
+ * shares the same lifecycle as its parent service.  This module handles:
+ *   - Pulling sidecar images from registries
+ *   - Starting/stoping sidecar containers with the parent's network config
+ *   - Ensuring sidecars restart on failure and inherit pod security options
+ *   - Cleaning up orphaned sidecars when a service is removed
+ *
+ * Sidecar containers run on stack-net with the same port/volume/secret bindings
+ * as their parent, prefixed <servicename>--<sidecarname>.
+ */
+
 // ── Imports ──
 
 import { execSync } from "child_process";
