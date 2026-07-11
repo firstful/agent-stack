@@ -405,6 +405,59 @@ export interface ApkBuildQueue {
   nextId: number;
 }
 
+// ── APK Script Environment ─────────────────────────────────────────────
+
+/**
+ * Environment variables auto-injected into scripts run by the controller
+ * during the APK build pipeline (test gate, future preBuild/postBuild hooks).
+ *
+ * All keys are always set — scripts do not need existence guards.
+ */
+export interface ApkScriptEnv {
+  /** Absolute path to the git clone (read-only source tree). */
+  SOURCE_DIR: string;
+  /** Directory containing the built APK (Gradle output dir). */
+  APK_OUTPUT_DIR: string;
+  /** Basename of the output APK file (e.g., "app-debug.apk"). */
+  APK_FILENAME: string;
+  /** Human-readable version string (e.g., "211.20260707.1159-f19c36d"). */
+  APK_VERSION: string;
+  /** Numeric version code (git rev-list count). */
+  APK_VERSION_CODE: string;
+  /** Android package name (from apkBuild.packageName). */
+  PACKAGE_NAME: string;
+  /** Gradle build type (e.g., "debug", "release"). */
+  BUILD_TYPE: string;
+  /** Full path to the built APK file (APK_OUTPUT_DIR + "/" + APK_FILENAME). */
+  APK_PATH: string;
+}
+
+/**
+ * Build the APK script environment variables from the build context.
+ * Pure function — does not read the filesystem.
+ */
+export function buildApkScriptEnv(params: {
+  sourceDir: string;
+  buildRoot: string;
+  buildType: string;
+  versionName: string;
+  versionCode: number;
+  packageName: string;
+}): ApkScriptEnv {
+  const outputDir = `${params.buildRoot}/app/build/outputs/apk/${params.buildType}`;
+  const apkFilename = `app-${params.buildType}.apk`;
+  return {
+    SOURCE_DIR: params.sourceDir,
+    APK_OUTPUT_DIR: outputDir,
+    APK_FILENAME: apkFilename,
+    APK_VERSION: params.versionName,
+    APK_VERSION_CODE: String(params.versionCode),
+    PACKAGE_NAME: params.packageName,
+    BUILD_TYPE: params.buildType,
+    APK_PATH: `${outputDir}/${apkFilename}`,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // v4 Schema Types — Flattened multi-unit manifest
 // ═══════════════════════════════════════════════════════════════════════

@@ -33,7 +33,7 @@ import {
 import { ensureSidecars, removeSidecars } from "./sidecar";
 import { ensureServiceClone, repoContentHashForPath, resolveApkBuildRoot, matchesWatch } from "./services";
 import type { Service, ApkBuildQueue, ApkQueueEntry, ApkBuildStatus } from "./types";
-import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe, normalizeWatch } from "./types";
+import { getStrategyType, isQueueEnabled, getCanaryConfig, isCanarySafe, normalizeWatch, buildApkScriptEnv } from "./types";
 import {
   AUTO_PORT_START,
   AUTO_PORT_END,
@@ -967,6 +967,19 @@ function runApkTests(
     ? path.resolve(clonePath, cfg.workdir)
     : path.resolve(clonePath, service.apkBuild?.path ?? "");
 
+  // ── Build script environment variables ──
+  const buildRoot = resolveApkBuildRoot({ ...service, repo: clonePath });
+  const buildType = service.apkBuild?.buildType || "debug";
+  const scriptEnv = buildRoot ? buildApkScriptEnv({
+    sourceDir: clonePath,
+    buildRoot,
+    buildType,
+    versionName: entry.versionName,
+    versionCode: entry.versionCode,
+    packageName: service.apkBuild?.packageName || "",
+  }) : {};
+  const env = { ...process.env, ...scriptEnv } as Record<string, string>;
+
   console.log(`[apk] ${service.name}: running tests — ${cfg.command}`);
 
   const start = Date.now();
@@ -977,6 +990,7 @@ function runApkTests(
       encoding: "utf-8",
       stdio: "pipe",
       maxBuffer: 1024 * 1024,
+      env,
     });
     const duration = Date.now() - start;
     const trimmed = output.slice(-2000);
