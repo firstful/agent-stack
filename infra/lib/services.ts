@@ -332,8 +332,7 @@ export function resolveEnvSecrets(
 // ── APK Build ──
 
 /**
- /**
-  * Resolve the build root directory for an APK build within a repo snapshot.
+ * Resolve the build root directory for an APK build within a repo snapshot.
   * Returns the path to the directory containing the Gradle project, or null
   * if the service has no apkBuild config or no repo.
   */
@@ -344,7 +343,6 @@ export function resolveEnvSecrets(
    return fs.existsSync(buildRoot) ? buildRoot : null;
  }
 
- // ── Hashing ──
 // ── Hashing ──
 
 /**
