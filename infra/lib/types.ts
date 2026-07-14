@@ -497,63 +497,107 @@ export interface BuildInput {
 
 /** A container unit — builds from a Containerfile, runs as a podman container. */
 export interface ContainerUnit {
+  /** Unit name, used as the service identifier and DNS hostname on stack-net. */
   name: string;
+  /** Relative path to the Containerfile/Dockerfile within the repo. Defaults to "Containerfile" when absent. */
   containerfile?: string;
+  /** Build configuration (network, cache, extra podman args). */
   build?: BuildInput;
+  /** Container-internal port (the port the app listens on inside the container). */
   port: number;
+  /** When true, allocates a host port automatically from the configured range (4000-4999). Mutually exclusive with hostPort. */
   autoPort?: boolean;
+  /** Fixed host port to publish the container port on. Overrides auto-port allocation when set. */
   hostPort?: number;
+  /** Environment variables injected into the container at runtime. */
   env?: Record<string, string>;
+  /** Volume mount specs (podman -v format: host-path:container-path:options). */
   volumes?: string[];
+  /** Override the container's entrypoint command. */
   command?: string[];
+  /** Extra arguments passed directly to `podman run`. Use for --sysctl, --cap-add, etc. */
   podmanArgs?: string;
+  /** Podman network name. Default: "stack-net". Use "host" for host networking. */
   network?: string;
+  /** Custom health check probe config (path and timeout for slot-swap health checks). */
   healthCheck?: HealthCheckConfig;
   /** Sidecar names referencing SidecarUnit.name entries in the same manifest. */
   sidecars?: string[];
+  /** File change detection patterns for triggering rebuilds on content change. */
   watch?: Watch;
+  /** Deploy strategy overrides for this container (inherits from top-level manifest.strategy). */
   strategy?: StrategyConfig;
+  /** Per-IP rate limiting overrides for this container (inherits from top-level manifest.rateLimit). */
   rateLimit?: RateLimitConfig;
+  /** Exposure override — can override hostname, tunnel, or disable exposure for this container. */
   expose?: ExposeOverride;
 }
 
-/** A systemd unit — runs as a host systemd service. */
+/** A systemd unit — runs as a host systemd service managed by the controller. */
 export interface SystemdUnit {
+  /** Unit name. Combined with the manifest name to form the service name (<manifest>--<name>). */
   name: string;
+  /** File change detection patterns for triggering redeployment on content change. */
   watch?: Watch;
+  /** Systemd service type (default: "simple"). Pass "forking" for daemonising services. */
   type?: string;
+  /** The ExecStart command for the systemd unit. */
   execStart: string;
+  /** Optional ExecReload command for reloading configuration without restart. */
   execReload?: string;
+  /** Port the service listens on (used for service discovery env vars). */
   port: number;
+  /** User to run the service as (default: "root"). */
   user?: string;
+  /** Restart policy for the systemd unit (default: "always"). */
   restart?: string;
+  /** Environment variables injected into the systemd unit. */
   env?: Record<string, string>;
+  /** Exposure override — can override hostname, tunnel, or disable exposure for this unit. */
   expose?: ExposeOverride;
 }
 
 /** A sidecar unit — an auxiliary container (db, redis, etc.) shared project-wide. */
 export interface SidecarUnit {
+  /** Unique name for this sidecar within the manifest. Referenced by ContainerUnit.sidecars[]. */
   name: string;
+  /** Container image to pull (e.g. "redis:7-alpine"). */
   image: string;
+  /** File change detection patterns for triggering redeployment on content change. */
   watch?: Watch;
+  /** Port exposed by the sidecar (used for service discovery). */
   port?: number;
+  /** Environment variables injected into the sidecar container. */
   env?: Record<string, string>;
+  /** Vault secret keys to resolve and inject into the sidecar's environment. */
   secrets?: string[];
+  /** Volume mount specs (podman -v format). */
   volumes?: string[];
+  /** Override the sidecar container's entrypoint command. */
   command?: string[];
+  /** When true, declares this sidecar safe to share between active and canary slots during a canary deploy. */
   canarySafe?: boolean;
 }
 
 /** An APK build unit — compiled from Gradle/Kotlin projects in the repo. */
 export interface ApkUnit {
+  /** Unit name, used to form the service name (<manifest>--apk-<name>). */
   name: string;
+  /** Android package name (e.g. "com.ffilt.us.red-thread"). */
   packageName: string;
+  /** File change detection patterns for triggering rebuilds on content change. */
   watch?: Watch;
+  /** Build toolchain type (default: "kotlin"). Future: "flutter", "react-native". */
   type?: string;
+  /** Path within the repo where the Gradle project lives, relative to repo root. Defaults to the unit name. */
   path?: string;
+  /** Gradle task to run (default: "assembleDebug"). */
   task?: string;
+  /** Build variant (default: "debug"). Affects the output APK path. */
   buildType?: string;
+  /** Destination directory name under /srv/data/files/apk/. Defaults from packageName's last segment. */
   destDir?: string;
+  /** Extra -P properties passed to Gradle, on top of auto-injected Vault and versioning props. */
   extraProps?: Record<string, string>;
 }
 
@@ -565,18 +609,31 @@ export interface ApkUnit {
  * as shared defaults that individual units can override.
  */
 export interface RepoManifest {
+  /** Manifest schema version — must be 4. */
   version: 4;
+  /** Project/service name. Used as the repo display name and as the service name for single-container repos. */
   name: string;
+  /** Container unit definitions (each builds and runs a podman container). */
   containers?: ContainerUnit[];
+  /** Systemd unit definitions (each runs as a host systemd service). */
   systemd?: SystemdUnit[];
+  /** Sidecar unit definitions (auxiliary containers referenced by containers[].sidecars). */
   sidecars?: SidecarUnit[];
+  /** APK build unit definitions (each compiles an Android APK from Gradle). */
   apks?: ApkUnit[];
+  /** Default file change detection patterns inherited by all units. */
   watch?: Watch;
+  /** Default deploy strategy inherited by all container units. */
   strategy?: StrategyConfig;
+  /** Default per-IP rate limiting inherited by all units. */
   rateLimit?: RateLimitConfig;
+  /** Default external exposure configuration inherited by all units. */
   expose?: ExposeConfig;
+  /** Default logo configuration inherited by all units. */
   logo?: LogoConfig;
+  /** Default vault secret keys inherited by all units. */
   secrets?: string[];
+  /** When true, all container units run in privileged mode (use with caution). */
   privileged?: boolean;
 }
 

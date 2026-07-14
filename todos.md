@@ -8,7 +8,7 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 - **Completion**: 3/8 deliverables done
 - **Phase/Stage**: Active maintenance — infra refinements and operational hardening
-- **Last updated**: 2026-07-07
+- **Last updated**: 2026-07-13
 
 ## Deliverables
 
@@ -36,7 +36,7 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 ## Notes
 
-- jerrymapping (garden.ffilt.us) is DOWN — build failing due to SSL cert verification in podman builds, shared root cause with 3 other build failures (games, groceries, groupthink)
-- 5 commits in past 24h, primarily talaria features + auto-backup
+- jerrymapping (garden.ffilt.us) is DOWN — 14 build failures, exponential backoff ~2min. Build issue persists. All other services (games, groceries, groupthink) are running fine.
+- 1 commit in past 24h (auto-backup only) — no feature or config changes.
 - Documentation discipline maintained: all new code arrives with JSDoc and section dividers
 - Most infra work tracked in individual repos; this file covers cross-cutting items only
