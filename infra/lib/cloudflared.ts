@@ -9,13 +9,16 @@
  * so all tunnel traffic routes through a single wildcard hostname
  * pointing at 127.0.0.1:80.
  */
+
+// ── Imports ──
+
 import fs from "fs";
 import path from "path";
 import { sh } from "./podman";
 import type { Service } from "./types";
 import { CLOUDFLARED_CONFIG, RESTART_COOLDOWN } from "./config";
 
-// ── Helpers ──
+// ── Helpers & State ──
 
 let lastRestart = 0;
 

@@ -55,6 +55,8 @@ export interface RouteMatch {
   openapi: OpenApiMeta;
 }
 
+// ── Route Definitions ──
+
 const routes: RouteDef[] = [
   // ── Ping / Health ────────────────────────────────────────
   {
