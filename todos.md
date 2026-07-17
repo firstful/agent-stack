@@ -36,7 +36,7 @@ Top-level meta-backlog for the Agent Stack monorepo at `/srv/agent-stack`. Track
 
 ## Notes
 
-- jerrymapping (garden.ffilt.us) is DOWN — 14 build failures, exponential backoff ~2min. Build issue persists. All other services (games, groceries, groupthink) are running fine.
+- jerrymapping (garden.ffilt.us) RESOLVED — gitlink mismatch fixed by clearing backoff state and repopulating clone directory. Container running on port 4001, slot a. Root cause (inner `.git` dir vs submodule file) still unresolved and could reoccur on clone regeneration.
 - 1 commit in past 24h (auto-backup only) — no feature or config changes.
 - Documentation discipline maintained: all new code arrives with JSDoc and section dividers
 - Most infra work tracked in individual repos; this file covers cross-cutting items only
