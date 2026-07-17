@@ -1,32 +1,44 @@
-name: Test Pipeline
+name: Build and Deploy Vault
 on: [push]
 
+env:
+  SERVICE_NAME: vault
+  SERVICE_PORT: 3500
+  HOST_PORT: 4003
+  IMAGE_TAG: vault:latest
+
 jobs:
-  build-vault:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Docker CLI
         run: |
           apt-get update -qq
-          apt-get install -y -qq docker.io 2>&1 | tail -3
+          apt-get install -y -qq docker.io curl 2>&1 | tail -3
           docker --version
-      
-      - name: Build vault image
+
+      - name: Build image
         run: |
-          docker build -t vault:latest repos/vault/
-          echo "Image built: vault:latest"
-      
-      - name: Test vault
+          docker build -t ${{ env.IMAGE_TAG }} repos/${{ env.SERVICE_NAME }}/
+          echo "Built: ${{ env.IMAGE_TAG }}"
+
+      - name: Test container
         run: |
-          docker run -d --name vault-test -p 4003:3500 vault:latest
-          sleep 3
-          curl -s http://localhost:4003/ | head -5 || echo "vault responded (or not)"
-          docker stop vault-test && docker rm vault-test
-      
-      - name: Deploy vault
+          docker run -d --name ${SERVICE_NAME}-test ${{ env.IMAGE_TAG }}
+          sleep 2
+          docker ps | grep ${SERVICE_NAME}-test
+          docker stop ${SERVICE_NAME}-test && docker rm ${SERVICE_NAME}-test
+          echo "Test passed"
+
+      - name: Deploy
         run: |
-          docker stop vault || true
-          docker rm vault || true
-          docker run -d --name vault -p 4003:3500 vault:latest
+          docker stop ${{ env.SERVICE_NAME }} || true
+          docker rm ${{ env.SERVICE_NAME }} || true
+          docker run -d \
+            --name ${{ env.SERVICE_NAME }} \
+            -p ${{ env.HOST_PORT }}:${{ env.SERVICE_PORT }} \
+            --restart unless-stopped \
+            ${{ env.IMAGE_TAG }}
+          echo "Deployed ${{ env.SERVICE_NAME }} on port ${{ env.HOST_PORT }}"
