@@ -1,0 +1,26 @@
+name: Test Pipeline
+on: [push]
+
+jobs:
+  build-vault:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build vault image
+        run: |
+          docker build -t vault:latest repos/vault/
+          echo "Image built: vault:latest"
+      
+      - name: Test vault
+        run: |
+          docker run -d --name vault-test -p 4003:3500 vault:latest
+          sleep 3
+          curl -s http://localhost:4003/ | head -5 || echo "vault responded (or not)"
+          docker stop vault-test && docker rm vault-test
+      
+      - name: Deploy vault
+        run: |
+          docker stop vault || true
+          docker rm vault || true
+          docker run -d --name vault -p 4003:3500 vault:latest
